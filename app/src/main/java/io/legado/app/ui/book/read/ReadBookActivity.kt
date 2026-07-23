@@ -1306,18 +1306,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         showDialogFragment<MoreConfigDialog>()
     }
 
-    /**
-     * 显示音色选择
-     */
-    override fun showVoiceSelect() {
-        ReadAloud.httpTTS?.let { httpTTS ->
-            startActivity<SourceLoginActivity> {
-                putExtra("type", "httpTts")
-                putExtra("key", httpTTS.id.toString())
-            }
-        }
-    }
-
     override fun showSearchSetting() {
         showDialogFragment<MoreConfigDialog>()
     }

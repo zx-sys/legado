@@ -92,8 +92,7 @@ class AnalyzeUrl(
     private var coroutineContext: CoroutineContext = EmptyCoroutineContext,
     headerMapF: Map<String, String>? = null,
     hasLoginHeader: Boolean = true,
-    private val infoMap: MutableMap<String, String>? = null,
-    private val extraParams: Map<String, String>? = null,
+    private val infoMap: MutableMap<String, String>? = null
 ) : JsExtensions {
     constructor(mUrl: String) : this(mUrl, null)
 
@@ -142,10 +141,6 @@ class AnalyzeUrl(
                 proxy = it["proxy"]
                 headerMap.remove("proxy")
             }
-        }
-        // 合并 extraParams 到 infoMap
-        if (!extraParams.isNullOrEmpty()) {
-            infoMap?.putAll(extraParams)
         }
         initUrl()
         domain = NetworkUtils.getSubDomain(source?.getKey() ?: url)
