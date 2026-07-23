@@ -1,7 +1,6 @@
 package io.legado.app.model.jsSource
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,6 +23,7 @@ class JsSourceAuthorGuideTest {
         val source = JsSourceConfig.extract(script)
 
         assertTrue(script.contains("var config ="))
+        assertTrue(script.contains("var Jsoup = org.jsoup.Jsoup;"))
         assertEquals("https://example.com", source.bookSourceUrl)
         assertEquals("示例 JS 书源", source.bookSourceName)
     }
@@ -64,12 +64,15 @@ class JsSourceAuthorGuideTest {
             "`exploreUrl` 非空时必选",
             "source.putVariable/getVariable",
             "只选择一个 JavaScript 书源导出或分享",
+            "getReviewSummary(chapter, book)",
+            "getReviewDetail(chapter, book, paraIndex, paraData, page)",
+            "nextPageUrl",
         )
 
         requiredText.forEach { text ->
             assertTrue("Missing current JS source contract: $text", guide.contains(text))
         }
-        assertFalse(guide.contains("getReviewSummary"))
+        assertTrue(guide.contains("只有同时声明 `getReviewSummary` 和 `getReviewDetail`"))
     }
 
     @Test
