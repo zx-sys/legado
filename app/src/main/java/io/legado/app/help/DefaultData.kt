@@ -12,6 +12,7 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.source.clearSharedGlobalState
 import io.legado.app.model.BookCover
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -125,6 +126,9 @@ object DefaultData {
     }
 
     fun importDefaultHttpTTS() {
+        appDb.httpTTSDao.all
+            .filter { it.id < 0 }
+            .forEach { it.clearSharedGlobalState() }
         appDb.httpTTSDao.deleteDefault()
         appDb.httpTTSDao.insert(*httpTTS.toTypedArray())
     }
@@ -135,6 +139,9 @@ object DefaultData {
     }
 
     fun importDefaultRssSources() {
+        appDb.rssSourceDao.all
+            .filter { it.sourceGroup == "legado" }
+            .forEach { it.clearSharedGlobalState() }
         appDb.rssSourceDao.deleteDefault()
         appDb.rssSourceDao.insert(*rssSources.toTypedArray())
     }

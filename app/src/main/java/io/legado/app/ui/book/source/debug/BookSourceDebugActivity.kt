@@ -176,9 +176,12 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
     private fun startSearch(key: String) {
         adapter.clearItems()
         viewModel.startDebug(key, {
-            binding.rotateLoading.visible()
-        }, {
-            toastOnUi("未获取到书源")
+            loading = true
+            if (binding.help.visibility != View.VISIBLE) binding.rotateLoading.visible()
+        }, { error ->
+            loading = false
+            binding.rotateLoading.gone()
+            toastOnUi(error.localizedMessage ?: "调试失败")
         })
     }
 

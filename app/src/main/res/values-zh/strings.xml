@@ -92,6 +92,11 @@
     <string name="retry">重试</string>
     <string name="web_service">Web 服务</string>
     <string name="web_service_desc">用浏览器写源或看书</string>
+    <string name="mcp_service">MCP 服务</string>
+    <string name="mcp_service_desc">带令牌保护的书源开发工具</string>
+    <string name="mcp_service_token_required">请先配置 Web 书源访问令牌</string>
+    <string name="mcp_service_token_invalid">MCP 访问令牌未配置或不正确</string>
+    <string name="mcp_service_start_failed">MCP 服务启动失败</string>
     <string name="web_edit_source">Web 编辑书源</string>
     <string name="offline_cache">离线缓存</string>
     <string name="offline_cache_t">离线缓存</string>
@@ -248,6 +253,8 @@
     <string name="data_loading">加载数据中…</string>
     <string name="load_error_retry">加载失败，点击重试</string>
     <string name="book_intro">内容简介</string>
+    <string name="book_intro_expand">展开</string>
+    <string name="book_intro_collapse">收起</string>
     <string name="intro_show">简介：%s</string>
     <string name="intro_show_null">简介：暂无简介</string>
     <string name="open_from_other">打开外部书籍</string>
@@ -561,6 +568,7 @@
     <string name="content_empty">文章内容为空</string>
     <string name="on_change_source">正在换源请等待…</string>
     <string name="chapter_list_empty">目录列表为空</string>
+    <string name="book_not_exist">书籍不存在</string>
     <string name="text_letter_spacing">字距</string>
 
     <string name="source_tab_base">基本</string>
@@ -575,8 +583,10 @@
     <string name="web_menu">Web 服务</string>
     <string name="web_port_title">Web 端口</string>
     <string name="web_port_summary">当前端口 %s</string>
+    <string name="mcp_port_title">MCP 端口</string>
+    <string name="mcp_port_summary">当前端口 %s</string>
     <string name="js_source_api_token_title">Web 书源访问令牌</string>
-    <string name="js_source_api_token_summary">纯 JS、书源写入、搜索和调试接口均需要</string>
+    <string name="js_source_api_token_summary">MCP、纯 JS、书源写入、搜索和调试接口均需要</string>
     <string name="js_source_api_token_configured">已配置</string>
     <string name="qr_share">二维码分享</string>
     <string name="str_share">字符串分享</string>
@@ -1285,5 +1295,16 @@
     <string name="review_more_replies">查看 %d 条回复</string>
     <string name="review_pause_audio">暂停</string>
     <string name="audio_cache_notification_title">音频缓存</string>
-    <string name="audio_cache_notification_text">%1$s %2$d/%3$d (失败: %4$d)</string>
+    <string name="audio_cache_notification_text">《%1$s》已缓存 %2$d/%3$d，失败 %4$d</string>
+    <string name="audio_cache_corrupted_retry">检测到缓存损坏，已自动回源重试</string>
+    <string name="review_total_count">共 %1$d 条评论</string>
+    <string name="review_more_replies">查看更多 %1$d 条回复</string>
+    <string name="review_play_audio">播放语音</string>
+    <string name="review_pause_audio">暂停语音</string>
+    <string name="review_empty">暂无段评</string>
+    <string name="review_rule_missing">未配置段评规则</string>
+    <string name="review_detail_url_missing">未配置段评详情 URL</string>
+    <string name="review_detail_rule_missing">未配置段评详情规则</string>
+    <string name="review_icon_color_title">段评图标颜色</string>
+    <string name="review_icon_color_reset">段评图标颜色已恢复跟随主题</string>
 </resources>

@@ -90,6 +90,44 @@ URL = ws://127.0.0.1:1235/rssSourceDebug
 Message = { key: [String], tag: [String] }
 ```
 
+#### HTTP 请求日志
+
+HTTP 日志仅在设置中启用“记录 HTTP 日志”后写入内存，最多保留最近 50 条；请求和响应正文单次最多记录 8 KiB，
+记录会在写入时脱敏认证信息、Cookie 和常见密钥字段。完整日志仍可能包含敏感业务数据，因此两个接口都要求通过
+`X-Legado-Token` 提供“Web 书源访问令牌”，并且只应在可信局域网中使用。
+
+```text
+URL = http://127.0.0.1:1234/getHttpLogs?limit=50
+URL = http://127.0.0.1:1234/getHttpLog?id=1
+Method = GET
+X-Legado-Token = 设置中配置的令牌
+```
+
+`getHttpLogs` 返回 `{ recording, logs }`，其中 `logs` 为摘要列表；`getHttpLog` 按 id 返回完整的已脱敏记录。
+
+#### MCP 服务
+
+应用可直接提供 Streamable HTTP MCP 服务，默认端口为 `1236`，端点为 `/mcp`。服务与 Web 服务相互独立，
+但复用“Web 书源访问令牌”；启动前必须先配置令牌，所有 MCP 请求都必须携带 `X-Legado-Token`。
+服务保留 SDK 的 Host 和 Origin 校验，只允许本机地址与设备当前局域网地址。令牌通过 HTTP 发送，因此只应在可信局域网中使用。
+端点面向可设置自定义请求头的本地或桌面客户端，不提供浏览器跨域 CORS 预检。
+
+通用 HTTP MCP 客户端可按以下字段配置：
+
+```json
+{
+  "url": "http://<设备IP>:1236/mcp",
+  "headers": {
+    "X-Legado-Token": "设置中配置的令牌"
+  }
+}
+```
+
+服务提供 8 个工具：`save_source`、`debug_source`、`list_sources`、`get_source`、`delete_sources`、
+`get_http_logs`、`get_http_log`、`set_http_log_recording`。书源写入、删除、调试和日志开关均属于修改操作；
+书源全文与已脱敏 HTTP 日志仍可能包含敏感业务数据，请只向可信客户端开放令牌。
+`debug_source` 返回的调试输出不会脱敏，也可能包含请求参数、书源正文或其他敏感内容。
+
 #### 获取替换规则
 
 ```
