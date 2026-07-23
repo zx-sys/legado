@@ -1,11 +1,13 @@
 package io.legado.app.ui.book.read.page.provider
 
+import android.graphics.Paint
 import android.graphics.Paint.FontMetrics
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Build
 import android.text.StaticLayout
 import android.text.TextPaint
+import androidx.core.net.toUri
 import androidx.core.os.postDelayed
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
@@ -16,6 +18,10 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.entities.TextChapter
+import io.legado.app.ui.book.read.page.entities.TextLine
+import io.legado.app.ui.book.read.page.entities.column.BaseColumn
+import io.legado.app.ui.book.read.page.entities.column.ReviewColumn
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.RealPathUtil
 import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.dpToPx
@@ -26,7 +32,6 @@ import io.legado.app.utils.spToPx
 import io.legado.app.utils.textHeight
 import kotlinx.coroutines.CoroutineScope
 import splitties.init.appCtx
-import androidx.core.net.toUri
 
 /**
  * 解析内容生成章节和页面
@@ -41,6 +46,12 @@ object ChapterProvider {
     const val reviewStr = "꧁"
     const val reviewChar = '꧁'
     const val indentChar = "　"
+
+    var reviewCountProvider: ((Int, Int) -> Int)? = null
+        private set
+    var reviewKeyProvider: ((Int, Int) -> String?)? = null
+        private set
+    var reviewTitleOffset: Int = 0
 
     @JvmStatic
     var viewWidth = 0

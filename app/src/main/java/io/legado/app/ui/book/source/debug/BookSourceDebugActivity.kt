@@ -38,6 +38,8 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
     private val searchView: SearchView by lazy {
         binding.titleBar.findViewById(R.id.search_view)
     }
+    private var loading = false
+
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it?.let {
             startSearch(it)

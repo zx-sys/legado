@@ -47,6 +47,7 @@ data class TextLine(
     var wordSpacing: Float = 0f,
     var exceed: Boolean = false,
     var onlyTextColumn: Boolean = true,
+    var reviewTitleOffset: Int = 0,
 ) {
 
     val columns: List<BaseColumn> get() = textColumns
@@ -69,6 +70,10 @@ data class TextLine(
         }
     var textPage: TextPage = emptyTextPage
     var isLeftLine = true
+
+    fun removeColumns(predicate: (BaseColumn) -> Boolean): Boolean {
+        return textColumns.removeAll(predicate)
+    }
 
     fun addColumn(column: BaseColumn) {
         if (column !is TextColumn) {

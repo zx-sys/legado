@@ -6,6 +6,7 @@ import android.os.Bundle
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
+import io.legado.app.BuildConfig
 import io.legado.app.constant.IntentAction
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
@@ -67,6 +68,11 @@ object ReadAloud {
         ttsEngine.toLongOrNull()?.let { id ->
             httpTTS = appDb.httpTTSDao.get(id)
             if (httpTTS != null) {
+                // 从 local.properties 注入 Edge TTS token
+                val token = BuildConfig.EdgeTtsToken
+                if (token.isNotEmpty()) {
+                    httpTTS?.header = "{\"Authorization\":\"Bearer $token\"}"
+                }
                 return HttpReadAloudService::class.java
             }
         }

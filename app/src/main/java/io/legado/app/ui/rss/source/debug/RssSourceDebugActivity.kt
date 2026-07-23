@@ -31,6 +31,8 @@ class RssSourceDebugActivity : VMBaseActivity<ActivityRssSourceDebugBinding, Rss
     override val viewModel by viewModels<RssSourceDebugModel>()
 
     private val adapter by lazy { RssSourceDebugAdapter(this) }
+    private var loading = false
+
     private val searchView: androidx.appcompat.widget.SearchView by lazy {
         binding.titleBar.findViewById(R.id.search_view)
     }

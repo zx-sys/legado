@@ -6,7 +6,6 @@
     <string name="app_name_s" translatable="false">LegadoPlus</string>
     <string name="receiving_shared_label">Legado·search</string>
     <string name="tip_perm_request_storage">Legado needs storage access to find and read books. please go "App Settings" to allow "Storage permission".</string>
-
     <!--Other-->
     <string name="menu_backup">Home</string>
     <string name="menu_restore">Restore</string>
@@ -1392,9 +1391,25 @@
     <string name="js_source_new">新建 JS 书源</string>
     <string name="js_source_edit">编辑 JS 书源</string>
     <string name="js_source_badge">JS</string>
-    <string name="review_total_count">Total: %d</string>
-    <string name="review_more_replies">%d more replies</string>
-    <string name="review_pause_audio">Pause</string>
-    <string name="audio_cache_notification_title">Audio Cache</string>
-    <string name="audio_cache_notification_text">%1$s %2$d/%3$d (Failed: %4$d)</string>
+    <string name="audio_cache_select_folder">Select audio cache folder</string>
+    <string name="audio_cache_range">Cache chapter range</string>
+    <string name="audio_cache_clear_current_chapter">Clear current chapter cache</string>
+    <string name="audio_cache_folder_selected">Audio cache folder selected</string>
+    <string name="audio_cache_folder_invalid">Audio cache folder is unavailable, please select it again</string>
+    <string name="audio_cache_folder_not_set">Please select an audio cache folder first</string>
+    <string name="audio_cache_start_range">Audio cache task queued</string>
+    <string name="audio_cache_current_chapter_cleared">Current chapter cache cleared</string>
+    <string name="audio_cache_current_chapter_not_found">Current chapter is not cached</string>
+    <string name="audio_cache_notification_title">Audio cache</string>
+    <string name="audio_cache_notification_text">"%1$s" cached %2$d/%3$d, failed %4$d</string>
+    <string name="audio_cache_corrupted_retry">Corrupted cache detected, switched to the online source and retried</string>
+    <string name="review_total_count">Total %1$d comments</string>
+    <string name="review_more_replies">View more %1$d replies</string>
+    <string name="review_pause_audio">Pause audio</string>
+    <string name="review_empty">No paragraph reviews</string>
+    <string name="review_rule_missing">Paragraph review rules are not configured</string>
+    <string name="review_detail_url_missing">Paragraph review detail URL is not configured</string>
+    <string name="review_detail_rule_missing">Paragraph review detail rules are not configured</string>
+    <string name="review_icon_color_title">Icon color</string>
+    <string name="review_icon_color_reset">Icon color reset to follow theme</string>
 </resources>
