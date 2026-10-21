@@ -38,6 +38,7 @@ object AppCacheManager {
                 || it.startsWith("userInfo_")
                 || it.startsWith("loginHeader_")
                 || it.startsWith("sourceVariable_")
+                || it.startsWith("infoMap_")
             ) {
                 memoryLruCache.remove(it)
             }
@@ -55,16 +56,21 @@ object CacheManager {
      * saveTime 单位为秒
      */
     @JvmOverloads
+    @Synchronized
     fun put(key: String, value: Any, saveTime: Int = 0) {
         val deadline =
-            if (saveTime == 0) 0 else System.currentTimeMillis() + saveTime * 1000
+            if (saveTime == 0) 0L else System.currentTimeMillis() + saveTime * 1000L
         when (value) {
             is ByteArray -> ACache.get().put(key, value, saveTime)
             else -> {
                 val valueStr = value.toString()
-                putMemory(key, valueStr)
                 val cache = Cache(key, valueStr, deadline)
                 appDb.cacheDao.insert(cache)
+                if (deadline == 0L) {
+                    putMemory(key, valueStr)
+                } else {
+                    deleteMemory(key)
+                }
             }
         }
     }
@@ -82,6 +88,7 @@ object CacheManager {
         memoryLruCache.remove(key)
     }
 
+    @Synchronized
     fun get(key: String): String? {
         getFromMemory(key)?.let {
             if (it is String) return it
@@ -89,12 +96,15 @@ object CacheManager {
         val cache = appDb.cacheDao.get(key)
         if (cache != null && (cache.deadline == 0L || cache.deadline > System.currentTimeMillis())) {
             return cache.value?.also {
-                putMemory(key, it)
+                if (cache.deadline == 0L) {
+                    putMemory(key, it)
+                }
             }
         }
         return null
     }
 
+    @Synchronized
     fun get(key: String, onlyDisk: Boolean): String? {
         if (!onlyDisk) {
             return get(key)
@@ -146,6 +156,7 @@ object CacheManager {
         return ACache.get().getAsString(key)
     }
 
+    @Synchronized
     fun delete(key: String) {
         appDb.cacheDao.delete(key)
         deleteMemory(key)

@@ -9,6 +9,7 @@ import androidx.room.Transaction
 import androidx.room.Update
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookSourceCheckState
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.splitNotBlank
@@ -16,6 +17,10 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+
+private const val BOOK_SOURCE_NO_GROUP_FILTER = """
+trim(coalesce(bookSourceGroup, ''), $GROUP_TRIM_CHARACTERS) in ('', '未分组')
+"""
 
 @Dao
 interface BookSourceDao {
@@ -33,6 +38,18 @@ interface BookSourceDao {
         order by b.customOrder asc"""
     )
     fun flowSearch(searchKey: String): Flow<List<BookSourcePart>>
+
+    @Query(
+        """select bp.*
+        from book_sources b join book_sources_part bp on b.bookSourceUrl = bp.bookSourceUrl
+        where b.bookSourceName like '%' || :searchKey || '%'
+        or b.bookSourceGroup like '%' || :searchKey || '%'
+        or b.bookSourceUrl like '%' || :searchKey || '%'
+        or b.bookSourceComment like '%' || :searchKey || '%'
+        or bp.checkDetail like '%' || :searchKey || '%'
+        order by b.customOrder asc"""
+    )
+    fun flowSearchWithCheckDetail(searchKey: String): Flow<List<BookSourcePart>>
 
     @Query(
         """select * from book_sources 
@@ -57,24 +74,20 @@ interface BookSourceDao {
     fun flowSearchEnabled(searchKey: String): Flow<List<BookSourcePart>>
 
     @Query(
-        """select * from book_sources_part 
-        where bookSourceGroup = :searchKey
-        or bookSourceGroup like :searchKey || ',%' 
-        or bookSourceGroup like  '%,' || :searchKey
-        or bookSourceGroup like  '%,' || :searchKey || ',%' 
-        order by customOrder asc"""
+        """select t2.* from book_sources_part as t2
+        where """ + NON_EMPTY_SOURCE_GROUP_CONDITION + """
+        """ + SOURCE_GROUP_MEMBERSHIP_FILTER + """
+        order by t2.customOrder asc"""
     )
-    fun flowGroupSearch(searchKey: String): Flow<List<BookSourcePart>>
+    fun flowGroupSearch(sourceGroup: String): Flow<List<BookSourcePart>>
 
     @Query(
-        """select * from book_sources 
-        where bookSourceGroup = :searchKey
-        or bookSourceGroup like :searchKey || ',%' 
-        or bookSourceGroup like  '%,' || :searchKey
-        or bookSourceGroup like  '%,' || :searchKey || ',%' 
-        order by customOrder asc"""
+        """select t2.* from book_sources as t2
+        where """ + NON_EMPTY_SOURCE_GROUP_CONDITION + """
+        """ + SOURCE_GROUP_MEMBERSHIP_FILTER + """
+        order by t2.customOrder asc"""
     )
-    fun groupSearch(searchKey: String): List<BookSource>
+    fun groupSearch(sourceGroup: String): List<BookSource>
 
     @Query("select * from book_sources_part where enabled = 1 order by customOrder asc")
     fun flowEnabled(): Flow<List<BookSourcePart>>
@@ -93,7 +106,7 @@ interface BookSourceDao {
 
     @Query(
         """select * from book_sources_part 
-        where bookSourceGroup is null or bookSourceGroup = '' or bookSourceGroup like '%未分组%'
+        where """ + BOOK_SOURCE_NO_GROUP_FILTER + """
         order by customOrder asc"""
     )
     fun flowNoGroup(): Flow<List<BookSourcePart>>
@@ -115,16 +128,14 @@ interface BookSourceDao {
     fun flowExplore(key: String): Flow<List<BookSourcePart>>
 
     @Query(
-        """select * from book_sources_part 
-        where enabledExplore = 1 
-        and hasExploreUrl = 1 
-        and (bookSourceGroup = :key
-            or bookSourceGroup like :key || ',%' 
-            or bookSourceGroup like  '%,' || :key
-            or bookSourceGroup like  '%,' || :key || ',%') 
-        order by customOrder asc"""
+        """select t2.* from book_sources_part as t2
+        where t2.enabledExplore = 1
+        and t2.hasExploreUrl = 1
+        and """ + NON_EMPTY_SOURCE_GROUP_CONDITION + """
+        """ + SOURCE_GROUP_MEMBERSHIP_FILTER + """
+        order by t2.customOrder asc"""
     )
-    fun flowGroupExplore(key: String): Flow<List<BookSourcePart>>
+    fun flowGroupExplore(sourceGroup: String): Flow<List<BookSourcePart>>
 
     @Query("select distinct bookSourceGroup from book_sources where trim(bookSourceGroup) <> ''")
     fun flowGroupsUnProcessed(): Flow<List<String>>
@@ -162,15 +173,12 @@ interface BookSourceDao {
     fun getEnabledByGroup(group: String): List<BookSource>
 
     @Query(
-        """select * from book_sources_part 
-        where enabled = 1 
-        and (bookSourceGroup = :group
-            or bookSourceGroup like :group || ',%' 
-            or bookSourceGroup like  '%,' || :group
-            or bookSourceGroup like  '%,' || :group || ',%')
-        order by customOrder asc"""
+        """select t2.* from book_sources_part as t2
+        where t2.enabled = 1
+        """ + SOURCE_GROUP_MEMBERSHIP_FILTER + """
+        order by t2.customOrder asc"""
     )
-    fun getEnabledPartByGroup(group: String): List<BookSourcePart>
+    fun getEnabledPartByGroup(sourceGroup: String): List<BookSourcePart>
 
     @Query(
         """select * from book_sources 
@@ -211,7 +219,7 @@ interface BookSourceDao {
 
     @get:Query(
         """select * from book_sources 
-        where bookSourceGroup is null or bookSourceGroup = '' or bookSourceGroup like '%未分组%'"""
+        where """ + BOOK_SOURCE_NO_GROUP_FILTER
     )
     val allNoGroup: List<BookSource>
 
@@ -266,10 +274,72 @@ interface BookSourceDao {
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(vararg bookSource: BookSource)
+    fun insertSources(vararg bookSource: BookSource)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun saveCheckStates(vararg states: BookSourceCheckState)
+
+    @Query("select * from book_source_check_states")
+    fun allCheckStates(): List<BookSourceCheckState>
+
+    @Query("select * from book_source_check_states where bookSourceUrl = :url")
+    fun getCheckState(url: String): BookSourceCheckState?
+
+    @Transaction
+    fun insert(vararg bookSource: BookSource) {
+        insertSources(*bookSource)
+        saveCheckStates(*bookSource.map { BookSourceCheckState(it.bookSourceUrl) }.toTypedArray())
+    }
 
     @Update
-    fun update(vararg bookSource: BookSource)
+    fun updateSources(vararg bookSource: BookSource)
+
+    @Transaction
+    fun update(vararg bookSource: BookSource) {
+        for (source in bookSource) {
+            val current = getBookSource(source.bookSourceUrl) ?: continue
+            updateSources(source)
+            if (current.checkContent() != source.checkContent()) {
+                saveCheckStates(BookSourceCheckState(source.bookSourceUrl))
+            }
+        }
+    }
+
+    /** Commit the entire queue before starting any network request. */
+    @Transaction
+    fun beginCheck(sources: List<BookSourcePart>): List<BookSourcePart> = sources.map { selected ->
+        val current = getBookSourcePart(selected.bookSourceUrl)
+        if (current == null || current.lastUpdateTime != selected.lastUpdateTime ||
+            current.checkRevision != selected.checkRevision) {
+            selected.copy()
+        } else {
+            val state = BookSourceCheckState(selected.bookSourceUrl, sourceRevision = current.sourceRevision)
+            saveCheckStates(state)
+            selected.copy(checkStatus = state.status, checkRevision = state.revision,
+                checkedAt = 0, checkDetail = "")
+        }
+    }
+
+    @Query("""update book_source_check_states set status = :status, detail = :detail,
+        checkedAt = :checkedAt where bookSourceUrl = :url and revision = :revision and status = 'NEEDS_CHECK'""")
+    fun finishCheck(url: String, revision: String, status: String, detail: String, checkedAt: Long): Int
+
+    @Query("update book_sources set respondTime = :respondTime where bookSourceUrl = :url")
+    fun updateRespondTime(url: String, respondTime: Long)
+
+    @Transaction
+    fun completeCheck(selected: BookSourcePart, status: String, detail: String, respondTime: Long): Boolean {
+        val updated = finishCheck(selected.bookSourceUrl, selected.checkRevision, status,
+            detail, System.currentTimeMillis())
+        if (updated == 0) return false
+        updateRespondTime(selected.bookSourceUrl, respondTime)
+        return true
+    }
+
+    fun completeCheck(selected: BookSourcePart, passed: Boolean, detail: String, respondTime: Long): Boolean =
+        completeCheck(selected,
+            if (passed) BookSourceCheckState.PASSED else BookSourceCheckState.FAILED,
+            detail, respondTime)
 
     @Delete
     fun delete(vararg bookSource: BookSource)
@@ -333,11 +403,11 @@ interface BookSourceDao {
         upOrder(bookSource.bookSourceUrl, bookSource.customOrder)
     }
 
-    @Query(
-        """update book_sources 
-        set bookSourceGroup = :bookSourceGroup where bookSourceUrl = :bookSourceUrl"""
-    )
-    fun upGroup(bookSourceUrl: String, bookSourceGroup: String)
+    @Transaction
+    fun upGroup(bookSourceUrl: String, bookSourceGroup: String) {
+        val current = getBookSource(bookSourceUrl) ?: return
+        if (current.bookSourceGroup != bookSourceGroup) update(current.copy(bookSourceGroup = bookSourceGroup))
+    }
 
     @Transaction
     fun upGroup(bookSources: List<BookSourcePart>) {

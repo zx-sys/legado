@@ -7,6 +7,7 @@ import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.*
 import io.legado.app.help.book.isWebFile
 import io.legado.app.help.coroutine.CompositeCoroutine
+import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.source.sortUrls
 import io.legado.app.model.rss.Rss
 import io.legado.app.model.webBook.WebBook
@@ -18,13 +19,43 @@ import kotlinx.coroutines.CoroutineScope
 import java.text.SimpleDateFormat
 import java.util.*
 
+enum class CheckSourceStatus {
+    PASSED,
+    FAILED,
+    UNCHECKABLE,
+    NOT_COMPLETED,
+}
+
+data class CheckSourceResult(
+    val status: CheckSourceStatus,
+    val detail: String = "",
+)
+
+data class CheckSourceSnapshot(
+    val messages: Map<String, String>,
+    val results: Map<String, CheckSourceResult>,
+)
+
 object Debug {
+    private const val MAX_FINISHED_CHECK_SESSIONS = 4
+
+    @get:Synchronized
     var callback: Callback? = null
+        private set
     private var debugSource: String? = null
     private val tasks: CompositeCoroutine = CompositeCoroutine()
+    private var debugSessionId = 0L
     val debugMessageMap = HashMap<String, String>()
     private val debugTimeMap = HashMap<String, Long>()
+    private var nextCheckSessionId = 0L
+    private var activeCheckSessionId: Long? = null
+    private var startedCheckSessionId: Long? = null
+    private val activeCheckSourceUrls = HashSet<String>()
+    private val activeCheckResults = HashMap<String, CheckSourceResult>()
+    private val finishedCheckSnapshots = LinkedHashMap<Long, CheckSourceSnapshot>()
+    @get:Synchronized
     var isChecking: Boolean = false
+        private set
 
     @SuppressLint("ConstantLocale")
     private val debugTimeFormat = SimpleDateFormat("[mm:ss.SSS]", Locale.getDefault())
@@ -70,8 +101,28 @@ object Debug {
         }
     }
 
+    @Synchronized
     internal fun isDebugging(sourceUrl: String): Boolean {
         return callback != null && debugSource == sourceUrl
+    }
+
+    @Synchronized
+    fun tryAcquireCallback(owner: Callback): Boolean {
+        if (isChecking) return false
+        val current = callback
+        if (current != null) return current === owner
+        callback = owner
+        return true
+    }
+
+    @Synchronized
+    fun cancelDebug(owner: Callback): Boolean {
+        if (callback !== owner) return false
+        debugSessionId++
+        tasks.clear()
+        debugSource = null
+        callback = null
+        return true
     }
 
     @Synchronized
@@ -79,282 +130,473 @@ object Debug {
         log(debugSource, msg ?: "", true)
     }
 
-    fun cancelDebug(destroy: Boolean = false) {
+    @Synchronized
+    private fun beginDebugSession(sourceUrl: String): Long {
         tasks.clear()
+        debugSessionId++
+        debugSource = sourceUrl
+        startTime = System.currentTimeMillis()
+        return debugSessionId
+    }
 
-        if (destroy) {
-            debugSource = null
-            callback = null
+    @Synchronized
+    fun startSimpleDebug(owner: Callback, sourceUrl: String): Boolean {
+        if (!tryAcquireCallback(owner)) return false
+        beginDebugSession(sourceUrl)
+        return true
+    }
+
+    private inline fun withActiveDebugSession(sessionId: Long, block: () -> Unit) {
+        synchronized(this) {
+            if (callback != null && debugSessionId == sessionId) {
+                block()
+            }
         }
     }
 
-    fun startChecking(source: BookSource) {
+    private fun trackDebugTask(sessionId: Long, task: Coroutine<*>) {
+        synchronized(this) {
+            if (callback != null && debugSessionId == sessionId) {
+                tasks.add(task)
+            } else {
+                task.cancel()
+            }
+        }
+    }
+
+    @Synchronized
+    fun tryStartCheckSession(): Long? {
+        if (callback != null || isChecking) return null
+        val sessionId = ++nextCheckSessionId
+        activeCheckSessionId = sessionId
+        startedCheckSessionId = null
+        activeCheckSourceUrls.clear()
+        activeCheckResults.clear()
         isChecking = true
+        return sessionId
+    }
+
+    fun tryStartChecking(): Boolean = tryStartCheckSession() != null
+
+    @Synchronized
+    fun markCheckServiceStarted(sessionId: Long): Boolean {
+        if (!isChecking || activeCheckSessionId != sessionId) return false
+        startedCheckSessionId = sessionId
+        return true
+    }
+
+    @Synchronized
+    fun isCheckServiceStarted(sessionId: Long): Boolean =
+        startedCheckSessionId == sessionId || finishedCheckSnapshots.containsKey(sessionId)
+
+    @Synchronized
+    fun isChecking(sessionId: Long): Boolean =
+        isChecking && activeCheckSessionId == sessionId
+
+    @Synchronized
+    fun currentCheckSession(): Long? = activeCheckSessionId.takeIf { isChecking }
+
+    @Synchronized
+    fun prepareCheckSession(sessionId: Long, sourceUrls: Collection<String>) {
+        if (activeCheckSessionId != sessionId) return
+        activeCheckSourceUrls.clear()
+        activeCheckSourceUrls.addAll(sourceUrls)
+        activeCheckResults.clear()
+        sourceUrls.forEach {
+            debugMessageMap.remove(it)
+            debugTimeMap.remove(it)
+        }
+    }
+
+    @Synchronized
+    fun getCheckSnapshot(
+        sessionId: Long,
+        sourceUrls: Collection<String>,
+    ): CheckSourceSnapshot {
+        val snapshot = if (activeCheckSessionId == sessionId) {
+            CheckSourceSnapshot(debugMessageMap, activeCheckResults)
+        } else {
+            finishedCheckSnapshots[sessionId] ?: CheckSourceSnapshot(emptyMap(), emptyMap())
+        }
+        return CheckSourceSnapshot(
+            messages = sourceUrls.associateWith { snapshot.messages[it].orEmpty() },
+            results = sourceUrls.mapNotNull { url ->
+                snapshot.results[url]?.let { url to it }
+            }.toMap(),
+        )
+    }
+
+    @Synchronized
+    fun takeCheckSnapshot(
+        sessionId: Long,
+        sourceUrls: Collection<String>,
+    ): CheckSourceSnapshot {
+        val snapshot = getCheckSnapshot(sessionId, sourceUrls)
+        if (activeCheckSessionId != sessionId) {
+            finishedCheckSnapshots.remove(sessionId)
+        }
+        return snapshot
+    }
+
+    @Synchronized
+    fun recordCheckResult(sessionId: Long, sourceUrl: String, result: CheckSourceResult) {
+        if (activeCheckSessionId != sessionId) return
+        activeCheckResults[sourceUrl] = result
+    }
+
+    @Synchronized
+    fun startChecking(sessionId: Long, source: BookSource) {
+        if (!isChecking || activeCheckSessionId != sessionId || callback != null) return
         debugTimeMap[source.bookSourceUrl] = System.currentTimeMillis()
         debugMessageMap[source.bookSourceUrl] = "${debugTimeFormat.format(Date(0))} 开始校验"
     }
 
-    fun finishChecking() {
+    @Synchronized
+    fun finishChecking(sessionId: Long): Boolean {
+        if (!isChecking || activeCheckSessionId != sessionId) return false
+        if (startedCheckSessionId == sessionId) {
+            finishedCheckSnapshots[sessionId] = CheckSourceSnapshot(
+                messages = activeCheckSourceUrls.associateWith { debugMessageMap[it].orEmpty() },
+                results = activeCheckSourceUrls.mapNotNull { url ->
+                    activeCheckResults[url]?.let { url to it }
+                }.toMap(),
+            )
+        }
+        while (finishedCheckSnapshots.size > MAX_FINISHED_CHECK_SESSIONS) {
+            finishedCheckSnapshots.remove(finishedCheckSnapshots.keys.first())
+        }
         isChecking = false
+        activeCheckSessionId = null
+        startedCheckSessionId = null
+        activeCheckSourceUrls.clear()
+        activeCheckResults.clear()
+        return true
     }
 
-    fun getRespondTime(sourceUrl: String): Long {
-        return debugTimeMap[sourceUrl] ?: CheckSource.timeout
+    @Synchronized
+    fun finishChecking() {
+        activeCheckSessionId?.let { finishChecking(it) }
     }
 
+    @Synchronized
+    fun getRespondTime(sessionId: Long, sourceUrl: String, succeeded: Boolean): Long {
+        if (activeCheckSessionId != sessionId) return CheckSource.timeout
+        val startTime = debugTimeMap[sourceUrl] ?: return CheckSource.timeout
+        val spendingTime = System.currentTimeMillis() - startTime
+        return if (succeeded) spendingTime else CheckSource.timeout + spendingTime
+    }
+
+    @Synchronized
+    fun updateFinalMessage(sessionId: Long, sourceUrl: String, state: String) {
+        if (activeCheckSessionId != sessionId) return
+        updateFinalMessage(sourceUrl, state)
+    }
+
+    @Synchronized
     fun updateFinalMessage(sourceUrl: String, state: String) {
         if (debugTimeMap[sourceUrl] != null && debugMessageMap[sourceUrl] != null) {
             val spendingTime = System.currentTimeMillis() - debugTimeMap[sourceUrl]!!
             debugTimeMap[sourceUrl] =
-                if (state == "校验成功") spendingTime else CheckSource.timeout + spendingTime
+                if (state == "校验成功" || state.startsWith("无法校验")) {
+                    spendingTime
+                } else {
+                    CheckSource.timeout + spendingTime
+                }
             val printTime = debugTimeFormat.format(Date(spendingTime))
             debugMessageMap[sourceUrl] = "$printTime $state"
         }
     }
 
+    @Synchronized
+    fun updateCheckMessage(sessionId: Long, sourceUrl: String, state: String) {
+        if (activeCheckSessionId != sessionId) return
+        val printTime = debugMessageMap[sourceUrl]?.substringBefore(' ') ?: return
+        debugMessageMap[sourceUrl] = "$printTime $state"
+    }
+
     suspend fun startDebug(scope: CoroutineScope, rssSource: RssSource) {
-        cancelDebug()
-        debugSource = rssSource.sourceUrl
-        log(debugSource, "︾开始解析")
+        val sessionId = beginDebugSession(rssSource.sourceUrl)
+        withActiveDebugSession(sessionId) {
+            log(debugSource, "︾开始解析")
+        }
         val sort = rssSource.sortUrls().firstOrNull() ?: ("" to rssSource.sourceUrl)
-        Rss.getArticles(scope, sort.first, sort.second, rssSource, 1)
+        val articles = Rss.getArticles(scope, sort.first, sort.second, rssSource, 1)
             .onSuccess {
-                if (it.first.isEmpty()) {
-                    log(debugSource, "⇒列表页解析成功，为空")
-                    log(debugSource, "︽解析完成", state = 1000)
-                } else {
+                withActiveDebugSession(sessionId) {
+                    if (it.first.isEmpty()) {
+                        log(debugSource, "⇒列表页解析成功，为空")
+                        log(debugSource, "︽解析完成", state = 1000)
+                    } else {
+                        val ruleContent = rssSource.ruleContent
+                        if (!rssSource.ruleArticles.isNullOrBlank() && rssSource.ruleDescription.isNullOrBlank()) {
+                            log(debugSource, "︽列表页解析完成")
+                            log(debugSource, showTime = false)
+                            if (ruleContent.isNullOrEmpty()) {
+                                log(debugSource, "⇒内容规则为空，默认获取整个网页", state = 1000)
+                            } else {
+                                rssContentDebug(scope, it.first[0], ruleContent, rssSource, sessionId)
+                            }
+                        } else {
+                            log(debugSource, "⇒存在描述规则，不解析内容页")
+                            log(debugSource, "︽解析完成", state = 1000)
+                        }
+                    }
+                }
+            }
+            .onError {
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, it.stackTraceStr, state = -1)
+                }
+            }
+        trackDebugTask(sessionId, articles)
+    }
+
+    fun startDebug(scope: CoroutineScope, rssSource: RssSource, key: String) {
+        val sessionId = beginDebugSession(rssSource.sourceUrl)
+        withActiveDebugSession(sessionId) {
+            when {
+                key.contains("::") -> {
+                    val name = key.substringBefore("::")
+                    val url = key.substringAfter("::")
+                    log(debugSource, "⇒开始访问分类页:$url")
+                    log(debugSource, "︾开始解析分类页")
+                    sortDebug(scope, rssSource, name, url, sessionId = sessionId)
+                }
+
+                key.isAbsUrl() -> {
                     val ruleContent = rssSource.ruleContent
                     if (!rssSource.ruleArticles.isNullOrBlank() && rssSource.ruleDescription.isNullOrBlank()) {
-                        log(debugSource, "︽列表页解析完成")
-                        log(debugSource, showTime = false)
                         if (ruleContent.isNullOrEmpty()) {
                             log(debugSource, "⇒内容规则为空，默认获取整个网页", state = 1000)
                         } else {
-                            rssContentDebug(scope, it.first[0], ruleContent, rssSource)
+                            val rssArticle = RssArticle()
+                            rssArticle.origin = rssSource.sourceUrl
+                            rssArticle.link = key
+                            log(debugSource, "⇒开始访问内容页:$key")
+                            rssContentDebug(scope, rssArticle, ruleContent, rssSource, sessionId)
                         }
                     } else {
                         log(debugSource, "⇒存在描述规则，不解析内容页")
                         log(debugSource, "︽解析完成", state = 1000)
                     }
                 }
-            }
-            .onError {
-                log(debugSource, it.stackTraceStr, state = -1)
-            }
-    }
 
-    fun startDebug(scope: CoroutineScope, rssSource: RssSource, key: String) {
-        cancelDebug()
-        debugSource = rssSource.sourceUrl
-        startTime = System.currentTimeMillis()
-        when {
-            key.contains("::") -> {
-                val name = key.substringBefore("::")
-                val url = key.substringAfter("::")
-                log(debugSource, "⇒开始访问分类页:$url")
-                log(debugSource, "︾开始解析分类页")
-                sortDebug(scope, rssSource, name, url)
-            }
-
-            key.isAbsUrl() -> {
-                val ruleContent = rssSource.ruleContent
-                if (!rssSource.ruleArticles.isNullOrBlank() && rssSource.ruleDescription.isNullOrBlank()) {
-                    if (ruleContent.isNullOrEmpty()) {
-                        log(debugSource, "⇒内容规则为空，默认获取整个网页", state = 1000)
-                    } else {
-                        val rssArticle = RssArticle()
-                        rssArticle.origin = rssSource.sourceUrl
-                        rssArticle.link = key
-                        log(debugSource, "⇒开始访问内容页:$key")
-                        rssContentDebug(scope, rssArticle, ruleContent, rssSource)
+                else -> {
+                    val searchUrl = rssSource.searchUrl
+                    if (searchUrl.isNullOrEmpty()) {
+                        log(debugSource, "⇒搜索URL为空", state = -1)
+                        return@withActiveDebugSession
                     }
-                } else {
-                    log(debugSource, "⇒存在描述规则，不解析内容页")
-                    log(debugSource, "︽解析完成", state = 1000)
+                    log(debugSource, "⇒开始搜索关键字:$key")
+                    log(debugSource, "︾开始解析搜索页")
+                    sortDebug(scope, rssSource, "搜索", searchUrl, key, sessionId)
                 }
-            }
-
-            else -> {
-                val searchUrl = rssSource.searchUrl
-                if (searchUrl.isNullOrEmpty()) {
-                    log(debugSource, "⇒搜索URL为空", state = -1)
-                    return
-                }
-                log(debugSource, "⇒开始搜索关键字:$key")
-                log(debugSource, "︾开始解析搜索页")
-                sortDebug(scope, rssSource, "搜索", searchUrl, key)
             }
         }
     }
 
-    private fun sortDebug(scope: CoroutineScope, rssSource: RssSource, name: String, url: String, key: String? = null) {
-        Rss.getArticles(scope, name, url, rssSource, 1, key)
+    private fun sortDebug(
+        scope: CoroutineScope,
+        rssSource: RssSource,
+        name: String,
+        url: String,
+        key: String? = null,
+        sessionId: Long,
+    ) {
+        val articles = Rss.getArticles(scope, name, url, rssSource, 1, key)
             .onSuccess {
-                if (it.first.isEmpty()) {
-                    log(debugSource, "⇒列表页解析成功，为空")
-                    log(debugSource, "︽解析完成", state = 1000)
-                } else {
-                    val ruleContent = rssSource.ruleContent
-                    if (!rssSource.ruleArticles.isNullOrBlank() && rssSource.ruleDescription.isNullOrBlank()) {
-                        log(debugSource, "︽列表页解析完成")
-                        log(debugSource, showTime = false)
-                        if (ruleContent.isNullOrEmpty()) {
-                            log(debugSource, "⇒内容规则为空，默认获取整个网页", state = 1000)
-                        } else {
-                            rssContentDebug(scope, it.first[0], ruleContent, rssSource)
-                        }
-                    } else {
-                        log(debugSource, "⇒存在描述规则，不解析内容页")
+                withActiveDebugSession(sessionId) {
+                    if (it.first.isEmpty()) {
+                        log(debugSource, "⇒列表页解析成功，为空")
                         log(debugSource, "︽解析完成", state = 1000)
+                    } else {
+                        val ruleContent = rssSource.ruleContent
+                        if (!rssSource.ruleArticles.isNullOrBlank() && rssSource.ruleDescription.isNullOrBlank()) {
+                            log(debugSource, "︽列表页解析完成")
+                            log(debugSource, showTime = false)
+                            if (ruleContent.isNullOrEmpty()) {
+                                log(debugSource, "⇒内容规则为空，默认获取整个网页", state = 1000)
+                            } else {
+                                rssContentDebug(scope, it.first[0], ruleContent, rssSource, sessionId)
+                            }
+                        } else {
+                            log(debugSource, "⇒存在描述规则，不解析内容页")
+                            log(debugSource, "︽解析完成", state = 1000)
+                        }
                     }
                 }
             }
             .onError {
-                log(debugSource, it.stackTraceStr, state = -1)
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, it.stackTraceStr, state = -1)
+                }
             }
+        trackDebugTask(sessionId, articles)
     }
 
     private fun rssContentDebug(
         scope: CoroutineScope,
         rssArticle: RssArticle,
         ruleContent: String,
-        rssSource: RssSource
+        rssSource: RssSource,
+        sessionId: Long,
     ) {
         log(debugSource, "︾开始解析内容页")
-        Rss.getContent(scope, rssArticle, ruleContent, rssSource)
+        val content = Rss.getContent(scope, rssArticle, ruleContent, rssSource)
             .onSuccess {
-                log(debugSource, it)
-                log(debugSource, "︽内容页解析完成", state = 1000)
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, it)
+                    log(debugSource, "︽内容页解析完成", state = 1000)
+                }
             }
             .onError {
-                log(debugSource, it.stackTraceStr, state = -1)
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, it.stackTraceStr, state = -1)
+                }
             }
+        trackDebugTask(sessionId, content)
     }
 
     fun startDebug(scope: CoroutineScope, bookSource: BookSource, key: String) {
-        cancelDebug()
-        debugSource = bookSource.bookSourceUrl
-        startTime = System.currentTimeMillis()
-        when {
-            key.isAbsUrl() -> {
-                val book = Book()
-                book.origin = bookSource.bookSourceUrl
-                book.bookUrl = key
-                log(debugSource, "⇒开始访问详情页:$key")
-                infoDebug(scope, bookSource, book)
-            }
+        val sessionId = beginDebugSession(bookSource.bookSourceUrl)
+        withActiveDebugSession(sessionId) {
+            when {
+                key.isAbsUrl() -> {
+                    val book = Book()
+                    book.origin = bookSource.bookSourceUrl
+                    book.bookUrl = key
+                    log(debugSource, "⇒开始访问详情页:$key")
+                    infoDebug(scope, bookSource, book, sessionId)
+                }
 
-            key.contains("::") -> {
-                val url = key.substringAfter("::")
-                log(debugSource, "⇒开始访问发现页:$url")
-                exploreDebug(scope, bookSource, url)
-            }
+                key.contains("::") -> {
+                    val url = key.substringAfter("::")
+                    log(debugSource, "⇒开始访问发现页:$url")
+                    exploreDebug(scope, bookSource, url, sessionId)
+                }
 
-            key.startsWith("++") -> {
-                val url = key.substring(2)
-                val book = Book()
-                book.origin = bookSource.bookSourceUrl
-                book.tocUrl = url
-                log(debugSource, "⇒开始访目录页:$url")
-                tocDebug(scope, bookSource, book)
-            }
+                key.startsWith("++") -> {
+                    val url = key.substring(2)
+                    val book = Book()
+                    book.origin = bookSource.bookSourceUrl
+                    book.tocUrl = url
+                    log(debugSource, "⇒开始访目录页:$url")
+                    tocDebug(scope, bookSource, book, sessionId)
+                }
 
-            key.startsWith("--") -> {
-                val url = key.substring(2)
-                val book = Book()
-                book.origin = bookSource.bookSourceUrl
-                log(debugSource, "⇒开始访正文页:$url")
-                val chapter = BookChapter()
-                chapter.title = "调试"
-                chapter.url = url
-                contentDebug(scope, bookSource, book, chapter, null)
-            }
+                key.startsWith("--") -> {
+                    val url = key.substring(2)
+                    val book = Book()
+                    book.origin = bookSource.bookSourceUrl
+                    log(debugSource, "⇒开始访正文页:$url")
+                    val chapter = BookChapter()
+                    chapter.title = "调试"
+                    chapter.url = url
+                    contentDebug(scope, bookSource, book, chapter, null, sessionId)
+                }
 
-            else -> {
-                log(debugSource, "⇒开始搜索关键字:$key")
-                searchDebug(scope, bookSource, key)
+                else -> {
+                    log(debugSource, "⇒开始搜索关键字:$key")
+                    searchDebug(scope, bookSource, key, sessionId)
+                }
             }
         }
     }
 
-    private fun exploreDebug(scope: CoroutineScope, bookSource: BookSource, url: String) {
+    private fun exploreDebug(scope: CoroutineScope, bookSource: BookSource, url: String, sessionId: Long) {
         log(debugSource, "︾开始解析发现页")
         val explore = WebBook.exploreBook(scope, bookSource, url, 1)
             .onSuccess { exploreBooks ->
-                if (exploreBooks.isNotEmpty()) {
-                    log(debugSource, "︽发现页解析完成")
-                    log(debugSource, showTime = false)
-                    infoDebug(scope, bookSource, exploreBooks[0].toBook())
-                } else {
-                    log(debugSource, "︽未获取到书籍", state = -1)
+                withActiveDebugSession(sessionId) {
+                    if (exploreBooks.isNotEmpty()) {
+                        log(debugSource, "︽发现页解析完成")
+                        log(debugSource, showTime = false)
+                        infoDebug(scope, bookSource, exploreBooks[0].toBook(), sessionId)
+                    } else {
+                        log(debugSource, "︽未获取到书籍", state = -1)
+                    }
                 }
             }
             .onError {
-                log(debugSource, it.stackTraceStr, state = -1)
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, it.stackTraceStr, state = -1)
+                }
             }
-        tasks.add(explore)
+        trackDebugTask(sessionId, explore)
     }
 
-    private fun searchDebug(scope: CoroutineScope, bookSource: BookSource, key: String) {
+    private fun searchDebug(scope: CoroutineScope, bookSource: BookSource, key: String, sessionId: Long) {
         log(debugSource, "︾开始解析搜索页")
         val search = WebBook.searchBook(scope, bookSource, key, 1)
             .onSuccess { searchBooks ->
-                if (searchBooks.isNotEmpty()) {
-                    log(debugSource, "︽搜索页解析完成")
-                    log(debugSource, showTime = false)
-                    infoDebug(scope, bookSource, searchBooks[0].toBook())
-                } else {
-                    log(debugSource, "︽未获取到书籍", state = -1)
+                withActiveDebugSession(sessionId) {
+                    if (searchBooks.isNotEmpty()) {
+                        log(debugSource, "︽搜索页解析完成")
+                        log(debugSource, showTime = false)
+                        infoDebug(scope, bookSource, searchBooks[0].toBook(), sessionId)
+                    } else {
+                        log(debugSource, "︽未获取到书籍", state = -1)
+                    }
                 }
             }
             .onError {
-                log(debugSource, it.stackTraceStr, state = -1)
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, it.stackTraceStr, state = -1)
+                }
             }
-        tasks.add(search)
+        trackDebugTask(sessionId, search)
     }
 
-    private fun infoDebug(scope: CoroutineScope, bookSource: BookSource, book: Book) {
+    private fun infoDebug(scope: CoroutineScope, bookSource: BookSource, book: Book, sessionId: Long) {
         if (book.tocUrl.isNotBlank()) {
             log(debugSource, "≡已获取目录链接,跳过详情页")
             log(debugSource, showTime = false)
-            tocDebug(scope, bookSource, book)
+            tocDebug(scope, bookSource, book, sessionId)
             return
         }
         log(debugSource, "︾开始解析详情页")
         val info = WebBook.getBookInfo(scope, bookSource, book)
             .onSuccess {
-                log(debugSource, "︽详情页解析完成")
-                log(debugSource, showTime = false)
-                if (!book.isWebFile) {
-                    tocDebug(scope, bookSource, book)
-                } else {
-                    log(debugSource, "≡文件类书源跳过解析目录", state = 1000)
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, "︽详情页解析完成")
+                    log(debugSource, showTime = false)
+                    if (!book.isWebFile) {
+                        tocDebug(scope, bookSource, book, sessionId)
+                    } else {
+                        log(debugSource, "≡文件类书源跳过解析目录", state = 1000)
+                    }
                 }
             }
             .onError {
-                log(debugSource, it.stackTraceStr, state = -1)
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, it.stackTraceStr, state = -1)
+                }
             }
-        tasks.add(info)
+        trackDebugTask(sessionId, info)
     }
 
-    private fun tocDebug(scope: CoroutineScope, bookSource: BookSource, book: Book) {
+    private fun tocDebug(scope: CoroutineScope, bookSource: BookSource, book: Book, sessionId: Long) {
         log(debugSource, "︾开始解析目录页")
         val chapterList = WebBook.getChapterList(scope, bookSource, book)
             .onSuccess { chapters ->
-                log(debugSource, "︽目录页解析完成")
-                log(debugSource, showTime = false)
-                val toc = chapters.filter { !(it.isVolume && it.url.startsWith(it.title)) }
-                if (toc.isEmpty()) {
-                    log(debugSource, "≡没有正文章节")
-                    return@onSuccess
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, "︽目录页解析完成")
+                    log(debugSource, showTime = false)
+                    val toc = chapters.filter { !(it.isVolume && it.url.startsWith(it.title)) }
+                    if (toc.isEmpty()) {
+                        log(debugSource, "≡没有正文章节", state = -1)
+                    } else {
+                        val nextChapterUrl = toc.getOrNull(1)?.url ?: toc.first().url
+                        contentDebug(scope, bookSource, book, toc.first(), nextChapterUrl, sessionId)
+                    }
                 }
-                val nextChapterUrl = toc.getOrNull(1)?.url ?: toc.first().url
-                contentDebug(scope, bookSource, book, toc.first(), nextChapterUrl)
             }
             .onError {
-                log(debugSource, it.stackTraceStr, state = -1)
+                withActiveDebugSession(sessionId) {
+                    log(debugSource, it.stackTraceStr, state = -1)
+                }
             }
-        tasks.add(chapterList)
+        trackDebugTask(sessionId, chapterList)
     }
 
     private fun contentDebug(
@@ -362,7 +604,8 @@ object Debug {
         bookSource: BookSource,
         book: Book,
         bookChapter: BookChapter,
-        nextChapterUrl: String?
+        nextChapterUrl: String?,
+        sessionId: Long,
     ) {
         log(debugSource, "︾开始解析正文页")
         val content = WebBook.getContent(
@@ -373,11 +616,15 @@ object Debug {
             nextChapterUrl = nextChapterUrl,
             needSave = false
         ).onSuccess {
-            log(debugSource, "︽正文页解析完成", state = 1000)
+            withActiveDebugSession(sessionId) {
+                log(debugSource, "︽正文页解析完成", state = 1000)
+            }
         }.onError {
-            log(debugSource, it.stackTraceStr, state = -1)
+            withActiveDebugSession(sessionId) {
+                log(debugSource, it.stackTraceStr, state = -1)
+            }
         }
-        tasks.add(content)
+        trackDebugTask(sessionId, content)
     }
 
     interface Callback {

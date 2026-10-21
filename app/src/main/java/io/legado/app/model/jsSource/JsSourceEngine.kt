@@ -13,6 +13,8 @@ import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.getShareScope
+import io.legado.app.help.source.getSharedGlobalStateKey
+import io.legado.app.model.BatchContentContext
 import io.legado.app.model.SharedJsScope
 import io.legado.app.utils.GSON
 import kotlinx.coroutines.CancellationException
@@ -37,9 +39,30 @@ class JsSourceEngine(
     private val coroutineContext: CoroutineContext? = null,
 ) : JsExtensions {
 
+    /** 批量正文上下文,只在 getContentBatch 调用期间设置,供 java.cacheContent 回存 */
+    private var batchContext: BatchContentContext? = null
+
     override fun getSource(): BaseSource = source
 
     override fun getTag(): String = source.getTag()
+
+    override fun getBatchContext(): BatchContentContext? = batchContext
+
+    /**
+     * 在批量正文上下文中调用 getContentBatch。
+     * 函数缺失时返回 exists=false,由调用方退回单章流程。
+     */
+    internal fun callContentBatch(
+        batchContext: BatchContentContext,
+        args: List<Pair<String, Any?>>,
+    ): OptionalCallResult {
+        this.batchContext = batchContext
+        try {
+            return callOptionalFunction("getContentBatch", args)
+        } finally {
+            this.batchContext = null
+        }
+    }
 
     /** 调用顶层函数并归一化返回值;函数缺失抛出明确错误 */
     fun callFunction(name: String, args: List<Pair<String, Any?>>): String? {
@@ -54,30 +77,29 @@ class JsSourceEngine(
 
     /** 调用可选顶层函数:缺失返回 null(单次 eval,不做 hasFunction 预探测) */
     fun callFunctionIfExists(name: String, args: List<Pair<String, Any?>>): String? {
+        return callOptionalFunction(name, args).value
+    }
+
+    internal fun callOptionalFunction(
+        name: String,
+        args: List<Pair<String, Any?>>,
+    ): OptionalCallResult {
         val scope = buildScope(args)
         if (ScriptableObject.getProperty(scope, name) !is JsFunction) {
-            return null
+            return OptionalCallResult(exists = false, value = null)
         }
         val callExpr = "$name(${args.joinToString(", ") { it.first }})"
         val raw = compile(callExpr).eval(scope, coroutineContext)
-        return normalizeJsResult(raw, coroutineContext)
+        return OptionalCallResult(
+            exists = true,
+            value = normalizeJsResult(raw, coroutineContext),
+        )
     }
 
-    data class OptionalCallResult(
+    internal data class OptionalCallResult(
         val exists: Boolean,
         val value: String?,
     )
-
-    /** 调用可选顶层函数:返回 exist+value 结构体,区分"函数不存在"与"函数返回 null" */
-    fun callOptionalFunction(name: String, args: List<Pair<String, Any?>>): OptionalCallResult {
-        val scope = buildScope(args)
-        if (ScriptableObject.getProperty(scope, name) !is JsFunction) {
-            return OptionalCallResult(false, null)
-        }
-        val callExpr = "$name(${args.joinToString(", ") { it.first }})"
-        val raw = compile(callExpr).eval(scope, coroutineContext)
-        return OptionalCallResult(true, normalizeJsResult(raw, coroutineContext))
-    }
 
     private fun buildScope(args: List<Pair<String, Any?>>): ScriptBindings {
         val mainJs = source.mainJs
@@ -91,12 +113,13 @@ class JsSourceEngine(
             b["cache"] = CacheManager
             args.forEach { (k, v) -> b[k] = v }
         }
+        val sharedGlobalStateKey = source.getSharedGlobalStateKey()
         val shared = source.getShareScope(coroutineContext)
             ?: SharedJsScope.getCryptoScope(source, coroutineContext)
         val scope = if (shared == null) {
             RhinoScriptEngine.getRuntimeScope(bindings)
         } else {
-            bindings.apply { chainTo(shared) }
+            bindings.apply { chainTo(shared, sharedGlobalStateKey) }
         }
         compile(mainJs).eval(scope, coroutineContext)
         return scope

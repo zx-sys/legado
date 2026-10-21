@@ -5,7 +5,9 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.SubMenu
+import android.view.View
 import android.view.WindowManager
+import android.widget.AdapterView
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
@@ -14,6 +16,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.flowWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.ItemTouchHelper
 import com.google.android.material.snackbar.Snackbar
@@ -24,11 +27,13 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSourcePart
+import io.legado.app.data.entities.BookSourceCheckState
 import io.legado.app.databinding.ActivityBookSourceBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.SourceSharePassphrase
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.sourceSharePassphraseButton
 import io.legado.app.lib.theme.primaryColor
@@ -79,6 +84,17 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+private const val BOOK_SOURCE_GROUP_QUERY_PREFIX = "group:"
+
+internal fun isMissingBookSourceGroupFilter(
+    query: CharSequence?,
+    groups: Set<String>,
+): Boolean {
+    val searchKey = query?.toString() ?: return false
+    if (!searchKey.startsWith(BOOK_SOURCE_GROUP_QUERY_PREFIX)) return false
+    return searchKey.removePrefix(BOOK_SOURCE_GROUP_QUERY_PREFIX) !in groups
+}
+
 /**
  * 书源管理界面
  */
@@ -101,10 +117,16 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     private var groupMenu: SubMenu? = null
     override var sort = BookSourceSort.Default
         private set
-    override var sortAscending = true
-        private set
+    private var sortAscending = true
     private var snackBar: Snackbar? = null
+    private var checkSourceUiSessionId: Long? = null
     private var groupSourcesByDomain = false
+    private var showCheckStatus = AppConfig.showSourceCheckStatus
+    private var showBookshelfCount = AppConfig.showSourceBookshelfCount
+    private var checkStatusFilter = 0
+    private val checkStatuses = listOf("", BookSourceCheckState.NEEDS_CHECK,
+        BookSourceCheckState.PASSED, BookSourceCheckState.FAILED,
+        BookSourceCheckState.UNCHECKABLE)
     private val hostMap = hashMapOf<String, String>()
     private val qrResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
@@ -153,15 +175,48 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.checkStatusFilter.visibility = if (showCheckStatus) View.VISIBLE else View.GONE
+        adapter.showCheckStatus = showCheckStatus
+        adapter.showBookshelfCount = showBookshelfCount
         initRecyclerView()
         initSearchView()
-        upBookSource()
+        val savedSearch = savedInstanceState?.getString("sourceSearch")
+        savedSearch?.let { searchView.setQuery(it, false) }
+        checkStatusFilter = if (showCheckStatus) {
+            savedInstanceState?.getInt("checkStatusFilter")
+                ?.coerceIn(0, checkStatuses.lastIndex) ?: 0
+        } else 0
+        binding.checkStatusFilter.setSelection(checkStatusFilter)
+        binding.checkStatusFilter.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (position == checkStatusFilter) return
+                checkStatusFilter = position
+                upBookSource(searchView.query?.toString())
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+        upBookSource(savedSearch)
         initLiveDataGroup()
+        lifecycleScope.launch {
+            appDb.bookDao.flowBookshelfSourceOrigins()
+                .map { origins -> origins.groupingBy { it }.eachCount() }
+                .distinctUntilChanged()
+                .flowOn(IO)
+                .flowWithLifecycle(lifecycle)
+                .catch { AppLog.put("更新书源书架引用数出错", it) }
+                .collect { adapter.updateBookshelfCounts(it) }
+        }
         initSelectActionBar()
         resumeCheckSource()
         if (!LocalConfig.bookSourcesHelpVersionIsLast) {
             showHelp("SourceMBookHelp")
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putInt("checkStatusFilter", checkStatusFilter)
+        outState.putString("sourceSearch", searchView.query?.toString())
+        super.onSaveInstanceState(outState)
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -170,6 +225,9 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        menu.findItem(R.id.menu_show_source_check_status).isChecked = showCheckStatus
+        menu.findItem(R.id.menu_show_source_bookshelf_count).isChecked = showBookshelfCount
+        menu.findItem(R.id.menu_block_source_navigation).isChecked = AppConfig.blockSourceNavigation
         groupMenu = menu.findItem(R.id.menu_group).subMenu
         val sortSubMenu = menu.findItem(R.id.action_sort).subMenu!!
         sortSubMenu.findItem(R.id.menu_sort_desc).isChecked = !sortAscending
@@ -272,6 +330,31 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             }
 
             R.id.menu_help -> showHelp("SourceMBookHelp")
+            R.id.menu_block_source_navigation -> {
+                AppConfig.blockSourceNavigation = !AppConfig.blockSourceNavigation
+                item.isChecked = AppConfig.blockSourceNavigation
+            }
+            R.id.menu_show_source_check_status -> {
+                showCheckStatus = !showCheckStatus
+                AppConfig.showSourceCheckStatus = showCheckStatus
+                item.isChecked = showCheckStatus
+                adapter.showCheckStatus = showCheckStatus
+                binding.checkStatusFilter.visibility = if (showCheckStatus) View.VISIBLE else View.GONE
+                if (!showCheckStatus) {
+                    checkStatusFilter = 0
+                    binding.checkStatusFilter.setSelection(0)
+                }
+                adapter.notifyItemRangeChanged(0, adapter.itemCount, Bundle().apply {
+                    putString("checkSourceMessage", null)
+                })
+                upBookSource(searchView.query?.toString())
+            }
+            R.id.menu_show_source_bookshelf_count -> {
+                showBookshelfCount = !showBookshelfCount
+                AppConfig.showSourceBookshelfCount = showBookshelfCount
+                item.isChecked = showBookshelfCount
+                adapter.showBookshelfCount = showBookshelfCount
+            }
         }
         if (item.groupId == R.id.source_group) {
             searchView.setQuery("group:${item.title}", true)
@@ -338,8 +421,11 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 }
 
                 else -> {
-                    appDb.bookSourceDao.flowSearch(searchKey)
+                    appDb.bookSourceDao.flowSearchWithCheckDetail(searchKey)
                 }
+            }.map { sources ->
+                val state = if (showCheckStatus) checkStatuses[checkStatusFilter] else ""
+                sources.filter { state.isEmpty() || it.checkStatus == state }
             }.map { data ->
                 hostMap.clear()
                 if (groupSourcesByDomain) {
@@ -388,10 +474,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                         else -> data.reversed()
                     }
                 }
-            }.flowWithLifecycleAndDatabaseChange(
-                lifecycle,
-                table = AppDatabase.BOOK_SOURCE_TABLE_NAME
-            ).catch {
+            }.flowWithLifecycle(lifecycle).catch {
                 AppLog.put("书源界面更新书源出错", it)
             }.flowOn(IO).conflate().collect { data ->
                 adapter.setItems(data, adapter.diffItemCallback, !Debug.isChecking)
@@ -429,6 +512,9 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 .collect {
                     groups.clear()
                     groups.addAll(it)
+                    if (isMissingBookSourceGroupFilter(searchView.query, groups)) {
+                        searchView.setQuery("", false)
+                    }
                     upGroupMenu()
                     delay(500)
                 }
@@ -533,12 +619,26 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     }
                 }
                 val selectItems = adapter.selection
-                CheckSource.start(this@BookSourceActivity, selectItems)
-                val adapterItems = adapter.getItems()
-                val firstItem = adapterItems.indexOf(selectItems.firstOrNull())
-                val lastItem = adapterItems.indexOf(selectItems.lastOrNull())
-                Debug.isChecking = firstItem >= 0 && lastItem >= 0
-                startCheckMessageRefreshJob(firstItem, lastItem)
+                if (selectItems.isEmpty()) {
+                    keepScreenOn(false)
+                    return@okButton
+                }
+                val checkSessionId = Debug.tryStartCheckSession()
+                if (checkSessionId == null) {
+                    keepScreenOn(false)
+                    toastOnUi("书源调试通道占用中，请稍后重试")
+                    return@okButton
+                }
+                lifecycleScope.launch {
+                    try {
+                        CheckSource.start(this@BookSourceActivity, selectItems, checkSessionId)
+                        checkSourceUiSessionId = checkSessionId
+                        startCheckMessageRefreshJob()
+                    } catch (error: Exception) {
+                        keepScreenOn(false)
+                        toastOnUi(error.localizedMessage ?: "无法启动书源检验")
+                    }
+                }
             }
             neutralButton(R.string.check_source_config)
             cancelButton()
@@ -555,7 +655,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
         keepScreenOn(true)
         CheckSource.resume(this)
-        startCheckMessageRefreshJob(0, 0)
+        startCheckMessageRefreshJob()
     }
 
     @SuppressLint("InflateParams")
@@ -670,17 +770,23 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     }
 
     override fun observeLiveBus() {
-        observeEvent<String>(EventBus.CHECK_SOURCE) { msg ->
-            snackBar?.setText(msg) ?: let {
-                snackBar = Snackbar
-                    .make(binding.root, msg, Snackbar.LENGTH_INDEFINITE)
-                    .setAction(R.string.cancel) {
-                        CheckSource.stop(this)
-                        Debug.finishChecking()
-                    }.apply { show() }
+        observeEvent<Pair<Long, String>>(EventBus.CHECK_SOURCE) { (checkSessionId, msg) ->
+            if (!Debug.isChecking(checkSessionId)) return@observeEvent
+            checkSourceUiSessionId = checkSessionId
+            val currentSnackBar = snackBar
+                ?: Snackbar.make(binding.root, msg, Snackbar.LENGTH_INDEFINITE)
+            currentSnackBar.setText(msg)
+            currentSnackBar.setAction(R.string.cancel) {
+                CheckSource.stop(this, checkSessionId)
             }
+            currentSnackBar.show()
+            snackBar = currentSnackBar
         }
-        observeEvent<Int>(EventBus.CHECK_SOURCE_DONE) {
+        observeEvent<Long>(EventBus.CHECK_SOURCE_DONE) { checkSessionId ->
+            if (checkSourceUiSessionId != null && checkSourceUiSessionId != checkSessionId) {
+                return@observeEvent
+            }
+            checkSourceUiSessionId = null
             keepScreenOn(false)
             snackBar?.dismiss()
             snackBar = null
@@ -691,37 +797,18 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                     putString("checkSourceMessage", null)
                 }
             )
-            groups.forEach { group ->
-                if (group.contains("失效") && searchView.query.isEmpty()) {
-                    searchView.setQuery("失效", true)
-                    toastOnUi("发现有失效书源，已为您自动筛选！")
-                }
-            }
         }
     }
 
-    private fun startCheckMessageRefreshJob(firstItem: Int, lastItem: Int) {
+    private fun startCheckMessageRefreshJob() {
         checkMessageRefreshJob?.cancel()
         checkMessageRefreshJob = lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 while (isActive) {
-                    if (lastItem == 0) {
-                        adapter.notifyItemRangeChanged(
-                            0,
-                            adapter.itemCount,
-                            Bundle().apply {
-                                putString("checkSourceMessage", null)
-                            }
-                        )
-                    } else {
-                        adapter.notifyItemRangeChanged(
-                            firstItem,
-                            lastItem + 1,
-                            Bundle().apply {
-                                putString("checkSourceMessage", null)
-                            }
-                        )
-                    }
+                    // Status filtering can remove finished rows while a batch is running.
+                    adapter.notifyItemRangeChanged(0, adapter.itemCount, Bundle().apply {
+                        putString("checkSourceMessage", null)
+                    })
                     if (!Debug.isChecking) {
                         checkMessageRefreshJob?.cancel()
                     }
@@ -783,9 +870,11 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
         }
     }
 
-    override fun upOrder(items: List<BookSourcePart>) {
-        viewModel.upOrder(items)
+    override fun move(sourceUrl: String, targetUrl: String, after: Boolean, onFinally: () -> Unit) {
+        viewModel.move(sourceUrl, targetUrl, if (sortAscending) after else !after, onFinally)
     }
+
+    override fun reload() = upBookSource(searchView.query.toString())
 
     override fun enable(enable: Boolean, bookSource: BookSourcePart) {
         viewModel.enable(enable, listOf(bookSource))
@@ -818,14 +907,6 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
     override fun debug(bookSource: BookSourcePart) {
         startActivity<BookSourceDebugActivity> {
             putExtra("key", bookSource.bookSourceUrl)
-        }
-    }
-
-    override fun finish() {
-        if (searchView.query.isNullOrEmpty()) {
-            super.finish()
-        } else {
-            searchView.setQuery("", true)
         }
     }
 

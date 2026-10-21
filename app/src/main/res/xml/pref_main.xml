@@ -12,6 +12,21 @@
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.prefs.Preference
+        android:icon="@drawable/ic_auto_page"
+        android:key="autoTaskManage"
+        android:summary="@string/auto_task_manage_desc"
+        android:title="@string/auto_task_manage"
+        app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.SwitchPreference
+        android:defaultValue="false"
+        android:icon="@drawable/ic_auto_page"
+        android:key="autoTaskService"
+        android:summary="@string/auto_task_service_desc"
+        android:title="@string/auto_task_service"
+        app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.Preference
         android:icon="@drawable/ic_cfg_source"
         android:key="txtTocRuleManage"
         android:summary="@string/config_txt_toc_rule"
@@ -48,6 +63,15 @@
         android:key="webService"
         android:summary="@string/web_service_desc"
         android:title="@string/web_service"
+        app:allowDividerBelow="false"
+        app:iconSpaceReserved="false" />
+
+    <io.legado.app.lib.prefs.SwitchPreference
+        android:defaultValue="false"
+        android:icon="@drawable/ic_cfg_web"
+        android:key="mcpService"
+        android:summary="@string/mcp_service_desc"
+        android:title="@string/mcp_service"
         app:allowDividerBelow="false"
         app:iconSpaceReserved="false" />
 
@@ -117,11 +141,29 @@
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.Preference
+            android:icon="@drawable/ic_download"
+            android:key="check_update"
+            android:title="@string/check_update"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
+            android:icon="@drawable/ic_download"
+            android:key="check_beta_update"
+            android:title="@string/check_beta_update"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.Preference
             android:icon="@drawable/ic_exit"
             android:key="exit"
             android:title="@string/exit"
             app:iconSpaceReserved="false" />
 
     </io.legado.app.lib.prefs.PreferenceCategory>
+
+    <io.legado.app.lib.prefs.Preference
+        android:icon="@drawable/ic_more_vert"
+        android:key="myMore"
+        android:title="@string/reader_menu_more"
+        app:iconSpaceReserved="false" />
 
 </androidx.preference.PreferenceScreen>

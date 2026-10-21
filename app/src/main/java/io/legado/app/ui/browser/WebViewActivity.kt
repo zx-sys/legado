@@ -18,6 +18,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.activity.viewModels
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.size
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
@@ -39,6 +40,7 @@ import io.legado.app.utils.keepScreenOn
 import io.legado.app.utils.longSnackbar
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.sendToClip
+import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.toggleSystemBar
 import io.legado.app.utils.viewbindingdelegate.viewBinding
@@ -60,8 +62,11 @@ import io.legado.app.help.webView.WebViewPool.DATA_HTML
 import io.legado.app.help.webView.toWebViewRequestConfig
 import io.legado.app.model.Download
 import splitties.systemservices.powerManager
+import splitties.views.bottomPadding
 import java.lang.ref.WeakReference
 import java.net.URLDecoder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit.SECONDS
 import androidx.core.graphics.createBitmap
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
@@ -81,7 +86,9 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
     private var webPic: String? = null
     private var isCloudflareChallenge = false
     private var isFullScreen = false
-    private var isfullscreen = false
+    private var isWebFullscreen = false
+    private var orientationBeforeWebFullscreen: Int? = null
+    private var pendingWebOrientation: Int? = null
     private var wasScreenOff = false
     private var needClearHistory = true
     private val saveImage = registerForActivityResult(HandleFileContract()) {
@@ -96,9 +103,22 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        binding.root.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
+            val typeMask = WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
+            view.bottomPadding = windowInsets.getInsets(typeMask).bottom
+            windowInsets
+        }
         pooledWebView = WebViewPool.acquire(this)
         currentWebView = pooledWebView.realWebView
         binding.webViewContainer.addView(currentWebView)
+        if (!SourceVerificationHelp.attachVerificationUi(
+                intent.getStringExtra("verificationResultKey"),
+                ::finishVerificationUi,
+            )
+        ) {
+            finish()
+            return
+        }
         currentWebView.post {
             currentWebView.clearHistory()
         }
@@ -126,7 +146,7 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         currentWebView.clearHistory()
         onBackPressedDispatcher.addCallback(this) {
             if (binding.customWebView.size > 0) { //网页全屏
-                customWebViewCallback?.onCustomViewHidden()
+                hideCustomView()
                 return@addCallback
             }
             if (isFullScreen) { //按钮全屏
@@ -302,8 +322,20 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
     }
 
     override fun finish() {
-        SourceVerificationHelp.checkResult(viewModel.sourceOrigin)
+        SourceVerificationHelp.checkResult(intent.getStringExtra("verificationResultKey"))
         super.finish()
+    }
+
+    private fun finishVerificationUi() {
+        val finished = CountDownLatch(1)
+        runOnUiThread {
+            try {
+                finish()
+            } finally {
+                finished.countDown()
+            }
+        }
+        finished.await(5, SECONDS)
     }
 
     private fun close() {
@@ -337,8 +369,50 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
     }
 
     override fun onDestroy() {
+        hideCustomView()
         WebViewPool.release(pooledWebView)
         super.onDestroy()
+    }
+
+    private fun lockWebOrientation(orientation: String) {
+        if (orientation == "unlock") {
+            pendingWebOrientation = null
+            if (isWebFullscreen) {
+                orientationBeforeWebFullscreen?.let { requestedOrientation = it }
+            }
+            return
+        }
+        val requested = when (orientation) {
+            "portrait", "portrait-primary" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            "portrait-secondary" -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+            "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            "landscape-primary" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            "landscape-secondary" -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+            "any", "unspecified" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            else -> return
+        }
+        if (isWebFullscreen) {
+            requestedOrientation = requested
+        } else {
+            // The JavascriptInterface thread can receive a lock before onShowCustomView.
+            pendingWebOrientation = requested
+        }
+    }
+
+    private fun hideCustomView() {
+        if (!isWebFullscreen) return
+        isWebFullscreen = false
+        val callback = customWebViewCallback
+        customWebViewCallback = null
+        binding.customWebView.removeAllViews()
+        binding.llView.visible()
+        orientationBeforeWebFullscreen?.let { requestedOrientation = it }
+        orientationBeforeWebFullscreen = null
+        pendingWebOrientation = null
+        keepScreenOn(false)
+        toggleSystemBar(!isFullScreen)
+        // Clear the state first: Chromium may re-enter onHideCustomView here.
+        callback?.onCustomViewHidden()
     }
 
     @Suppress("unused")
@@ -346,18 +420,10 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         private val activityRef: WeakReference<WebViewActivity> = WeakReference(activity)
         @JavascriptInterface
         fun lockOrientation(orientation: String) {
-            val ctx = activityRef.get()
-            if (ctx != null && ctx.isfullscreen  && !ctx.isFinishing && !ctx.isDestroyed) {
-                ctx.runOnUiThread {
-                    ctx.requestedOrientation = when (orientation) {
-                        "portrait", "portrait-primary" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                        "portrait-secondary" -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
-                        "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE //横屏且受重力控制正反
-                        "landscape-primary" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE //正向横屏
-                        "landscape-secondary" -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE //反向横屏
-                        "any", "unspecified" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
-                        else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                    }
+            val ctx = activityRef.get() ?: return
+            ctx.runOnUiThread {
+                if (!ctx.isFinishing && !ctx.isDestroyed) {
+                    ctx.lockWebOrientation(orientation)
                 }
             }
         }
@@ -385,21 +451,24 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         }
 
         override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
-            isfullscreen = true
+            if (view == null || isWebFullscreen) {
+                if (callback !== customWebViewCallback) callback?.onCustomViewHidden()
+                return
+            }
+            orientationBeforeWebFullscreen = requestedOrientation
+            isWebFullscreen = true
             binding.llView.invisible()
             binding.customWebView.addView(view)
             customWebViewCallback = callback
             keepScreenOn(true)
             toggleSystemBar(false)
+            requestedOrientation = pendingWebOrientation
+                ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            pendingWebOrientation = null
         }
 
         override fun onHideCustomView() {
-            isfullscreen = false
-            binding.customWebView.removeAllViews()
-            binding.llView.visible()
-            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            keepScreenOn(false)
-            toggleSystemBar(true)
+            hideCustomView()
         }
 
         /* 覆盖window.close() */
@@ -443,6 +512,8 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         }
 
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+            hideCustomView()
+            pendingWebOrientation = null
             if (needClearHistory) {
                 needClearHistory = false
                 currentWebView.clearHistory() //清除历史
@@ -453,6 +524,8 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
         
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
+            // The document created after onPageStarted may replace its injected globals.
+            view?.evaluateJavascript(basicJs, null)
             val cookieManager = CookieManager.getInstance()
             url?.let {
                 CookieStore.setCookie(it, cookieManager.getCookie(it))

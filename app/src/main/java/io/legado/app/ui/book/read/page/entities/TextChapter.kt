@@ -4,12 +4,17 @@ package io.legado.app.ui.book.read.page.entities
 import androidx.annotation.Keep
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookHighlight
 import io.legado.app.data.entities.ReplaceRule
+import io.legado.app.help.HighlightAnchor
+import io.legado.app.help.HighlightRuleMatcher
 import io.legado.app.help.book.BookContent
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
 import io.legado.app.ui.book.read.page.provider.TextChapterLayout
+import io.legado.app.ui.book.read.page.provider.HighlightSpacing
 import io.legado.app.utils.fastBinarySearchBy
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.math.abs
 import kotlin.math.min
@@ -28,7 +33,9 @@ data class TextChapter(
     val isVip: Boolean,
     val isPay: Boolean,
     //起效的替换规则
-    val effectiveReplaceRules: List<ReplaceRule>?
+    val effectiveReplaceRules: List<ReplaceRule>?,
+    val hasBodyContent: Boolean = true,
+    val isTransient: Boolean = false,
 ) : LayoutProgressListener {
 
     // Layout appends from IO while reading, navigation and progress query from the main thread.
@@ -36,6 +43,17 @@ data class TextChapter(
     val pages: List<TextPage> get() = textPages
 
     private var layout: TextChapterLayout? = null
+
+    var highlightSpacing = HighlightSpacing()
+    var highlightSpacingBase: TextChapter? = null
+    var highlightSpacingJob: Job? = null
+    var highlightSpacingRequest: HighlightSpacing? = null
+
+    fun layoutWithHighlightSpacing(scope: CoroutineScope, spacing: HighlightSpacing): TextChapter? =
+        (highlightSpacingBase ?: this).layout?.withHighlightSpacing(scope, spacing)
+
+    @Volatile
+    var layoutTitleLength: Int = UNKNOWN_LAYOUT_TITLE_LENGTH
 
     val layoutChannel get() = layout!!.channel
 
@@ -57,7 +75,40 @@ data class TextChapter(
 
     var listener: LayoutProgressListener? = null
 
+    @Volatile
     var isCompleted = false
+
+    @Volatile
+    var highlightRuleMatches: List<HighlightRuleMatcher.RuleMatch>? = null
+
+    @Volatile
+    var highlightRuleMatchesVersion: Long = Long.MIN_VALUE
+
+    @Volatile
+    var highlightRuleMatchesBookUrl: String? = null
+
+    @Volatile
+    var highlightRuleMatchesJob: Job? = null
+
+    @Volatile
+    var highlightText: String? = null
+
+    @Volatile
+    var manualHighlightAnchors: List<Pair<BookHighlight, HighlightAnchor.Anchor>>? = null
+
+    @Volatile
+    var manualHighlightAnchorsVersion: Long = Long.MIN_VALUE
+
+    @Volatile
+    var manualHighlightAnchorsTitleLength: Int = UNKNOWN_LAYOUT_TITLE_LENGTH
+
+    fun invalidateHighlightRuleMatches() {
+        highlightRuleMatchesJob?.cancel()
+        highlightRuleMatchesJob = null
+        highlightRuleMatches = null
+        highlightRuleMatchesVersion = Long.MIN_VALUE
+        highlightRuleMatchesBookUrl = null
+    }
 
     val paragraphs by lazy {
         paragraphsInternal
@@ -267,7 +318,12 @@ data class TextChapter(
         }
     }
 
-    fun createLayout(scope: CoroutineScope, book: Book, bookContent: BookContent) {
+    fun createLayout(
+        scope: CoroutineScope,
+        book: Book,
+        bookContent: BookContent,
+        saveChapterData: Boolean = true,
+    ) {
         if (layout != null) {
             throw IllegalStateException("已经排版过了")
         }
@@ -277,6 +333,7 @@ data class TextChapter(
             textPages,
             book,
             bookContent,
+            saveChapterData,
         )
     }
 
@@ -306,17 +363,22 @@ data class TextChapter(
     }
 
     fun cancelLayout() {
+        highlightSpacingJob?.cancel()
+        invalidateHighlightRuleMatches()
         layout?.cancel()
         listener = null
     }
 
     companion object {
+        const val UNKNOWN_LAYOUT_TITLE_LENGTH = -1
+
         val emptyTextChapter = TextChapter(
             BookChapter(), -1, "emptyTextChapter", -1,
             sameTitleRemoved = false,
             isVip = false,
             isPay = false,
-            null
+            effectiveReplaceRules = null,
+            hasBodyContent = false,
         ).apply { isCompleted = true }
     }
 

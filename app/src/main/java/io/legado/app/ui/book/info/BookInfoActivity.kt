@@ -8,12 +8,12 @@ import android.os.Build
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.TextUtils
 import android.text.style.LeadingMarginSpan
 import android.view.LayoutInflater
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
-import io.legado.app.ui.widget.text.ScrollTextView
 import android.view.textclassifier.TextClassifier
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -43,14 +43,16 @@ import io.legado.app.help.GlideImageGetter
 import io.legado.app.help.TextViewTagHandler
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.book.addType
-import io.legado.app.help.book.getRemoteUrl
+import io.legado.app.help.book.getLocalUri
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalTxt
 import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.isWebFile
+import io.legado.app.help.book.readProgress
 import io.legado.app.help.book.removeType
+import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.webView.PooledWebView
@@ -62,13 +64,18 @@ import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
+import io.legado.app.lib.webdav.WebDavException
+import io.legado.app.lib.webdav.isWebDavOverwriteConflict
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
+import io.legado.app.model.AutoTask
 import io.legado.app.model.BookCover
 import io.legado.app.model.remote.RemoteBookWebDav
 import io.legado.app.ui.about.AppLogDialog
+import io.legado.app.ui.autoTask.AutoTaskEditActivity
+import io.legado.app.ui.autoTask.ImportAutoTaskDialog
 import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.book.changesource.ChangeBookSourceDialog
@@ -88,6 +95,7 @@ import io.legado.app.ui.video.VideoPlayerActivity
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
+import io.legado.app.ui.widget.text.ScrollTextView
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.FileDoc
@@ -114,6 +122,9 @@ import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.image.glide.GlideImagesPlugin
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -127,23 +138,21 @@ class BookInfoActivity :
 
     private val tocActivityResult = registerForActivityResult(TocActivityResult()) {
         it?.let {
-            viewModel.getBook(false)?.let { book ->
-                lifecycleScope.launch {
-                    withContext(IO) {
-                        val durChapterIndex = it[0] as Int
-                        val durChapterPos = it[1] as Int
-                        val durVolumeIndex = it[3] as Int
-                        val chapterInVolumeIndex = it[4] as Int
-                        book.durChapterIndex = durChapterIndex
-                        book.durChapterPos = durChapterPos
-                        chapterChanged = it[2] as Boolean
-                        book.durVolumeIndex = durVolumeIndex
-                        book.chapterInVolumeIndex = chapterInVolumeIndex
-                        appDb.bookDao.update(book)
-                    }
-                    startReadActivity(book)
-                }
-            }
+            readFromChapter(
+                index = it[0] as Int,
+                pos = it[1] as Int,
+                changed = it[2] as Boolean,
+                volumeIndex = it[3] as Int,
+                chapterInVolumeIndex = it[4] as Int,
+                highlightLayoutTitleLength =
+                    (it[TocActivityResult.HIGHLIGHT_LAYOUT_TITLE_LENGTH_INDEX] as Int)
+                        .takeUnless { titleLength ->
+                            titleLength == TocActivityResult.NO_HIGHLIGHT_LAYOUT_TITLE_LENGTH
+                        },
+                highlightAnchorText =
+                    (it[TocActivityResult.HIGHLIGHT_ANCHOR_TEXT_INDEX] as String)
+                        .takeIf(String::isNotEmpty),
+            )
         } ?: let {
             if (!viewModel.inBookshelf) {
                 viewModel.delBook() //进目录会保存book，此时退出目录触发的book删除，不通知书源回调
@@ -200,14 +209,23 @@ class BookInfoActivity :
     override val binding by viewBinding(ActivityBookInfoBinding::inflate)
     override val viewModel by viewModels<BookInfoViewModel>()
     private var isIntroTextViewAttached = false
-    private val introTextView by lazy {
+    private var introContent: String? = null
+    private var introExpanded = false
+    private var introCanCollapse = false
+    private var introRenderGeneration = 0
+    private var introRenderJob: Job? = null
+    private val introTextViewDelegate = lazy {
         val inflater = LayoutInflater.from(this)
         val view = inflater.inflate(R.layout.view_book_intro, binding.tvIntroContainer, false) as ScrollTextView
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
             view.revealOnFocusHint = false
         }
+        view.onTextLayoutChanged = {
+            updateIntroOverflow()
+        }
         view
     }
+    private val introTextView by introTextViewDelegate
 
     private var pooledWebView: PooledWebView? = null
 
@@ -239,6 +257,7 @@ class BookInfoActivity :
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         binding.titleBar.setBackgroundResource(R.color.transparent)
         binding.refreshLayout?.setColorSchemeColors(accentColor)
+        binding.refreshProgressBar.secondColor = accentColor
         binding.arcView?.setBgColor(backgroundColor)
         binding.llInfo.setBackgroundColor(backgroundColor)
         binding.ivCoverC.setCardBackgroundColor(backgroundColor)
@@ -247,7 +266,17 @@ class BookInfoActivity :
         binding.tvShelf.setTextColor(getPrimaryTextColor(ColorUtils.isColorLight(bottomBackground)))
         binding.tvToc.text = getString(R.string.toc_s, getString(R.string.loading))
         viewModel.bookData.observe(this) { showBook(it) }
-        viewModel.chapterListData.observe(this) { upLoading(false, it) }
+        viewModel.chapterListData.observe(this) {
+            upLoading(viewModel.loadingData.value == true, it)
+        }
+        viewModel.loadingData.observe(this) { isLoading ->
+            binding.refreshProgressBar.isAutoLoading = isLoading
+            if (isLoading) {
+                upLoading(true)
+            } else {
+                viewModel.chapterListData.value?.let { upLoading(false, it) }
+            }
+        }
         viewModel.waitDialogData.observe(this) { upWaitDialogStatus(it) }
         viewModel.initData(intent)
         initViewEvent()
@@ -279,6 +308,13 @@ class BookInfoActivity :
             viewModel.bookData.value?.isLocalTxt ?: false
         menu.findItem(R.id.menu_upload)?.isVisible =
             viewModel.bookData.value?.isLocal ?: false
+        menu.findItem(R.id.menu_create_book_update_task)?.isVisible =
+            viewModel.bookData.value?.let {
+                viewModel.inBookshelf &&
+                    viewModel.bookSource != null &&
+                    !it.isLocal &&
+                    it.canUpdate
+            } == true
         menu.findItem(R.id.menu_delete_alert)?.isChecked =
             LocalConfig.bookInfoDeleteAlert
         return super.onMenuOpened(featureId, menu)
@@ -331,6 +367,10 @@ class BookInfoActivity :
 
             R.id.menu_refresh -> {
                 refreshBook()
+            }
+
+            R.id.menu_create_book_update_task -> viewModel.getBook()?.let {
+                openBookUpdateTask(it)
             }
 
             R.id.menu_login -> viewModel.bookSource?.let {
@@ -400,16 +440,7 @@ class BookInfoActivity :
 
             R.id.menu_delete_alert -> LocalConfig.bookInfoDeleteAlert = !item.isChecked
             R.id.menu_upload -> {
-                viewModel.getBook()?.let { book ->
-                    book.getRemoteUrl()?.let {
-                        alert(R.string.draw, R.string.sure_upload) {
-                            okButton {
-                                upLoadBook(book)
-                            }
-                            cancelButton()
-                        }
-                    } ?: upLoadBook(book)
-                }
+                viewModel.getBook()?.let { confirmAndUploadBook(it) }
             }
         }
         return super.onCompatOptionsItemSelected(item)
@@ -455,6 +486,23 @@ class BookInfoActivity :
         }
     }
 
+    private fun openBookUpdateTask(book: Book) {
+        val task = AutoTask.buildBookUpdateTask(
+            book = book,
+            name = getString(R.string.auto_task_book_update_name, book.name)
+        )
+        lifecycleScope.launch {
+            val existingTask = withContext(IO) {
+                AutoTask.findBookUpdateTask(AutoTask.all(), book)
+            }
+            if (existingTask != null) {
+                startActivity(AutoTaskEditActivity.intent(this@BookInfoActivity, existingTask.id))
+            } else {
+                showDialogFragment(ImportAutoTaskDialog(GSON.toJson(task)))
+            }
+        }
+    }
+
     private fun refreshToc() {
         upLoading(true)
         viewModel.getBook()?.let {
@@ -465,22 +513,97 @@ class BookInfoActivity :
     private fun upLoadBook(
         book: Book,
         bookWebDav: RemoteBookWebDav? = AppWebDav.defaultBookWebDav,
+        overwrite: Boolean = true,
+        onConflict: (() -> Unit)? = null,
+        onFinished: () -> Unit = {},
     ) {
         lifecycleScope.launch {
-            waitDialog.setText("上传中.....")
+            waitDialog.setText(R.string.loading)
             waitDialog.show()
+            var uploadConflict = false
             try {
                 bookWebDav
-                    ?.upload(book)
-                    ?: throw NoStackTraceException("未配置webDav")
+                    ?.upload(book, overwrite)
+                    ?: throw NoStackTraceException(getString(R.string.webdav_not_configured))
                 //更新书籍最后更新时间,使之比远程书籍的时间新
                 book.lastCheckTime = System.currentTimeMillis()
                 viewModel.saveBook(book)
             } catch (e: Exception) {
-                toastOnUi(e.localizedMessage)
+                currentCoroutineContext().ensureActive()
+                if (!overwrite &&
+                    e is WebDavException &&
+                    isWebDavOverwriteConflict(e.responseCode)
+                ) {
+                    uploadConflict = true
+                } else {
+                    toastOnUi(e.localizedMessage)
+                }
             } finally {
                 waitDialog.dismiss()
             }
+            if (uploadConflict) {
+                onConflict?.invoke() ?: onFinished()
+            } else {
+                onFinished()
+            }
+        }
+    }
+
+    private fun confirmAndUploadBook(
+        book: Book,
+        onFinished: () -> Unit = {},
+    ) {
+        val bookWebDav = AppWebDav.defaultBookWebDav
+        if (bookWebDav == null) {
+            toastOnUi(R.string.webdav_not_configured)
+            onFinished()
+            return
+        }
+        lifecycleScope.launch {
+            waitDialog.setText(R.string.loading)
+            waitDialog.show()
+            val remoteExists = try {
+                withContext(IO) { bookWebDav.hasRemoteBook(book) }
+            } catch (e: Exception) {
+                currentCoroutineContext().ensureActive()
+                toastOnUi(e.localizedMessage)
+                onFinished()
+                return@launch
+            } finally {
+                waitDialog.dismiss()
+            }
+            if (!remoteExists) {
+                upLoadBook(
+                    book = book,
+                    bookWebDav = bookWebDav,
+                    overwrite = false,
+                    onConflict = {
+                        showUploadOverwriteConfirm(book, bookWebDav, onFinished)
+                    },
+                    onFinished = onFinished,
+                )
+                return@launch
+            }
+            showUploadOverwriteConfirm(book, bookWebDav, onFinished)
+        }
+    }
+
+    private fun showUploadOverwriteConfirm(
+        book: Book,
+        bookWebDav: RemoteBookWebDav,
+        onFinished: () -> Unit,
+    ) {
+        alert(R.string.draw, R.string.webdav_book_exists_confirm) {
+            yesButton {
+                upLoadBook(
+                    book = book,
+                    bookWebDav = bookWebDav,
+                    overwrite = true,
+                    onFinished = onFinished,
+                )
+            }
+            noButton { onFinished() }
+            onCancelled { onFinished() }
         }
     }
 
@@ -545,19 +668,36 @@ class BookInfoActivity :
     private fun showBookIntro(book: Book) {
         val intro = book.getDisplayIntro()
         if (intro.isNullOrBlank()) {
+            introContent = null
+            introExpanded = false
+            introCanCollapse = false
+            introRenderGeneration++
+            introRenderJob?.cancel()
             destroyWeb()
             binding.tvIntroContainer.removeAllViews()
             isIntroTextViewAttached = false
             binding.tvIntroContainer.gone()
+            updateIntroToggle()
             return
         }
+        if (intro != introContent) {
+            introContent = intro
+            introExpanded = true
+            introCanCollapse = false
+        }
+        val renderGeneration = ++introRenderGeneration
+        introRenderJob?.cancel()
         binding.tvIntroContainer.visible()
         if (intro.startsWith("<useweb>")) {
             val lastIndex = intro.lastIndexOf("<")
             if (lastIndex < 8) {
-                introTextView.text = intro
+                val tvIntro = prepareIntroTextView()
+                tvIntro.text = intro
+                scheduleIntroOverflowCheck(renderGeneration)
                 return
             }
+            introCanCollapse = false
+            updateIntroToggle()
             val html = intro.substring(8, lastIndex)
             val pooledWebView = this.pooledWebView ?: let{
                 val pooledWebView = WebViewPool.acquire(this)
@@ -585,18 +725,12 @@ class BookInfoActivity :
             webView.loadDataWithBaseURL(bookUrl, html, "text/html", "utf-8", bookUrl)
             return
         }
-        val tvIntro = introTextView
-        if (!isIntroTextViewAttached || pooledWebView != null) {
-            destroyWeb()
-            binding.tvIntroContainer.removeAllViews()
-            tvIntro.text = null
-            binding.tvIntroContainer.addView(tvIntro)
-            isIntroTextViewAttached = true
-        }
+        val tvIntro = prepareIntroTextView()
         if (intro.startsWith("<usehtml>")) {
             val lastIndex = intro.lastIndexOf("<")
             if (lastIndex < 9) {
                 tvIntro.text = intro
+                scheduleIntroOverflowCheck(renderGeneration)
                 return
             }
             val html = intro.substring(9, lastIndex)
@@ -611,14 +745,17 @@ class BookInfoActivity :
                     viewModel.onButtonClick(this@BookInfoActivity, "info image" , it)
                 }
             )
+            scheduleIntroOverflowCheck(renderGeneration)
         } else if (intro.startsWith("<md>")) {
             val lastIndex = intro.lastIndexOf("<")
             if (lastIndex < 4) {
                 tvIntro.text = intro
+                scheduleIntroOverflowCheck(renderGeneration)
                 return
             }
             val mark = intro.substring(4, lastIndex)
-            lifecycleScope.launch {
+            tvIntro.text = null
+            introRenderJob = lifecycleScope.launch {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     tvIntro.setTextClassifier(TextClassifier.NO_OP)
                 }
@@ -641,6 +778,7 @@ class BookInfoActivity :
                         .build()
                     markwon.toMarkdown(mark)
                 }
+                if (renderGeneration != introRenderGeneration) return@launch
                 tvIntro.setMarkdown(
                     markwon,
                     markdown,
@@ -648,9 +786,11 @@ class BookInfoActivity :
                         showDialogFragment(PhotoDialog(source, viewModel.bookSource?.bookSourceUrl))
                     }
                 )
+                scheduleIntroOverflowCheck(renderGeneration)
             }
         } else {
             setPlainBookIntro(tvIntro, intro)
+            scheduleIntroOverflowCheck(renderGeneration)
         }
     }
 
@@ -673,12 +813,99 @@ class BookInfoActivity :
         }
     }
 
+    private fun prepareIntroTextView(): ScrollTextView {
+        val tvIntro = introTextView
+        if (!isIntroTextViewAttached || pooledWebView != null) {
+            destroyWeb()
+            binding.tvIntroContainer.removeAllViews()
+            tvIntro.text = null
+            binding.tvIntroContainer.addView(tvIntro)
+            isIntroTextViewAttached = true
+        }
+        applyIntroCollapseState(tvIntro)
+        return tvIntro
+    }
+
+    private fun applyIntroCollapseState(tvIntro: ScrollTextView = introTextView) {
+        tvIntro.internalScrollEnabled = false
+        tvIntro.maxLines = if (introExpanded) Int.MAX_VALUE else BookIntroCollapse.COLLAPSED_LINES
+        tvIntro.maxMeasuredHeight = if (introExpanded) {
+            null
+        } else {
+            collapsedIntroHeight(tvIntro)
+        }
+        tvIntro.ellipsize = if (introExpanded) null else TextUtils.TruncateAt.END
+        if (!introExpanded) {
+            tvIntro.scrollTo(0, 0)
+        }
+        updateIntroToggle()
+        tvIntro.requestLayout()
+    }
+
+    private fun collapsedIntroHeight(tvIntro: ScrollTextView): Int =
+        tvIntro.lineHeight * BookIntroCollapse.COLLAPSED_LINES +
+            tvIntro.compoundPaddingTop + tvIntro.compoundPaddingBottom
+
+    private fun scheduleIntroOverflowCheck(renderGeneration: Int) {
+        introTextView.post {
+            if (renderGeneration == introRenderGeneration &&
+                lifecycle.currentState != Lifecycle.State.DESTROYED
+            ) {
+                updateIntroOverflow()
+            }
+        }
+    }
+
+    private fun updateIntroOverflow() {
+        if (!isIntroTextViewAttached || pooledWebView != null) return
+        val tvIntro = introTextView
+        val textLayout = tvIntro.layout ?: return
+        val lineCount = textLayout.lineCount
+        if (lineCount <= 0) return
+        val lastLine = lineCount - 1
+        val collapsedHeight = collapsedIntroHeight(tvIntro)
+        val canCollapse = tvIntro.isMeasuredHeightLimited || BookIntroCollapse.hasOverflow(
+            expanded = introExpanded,
+            lineCount = lineCount,
+            lastLineEllipsisCount = textLayout.getEllipsisCount(lastLine),
+            lastLineEnd = textLayout.getLineEnd(lastLine),
+            textLength = tvIntro.text.length,
+            contentHeight = textLayout.height +
+                tvIntro.compoundPaddingTop + tvIntro.compoundPaddingBottom,
+            collapsedContentHeight = collapsedHeight,
+        )
+        if (introCanCollapse != canCollapse) {
+            introCanCollapse = canCollapse
+            updateIntroToggle()
+        }
+    }
+
+    private fun updateIntroToggle() = binding.tvIntroToggle.run {
+        if (!introCanCollapse || !isIntroTextViewAttached || pooledWebView != null) {
+            gone()
+            return@run
+        }
+        setText(
+            if (introExpanded) {
+                R.string.book_intro_collapse
+            } else {
+                R.string.book_intro_expand
+            }
+        )
+        visible()
+    }
+
     private fun upKinds(book: Book) = binding.run {
         lifecycleScope.launch {
             var kinds = book.getKindList()
             if (book.isLocal) {
                 withContext(IO) {
-                    val size = FileDoc.fromFile(book.bookUrl).size
+                    val size = try {
+                        FileDoc.fromUri(book.getLocalUri(), false).size
+                    } catch (e: Exception) {
+                        currentCoroutineContext().ensureActive()
+                        0L
+                    }
                     if (size > 0) {
                         kinds = kinds.toMutableList()
                         kinds.add(ConvertUtils.formatFileSize(size))
@@ -754,7 +981,18 @@ class BookInfoActivity :
 
             else -> {
                 book?.let {
-                    binding.tvToc.text = getString(R.string.toc_s, it.durChapterTitle)
+                    val tocTitle = resolveBookInfoTocTitle(
+                        it.durChapterTitle,
+                        it.durChapterIndex,
+                        chapterList,
+                    ) ?: getString(R.string.no_last_chapter)
+                    val readStatus = resolveBookInfoReadProgress(it)?.let { percent ->
+                        getString(R.string.read_y, "$percent%")
+                    }
+                    binding.tvToc.text = getString(
+                        R.string.toc_s,
+                        listOfNotNull(tocTitle, readStatus).joinToString("  ·  "),
+                    )
                     binding.tvLasted.text = getString(R.string.lasted_show, it.latestChapterTitle)
                 }
             }
@@ -785,6 +1023,12 @@ class BookInfoActivity :
     }
 
     private fun initViewEvent() = binding.run {
+        tvIntroToggle.setOnClickListener {
+            if (!introCanCollapse || !isIntroTextViewAttached) return@setOnClickListener
+            introExpanded = !introExpanded
+            applyIntroCollapseState()
+            scheduleIntroOverflowCheck(introRenderGeneration)
+        }
         ivCover.setOnClickListener {
             viewModel.getBook()?.let {
                 showDialogFragment(
@@ -846,16 +1090,19 @@ class BookInfoActivity :
                 toastOnUi(R.string.chapter_list_empty)
                 return@setOnClickListener
             }
-            viewModel.getBook()?.let { book ->
-                if (!viewModel.inBookshelf) {
-                    viewModel.saveBook(book) { //点击目录会保存book
-                        viewModel.saveChapterList {
-                            openChapterList()
-                        }
+            val book = viewModel.getBook(false)
+            if (book == null) {
+                toastOnUi(R.string.book_not_exist)
+                return@setOnClickListener
+            }
+            if (!viewModel.inBookshelf) {
+                viewModel.saveBook(book) { //点击目录会保存book
+                    viewModel.saveChapterList {
+                        openChapterList()
                     }
-                } else {
-                    openChapterList()
                 }
+            } else {
+                openChapterList()
             }
         }
         tvChangeGroup.setOnClickListener {
@@ -993,43 +1240,138 @@ class BookInfoActivity :
                     titleResource = R.string.draw,
                     messageResource = R.string.sure_del
                 ) {
-                    var checkBox: CheckBox? = null
+                    var deleteOriginalCheckBox: CheckBox? = null
+                    var deleteRemoteCheckBox: CheckBox? = null
                     if (book.isLocal) {
-                        checkBox = CheckBox(this@BookInfoActivity).apply {
+                        deleteOriginalCheckBox = CheckBox(this@BookInfoActivity).apply {
                             setText(R.string.delete_book_file)
                             isChecked = LocalConfig.deleteBookOriginal
                         }
                         val view = LinearLayout(this@BookInfoActivity).apply {
+                            orientation = LinearLayout.VERTICAL
                             setPadding(16.dpToPx(), 0, 16.dpToPx(), 0)
-                            addView(checkBox)
+                            addView(deleteOriginalCheckBox)
+                            if (AppWebDav.defaultBookWebDav != null) {
+                                deleteRemoteCheckBox = CheckBox(this@BookInfoActivity).apply {
+                                    setText(R.string.delete_webdav_book_file)
+                                }
+                                addView(deleteRemoteCheckBox)
+                            }
                         }
                         customView { view }
                     }
                     yesButton {
-                        if (checkBox != null) {
-                            LocalConfig.deleteBookOriginal = checkBox.isChecked
+                        if (deleteOriginalCheckBox != null) {
+                            LocalConfig.deleteBookOriginal = deleteOriginalCheckBox.isChecked
                         }
-                        SourceCallBack.callBackBook(SourceCallBack.DEL_BOOK_SHELF, viewModel.bookSource, book) //确认后删除书架
-                        viewModel.delBook(LocalConfig.deleteBookOriginal) {
-                            setResult(RESULT_OK)
-                            finish()
-                        }
+                        deleteBook(
+                            book = book,
+                            deleteOriginal = LocalConfig.deleteBookOriginal,
+                            deleteRemote = deleteRemoteCheckBox?.isChecked == true,
+                        )
                     }
                     noButton()
                 }
             } else {
-                SourceCallBack.callBackBook(SourceCallBack.DEL_BOOK_SHELF, viewModel.bookSource, book) //点按钮直接删除书架
-                viewModel.delBook(LocalConfig.deleteBookOriginal) {
-                    setResult(RESULT_OK)
-                    finish()
-                }
+                deleteBook(book, LocalConfig.deleteBookOriginal, deleteRemote = false)
             }
+        }
+    }
+
+    private fun deleteBook(book: Book, deleteOriginal: Boolean, deleteRemote: Boolean) {
+        if (!deleteRemote) {
+            finishDeleteBook(book, deleteOriginal)
+            return
+        }
+        val bookWebDav = AppWebDav.defaultBookWebDav
+        if (bookWebDav == null) {
+            toastOnUi(R.string.webdav_not_configured)
+            return
+        }
+        lifecycleScope.launch {
+            waitDialog.setText(R.string.loading)
+            waitDialog.show()
+            val deleted = try {
+                withContext(IO) { bookWebDav.delete(book) }
+            } catch (e: Exception) {
+                currentCoroutineContext().ensureActive()
+                toastOnUi(e.localizedMessage ?: getString(R.string.delete_webdav_book_file_fail))
+                return@launch
+            } finally {
+                waitDialog.dismiss()
+            }
+            if (!deleted) {
+                toastOnUi(R.string.delete_webdav_book_file_fail)
+                return@launch
+            }
+            finishDeleteBook(book, deleteOriginal)
+        }
+    }
+
+    private fun finishDeleteBook(book: Book, deleteOriginal: Boolean) {
+        SourceCallBack.callBackBook(SourceCallBack.DEL_BOOK_SHELF, viewModel.bookSource, book)
+        viewModel.delBook(deleteOriginal) {
+            setResult(RESULT_OK)
+            finish()
         }
     }
 
     private fun openChapterList() {
         viewModel.getBook()?.let {
             tocActivityResult.launch(it.bookUrl)
+        }
+    }
+
+    private fun readFromChapter(
+        index: Int,
+        pos: Int,
+        changed: Boolean,
+        volumeIndex: Int,
+        chapterInVolumeIndex: Int,
+        highlightLayoutTitleLength: Int?,
+        highlightAnchorText: String?,
+    ) {
+        viewModel.getBook(false)?.let { book ->
+            val deferHighlightPosition = highlightLayoutTitleLength != null &&
+                !book.isAudio && !book.isVideo &&
+                (book.isLocal || !book.isImage || !AppConfig.showMangaUi)
+            if (!deferHighlightPosition) {
+                book.durChapterIndex = index
+                book.durChapterPos = pos
+                book.durVolumeIndex = volumeIndex
+                book.chapterInVolumeIndex = chapterInVolumeIndex
+            }
+            chapterChanged = changed
+            if (!viewModel.inBookshelf) {
+                book.addType(BookType.notShelf)
+                lifecycleScope.launch {
+                    withContext(IO) {
+                        book.save()
+                    }
+                    viewModel.saveChapterList {
+                        startReadActivity(
+                            book,
+                            index.takeIf { deferHighlightPosition },
+                            pos.takeIf { deferHighlightPosition },
+                            highlightLayoutTitleLength.takeIf { deferHighlightPosition },
+                            highlightAnchorText.takeIf { deferHighlightPosition }
+                        )
+                    }
+                }
+            } else {
+                lifecycleScope.launch {
+                    withContext(IO) {
+                        book.update()
+                    }
+                    startReadActivity(
+                        book,
+                        index.takeIf { deferHighlightPosition },
+                        pos.takeIf { deferHighlightPosition },
+                        highlightLayoutTitleLength.takeIf { deferHighlightPosition },
+                        highlightAnchorText.takeIf { deferHighlightPosition }
+                    )
+                }
+            }
         }
     }
 
@@ -1041,42 +1383,70 @@ class BookInfoActivity :
             toastOnUi("Unexpected webFileData")
             return
         }
-        selector(
-            R.string.download_and_import_file,
-            webFiles
-        ) { _, webFile, _ ->
-            if (webFile.isSupported) {
-                /* import */
-                viewModel.importOrDownloadWebFile<Book>(webFile) {
-                    onClick?.invoke(it)
-                }
-            } else if (webFile.isSupportDecompress) {
-                /* 解压筛选后再选择导入项 */
-                viewModel.importOrDownloadWebFile<Uri>(webFile) { uri ->
-                    viewModel.getArchiveFilesName(uri) { fileNames ->
-                        if (fileNames.size == 1) {
-                            viewModel.importArchiveBook(uri, fileNames[0]) {
-                                onClick?.invoke(it)
+        val uploadCheckBox = CheckBox(this).apply {
+            setText(R.string.upload_imported_book_to_webdav)
+            isChecked = LocalConfig.uploadImportedBookToWebDav
+            setOnCheckedChangeListener { _, isChecked ->
+                LocalConfig.uploadImportedBookToWebDav = isChecked
+            }
+        }
+        alert(titleResource = R.string.download_and_import_file) {
+            items(webFiles) { _, webFile, _ ->
+                val uploadToWebDav = uploadCheckBox.isChecked
+                if (webFile.isSupported) {
+                    /* import */
+                    viewModel.importOrDownloadWebFile<Book>(webFile) {
+                        onWebBookImported(it, uploadToWebDav, onClick)
+                    }
+                } else if (webFile.isSupportDecompress) {
+                    /* 解压筛选后再选择导入项 */
+                    viewModel.importOrDownloadWebFile<Uri>(webFile) { uri ->
+                        viewModel.getArchiveFilesName(uri) { fileNames ->
+                            if (fileNames.size == 1) {
+                                viewModel.importArchiveBook(uri, fileNames[0]) {
+                                    onWebBookImported(it, uploadToWebDav, onClick)
+                                }
+                            } else {
+                                showDecompressFileImportAlert(uri, fileNames) {
+                                    onWebBookImported(it, uploadToWebDav, onClick)
+                                }
                             }
-                        } else {
-                            showDecompressFileImportAlert(uri, fileNames, onClick)
                         }
                     }
-                }
-            } else {
-                alert(
-                    title = getString(R.string.draw),
-                    message = getString(R.string.file_not_supported, webFile.name)
-                ) {
-                    neutralButton(R.string.open_fun) {
-                        /* download only */
-                        viewModel.importOrDownloadWebFile<Uri>(webFile) {
-                            openFileUri(it, "*/*")
+                } else {
+                    alert(
+                        title = getString(R.string.draw),
+                        message = getString(R.string.file_not_supported, webFile.name)
+                    ) {
+                        neutralButton(R.string.open_fun) {
+                            /* download only */
+                            viewModel.importOrDownloadWebFile<Uri>(webFile) {
+                                openFileUri(it, "*/*")
+                            }
                         }
+                        noButton()
                     }
-                    noButton()
                 }
             }
+            customView {
+                LinearLayout(this@BookInfoActivity).apply {
+                    setPadding(16.dpToPx(), 0, 16.dpToPx(), 8.dpToPx())
+                    addView(uploadCheckBox)
+                }
+            }
+        }
+    }
+
+    private fun onWebBookImported(
+        book: Book,
+        uploadToWebDav: Boolean,
+        onClick: ((Book) -> Unit)?,
+    ) {
+        val onFinished: () -> Unit = { onClick?.invoke(book) }
+        if (uploadToWebDav) {
+            confirmAndUploadBook(book, onFinished)
+        } else {
+            onFinished()
         }
     }
 
@@ -1114,7 +1484,13 @@ class BookInfoActivity :
         }
     }
 
-    private fun startReadActivity(book: Book) {
+    private fun startReadActivity(
+        book: Book,
+        highlightIndex: Int? = null,
+        highlightChapterPos: Int? = null,
+        highlightLayoutTitleLength: Int? = null,
+        highlightAnchorText: String? = null,
+    ) {
         when {
             book.isAudio -> readBookResult.launch(
                 Intent(this, AudioPlayActivity::class.java)
@@ -1132,10 +1508,25 @@ class BookInfoActivity :
                     this,
                     if (!book.isLocal && book.isImage && AppConfig.showMangaUi) ReadMangaActivity::class.java
                     else ReadBookActivity::class.java
-                )
-                    .putExtra("bookUrl", book.bookUrl)
-                    .putExtra("inBookshelf", viewModel.inBookshelf)
-                    .putExtra("chapterChanged", chapterChanged)
+                ).apply {
+                    putExtra("bookUrl", book.bookUrl)
+                    putExtra("inBookshelf", viewModel.inBookshelf)
+                    putExtra("chapterChanged", chapterChanged)
+                    if (highlightIndex != null &&
+                        highlightChapterPos != null &&
+                        highlightLayoutTitleLength != null
+                    ) {
+                        putExtra("index", highlightIndex)
+                        putExtra("chapterPos", highlightChapterPos)
+                        putExtra(
+                            TocActivityResult.EXTRA_HIGHLIGHT_LAYOUT_TITLE_LENGTH,
+                            highlightLayoutTitleLength
+                        )
+                        highlightAnchorText?.let {
+                            putExtra(TocActivityResult.EXTRA_HIGHLIGHT_ANCHOR_TEXT, it)
+                        }
+                    }
+                }
             )
         }
     }
@@ -1143,16 +1534,22 @@ class BookInfoActivity :
     override val oldBook: Book?
         get() = viewModel.bookData.value
 
-    override fun changeTo(source: BookSource, book: Book, toc: List<BookChapter>) {
-        viewModel.changeTo(source, book, toc)
+    override fun changeTo(
+        source: BookSource,
+        book: Book,
+        toc: List<BookChapter>,
+        onSuccess: () -> Unit,
+    ) {
+        viewModel.changeTo(source, book, toc, onSuccess)
     }
 
     override fun coverChangeTo(coverUrl: String) {
         viewModel.bookData.value?.let { book ->
             book.customCoverUrl = coverUrl
+            book.persistedCoverUrl = null
             showCover(book)
             if (viewModel.inBookshelf) {
-                viewModel.saveBook(book)
+                viewModel.saveBook(book, preserveCustomCoverUrl = false)
             }
         }
     }
@@ -1198,6 +1595,10 @@ class BookInfoActivity :
      }
 
     override fun onDestroy() {
+        introRenderJob?.cancel()
+        if (introTextViewDelegate.isInitialized()) {
+            introTextView.onTextLayoutChanged = null
+        }
         destroyWeb()
         super.onDestroy()
         if (initGetter) {
@@ -1210,4 +1611,20 @@ class BookInfoActivity :
         pooledWebView = null
     }
 
+}
+
+internal fun resolveBookInfoTocTitle(
+    storedTitle: String?,
+    currentIndex: Int,
+    chapters: List<BookChapter>,
+): String? {
+    return storedTitle?.takeIf { it.isNotBlank() }
+        ?: (chapters.getOrNull(currentIndex) ?: chapters.lastOrNull())
+            ?.getDisplayTitle(chineseConvert = false)
+            ?.takeIf { it.isNotBlank() }
+}
+
+internal fun resolveBookInfoReadProgress(book: Book): Int? {
+    if (book.totalChapterNum <= 1) return null
+    return book.readProgress()?.let { (it * 100).roundToInt() }
 }

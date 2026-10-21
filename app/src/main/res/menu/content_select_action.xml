@@ -15,8 +15,17 @@
         android:title="@string/bookmark" />
 
     <item
+        android:id="@+id/menu_highlight"
+        android:title="@string/highlight"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_aloud"
         android:title="@string/read_aloud" />
+
+    <item
+        android:id="@+id/menu_aloud_from_here"
+        android:title="@string/read_aloud_from_here" />
 
     <item
         android:id="@+id/menu_dict"

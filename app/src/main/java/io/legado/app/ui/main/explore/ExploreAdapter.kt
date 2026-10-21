@@ -12,7 +12,6 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.LinearLayout
-import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.AppCompatSpinner
@@ -39,6 +38,7 @@ import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.source.exploreKinds
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.widget.popupActionMenu
 import io.legado.app.ui.login.SourceLoginJsExtensions
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.text.AccentTextView
@@ -63,6 +63,17 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.set
 import kotlin.text.isNullOrEmpty
 
+internal fun isExploreBindingCurrent(
+    expectedLoadVersion: Int,
+    currentLoadVersion: Int,
+    expandedPosition: Int,
+    bindingPosition: Int,
+    boundSourceUrl: String,
+    currentSourceUrl: String?,
+): Boolean = expectedLoadVersion == currentLoadVersion &&
+    expandedPosition == bindingPosition &&
+    boundSourceUrl == currentSourceUrl
+
 class ExploreAdapter(context: Context, val callBack: CallBack) :
     RecyclerAdapter<BookSourcePart, ItemFindBookBinding>(context) {
     companion object {
@@ -74,6 +85,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
     private var exIndex = -1
     private var scrollTo = -1
+    private var kindLoadVersion = 0
     private var lastClickTime: Long = 0
     private val sourceKinds = ConcurrentHashMap<String, List<ExploreKind>>()
     private var saveInfoMapJob: Job? = null
@@ -98,19 +110,46 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                 tvName.text = item.bookSourceName
             }
             if (exIndex == holder.layoutPosition) {
+                val loadVersion = ++kindLoadVersion
+                fun currentBindingPosition(): Int? {
+                    val position = holder.bindingAdapterPosition
+                    return position.takeIf {
+                        isExploreBindingCurrent(
+                            expectedLoadVersion = loadVersion,
+                            currentLoadVersion = kindLoadVersion,
+                            expandedPosition = exIndex,
+                            bindingPosition = position,
+                            boundSourceUrl = item.bookSourceUrl,
+                            currentSourceUrl = getItem(position)?.bookSourceUrl,
+                        )
+                    }
+                }
                 ivStatus.setImageResource(R.drawable.ic_arrow_down)
+                sourceKinds[item.bookSourceUrl]?.let { kindList ->
+                    val position = currentBindingPosition() ?: return@run
+                    // A refresh has already loaded these kinds. Replace them in this layout pass
+                    // so an expanded row cannot briefly collapse above the current viewport.
+                    upKindList(this@run, item, kindList, position)
+                    rotateLoading.gone()
+                    if (scrollTo >= 0) {
+                        callBack.scrollTo(scrollTo)
+                        scrollTo = -1
+                    }
+                    return@run
+                }
                 rotateLoading.loadingColor = context.accentColor
                 rotateLoading.visible()
+                recyclerFlexbox(flexbox)
+                flexbox.gone()
                 Coroutine.async(callBack.scope) {
-                    sourceKinds[item.bookSourceUrl]?.also {
-                        return@async it
-                    }
-                    item.exploreKinds().also {
-                        sourceKinds[item.bookSourceUrl] = it
-                    }
+                    item.exploreKinds()
                 }.onSuccess { kindList ->
-                    upKindList(this@run, item, kindList, exIndex)
+                    currentBindingPosition()?.let { position ->
+                        sourceKinds[item.bookSourceUrl] = kindList
+                        upKindList(this@run, item, kindList, position)
+                    }
                 }.onFinally {
+                    if (currentBindingPosition() == null) return@onFinally
                     rotateLoading.gone()
                     if (scrollTo >= 0) {
                         callBack.scrollTo(scrollTo)
@@ -128,13 +167,14 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
     @SuppressLint("SetTextI18n", "ClickableViewAccessibility")
     private fun upKindList(binding: ItemFindBookBinding, item: BookSourcePart, kinds: List<ExploreKind>, exIndex: Int) {
+        val flexbox = binding.flexbox
+        recyclerFlexbox(flexbox)
+        flexbox.gone()
         if (kinds.isEmpty()) {
             return
         }
-        val flexbox = binding.flexbox
         val sourceUrl = item.bookSourceUrl
         kotlin.runCatching {
-            recyclerFlexbox(flexbox)
             flexbox.visible()
             val source by lazy { appDb.bookSourceDao.getBookSource(sourceUrl) }
             val infoMap by lazy {
@@ -142,16 +182,18 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                     exploreInfoMapList.put(sourceUrl, it)
                 }
             }
-            val sourceJsExtensions by lazy {
-                SourceLoginJsExtensions(context as? AppCompatActivity, source,
-                    callback = object : SourceLoginJsExtensions.Callback {
-                        override fun upUiData(data: Map<String, Any?>?) {
-                        }
+            val sourceUiCallback = object : SourceLoginJsExtensions.Callback {
+                override fun upUiData(data: Map<String, Any?>?) {
+                }
 
-                        override fun reUiView(deltaUp: Boolean) {
-                            refreshExplore(item, exIndex, binding)
-                        }
-                    })
+                override fun reUiView(deltaUp: Boolean) {
+                    refreshExplore(item, exIndex, binding)
+                }
+            }
+            // The JS bridge holds callbacks weakly; the live controls own this one.
+            flexbox.tag = sourceUiCallback
+            val sourceJsExtensions by lazy {
+                SourceLoginJsExtensions(context as? AppCompatActivity, source, callback = sourceUiCallback)
             }
             kinds.forEach { kind ->
                 val type = kind.type
@@ -160,6 +202,8 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                 when (type) {
                     Type.url -> {
                         val tv = getFlexboxChild(flexbox)
+                        val viewNameToken = Any()
+                        tv.tag = viewNameToken
                         flexbox.addView(tv)
                         kind.style().apply {
                             when (this.layout_justifySelf) {
@@ -179,12 +223,14 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                             Coroutine.async(callBack.scope, IO) {
                                 evalUiJs(viewName, source, infoMap)
                             }.onSuccess { n ->
+                                if (tv.tag !== viewNameToken) return@onSuccess
                                 if (n.isNullOrEmpty()) {
                                     tv.text = "null"
                                 } else {
                                     tv.text = n
                                 }
                             }.onError { _ ->
+                                if (tv.tag !== viewNameToken) return@onError
                                 tv.text = "err"
                             }
                         }
@@ -225,6 +271,8 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
                     Type.button -> {
                         val tv = getFlexboxChild(flexbox)
+                        val viewNameToken = Any()
+                        tv.tag = viewNameToken
                         flexbox.addView(tv)
                         kind.style().apply {
                             when (this.layout_justifySelf) {
@@ -244,12 +292,14 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                             Coroutine.async(callBack.scope, IO) {
                                 evalUiJs(viewName, source, infoMap)
                             }.onSuccess { n ->
+                                if (tv.tag !== viewNameToken) return@onSuccess
                                 if (n.isNullOrEmpty()) {
                                     tv.text = "null"
                                 } else {
                                     tv.text = n
                                 }
                             }.onError{ _ ->
+                                if (tv.tag !== viewNameToken) return@onError
                                 tv.text = "err"
                             }
                         }
@@ -286,6 +336,8 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
                     Type.text -> {
                         val ti = getFlexboxChildText(flexbox)
+                        val viewNameToken = Any()
+                        ti.tag = viewNameToken
                         flexbox.addView(ti)
                         kind.style().apply {
                             when (this.layout_justifySelf) {
@@ -305,12 +357,14 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                             Coroutine.async(callBack.scope, IO) {
                                 evalUiJs(viewName, source, infoMap)
                             }.onSuccess { n ->
+                                if (ti.tag !== viewNameToken) return@onSuccess
                                 if (n.isNullOrEmpty()) {
                                     ti.hint = "null"
                                 } else {
                                     ti.hint = n
                                 }
                             }.onError{ _ ->
+                                if (ti.tag !== viewNameToken) return@onError
                                 ti.hint = "err"
                             }
                         }
@@ -345,6 +399,8 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                         var newName = title
                         var left = true
                         val tv = getFlexboxChild(flexbox)
+                        val viewNameToken = Any()
+                        tv.tag = viewNameToken
                         flexbox.addView(tv)
                         kind.style().apply {
                             when (this.layout_justifySelf) {
@@ -375,6 +431,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                             Coroutine.async(callBack.scope, IO) {
                                 evalUiJs(viewName, source, infoMap)
                             }.onSuccess { n ->
+                                if (tv.tag !== viewNameToken) return@onSuccess
                                 if (n.isNullOrEmpty()) {
                                     tv.text = char + "null"
                                 } else {
@@ -382,6 +439,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                                     tv.text = if (left) char + n else n + char
                                 }
                             }.onError{ _ ->
+                                if (tv.tag !== viewNameToken) return@onError
                                 tv.text = char + "err"
                             }
                         }
@@ -438,6 +496,8 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                             apply(sl)
                         }
                         val spName = sl.findViewById<AccentTextView>(R.id.sp_name)
+                        val viewNameToken = Any()
+                        spName.tag = viewNameToken
                         if (viewName == null) {
                             spName.text = title
                         } else if (viewName.length in 3..19 && viewName.first() == '\'' && viewName.last() == '\'') {
@@ -448,12 +508,14 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
                             Coroutine.async(callBack.scope, IO) {
                                 evalUiJs(viewName, source, infoMap)
                             }.onSuccess { n ->
+                                if (spName.tag !== viewNameToken) return@onSuccess
                                 if (n.isNullOrEmpty()) {
                                     spName.text = "null"
                                 } else {
                                     spName.text = n
                                 }
                             }.onError{ _ ->
+                                if (spName.tag !== viewNameToken) return@onError
                                 spName.text = "err"
                             }
                         }
@@ -556,6 +618,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
     @Synchronized
     private fun recyclerFlexbox(flexbox: FlexboxLayout) {
+        flexbox.tag = null
         val children = flexbox.children.toList()
         if (children.isEmpty()) return
         flexbox.removeAllViews()
@@ -639,26 +702,29 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
 
     private fun showMenu(binding: ItemFindBookBinding, position: Int): Boolean {
         val source = getItem(position) ?: return true
-        val popupMenu = PopupMenu(context, binding.llTitle)
-        popupMenu.inflate(R.menu.explore_item)
-        popupMenu.menu.findItem(R.id.menu_login).isVisible = source.hasLoginUrl
-        popupMenu.setOnMenuItemClickListener {
-            when (it.itemId) {
-                R.id.menu_edit -> callBack.editSource(source.bookSourceUrl)
-                R.id.menu_top -> callBack.toTop(source)
-                R.id.menu_search -> callBack.searchBook(source)
-                R.id.menu_login -> context.startActivity<SourceLoginActivity> {
+        popupActionMenu(context) {
+            item(context.getString(R.string.edit), "edit")
+            item(context.getString(R.string.to_top), "top")
+            item(context.getString(R.string.login), "login", source.hasLoginUrl)
+            item(context.getString(R.string.search), "search")
+            item(context.getString(R.string.refresh), "refresh")
+            item(context.getString(R.string.delete), "delete")
+            danger("delete")
+        }.show(binding.llTitle) { action ->
+            when (action) {
+                "edit" -> callBack.editSource(source.bookSourceUrl)
+                "top" -> callBack.toTop(source)
+                "search" -> callBack.searchBook(source)
+                "login" -> context.startActivity<SourceLoginActivity> {
                     putExtra("type", "bookSource")
                     putExtra("key", source.bookSourceUrl)
                 }
 
-                R.id.menu_refresh -> refreshExplore(source, position, binding)
+                "refresh" -> refreshExplore(source, position, binding)
 
-                R.id.menu_del -> callBack.deleteSource(source)
+                "delete" -> callBack.deleteSource(source)
             }
-            true
         }
-        popupMenu.show()
         return true
     }
 

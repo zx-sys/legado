@@ -20,6 +20,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeStore
+import io.legado.app.utils.disableAutoFill
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.setBackgroundKeepPadding
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +34,7 @@ abstract class BaseDialogFragment(
 ) : DialogFragment(layoutID) {
 
     private var onDismissListener: OnDismissListener? = null
+    private var showRequested = false
 
     fun setOnDismissListener(onDismissListener: OnDismissListener?) {
         this.onDismissListener = onDismissListener
@@ -40,6 +42,7 @@ abstract class BaseDialogFragment(
 
     override fun onStart() {
         super.onStart()
+        dialog?.window?.decorView?.disableAutoFill()
         if (adaptationSoftKeyboard) {
             dialog?.window?.setBackgroundDrawableResource(R.color.transparent)
         } else if (AppConfig.isEInkMode) {
@@ -91,18 +94,26 @@ abstract class BaseDialogFragment(
     abstract fun onFragmentCreated(view: View, savedInstanceState: Bundle?)
 
     override fun show(manager: FragmentManager, tag: String?) {
+        if (showRequested || isAdded) return
         kotlin.runCatching {
-            //在每个add事务前增加一个remove事务，防止连续的add
-            manager.beginTransaction().remove(this).commit()
+            // Guard queued requests without removing a fragment and clearing its tag.
+            showRequested = true
             super.show(manager, tag)
         }.onFailure {
+            showRequested = false
             AppLog.put("显示对话框失败 tag:$tag", it)
         }
     }
 
     override fun onDismiss(dialog: DialogInterface) {
+        val host = activity
+        showRequested = false
         super.onDismiss(dialog)
         onDismissListener?.onDismiss(dialog)
+        // Destroying the dialog view for recreation also calls onDismiss.
+        if (arguments?.getBoolean("finishOnDismiss") == true && host?.isChangingConfigurations == false) {
+            host.finish()
+        }
     }
 
     fun <T> execute(

@@ -5,6 +5,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.ReplaceRule
@@ -15,6 +16,28 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
+private const val REPLACE_RULE_GROUP_FILTER = """
+trim(:groupName, $GROUP_TRIM_CHARACTERS) <> ''
+and exists (
+    with recursive replace_rule_groups(group_name, rest) as (
+        select '',
+            replace(replace(replace(coalesce(t2.`group`, ''), ';', ','), '，', ','), '；', ',') || ','
+        union all
+        select
+            trim(substr(rest, 1, instr(rest, ',') - 1), $GROUP_TRIM_CHARACTERS),
+            substr(rest, instr(rest, ',') + 1)
+        from replace_rule_groups
+        where rest <> ''
+    )
+    select 1
+    from replace_rule_groups
+    where group_name = trim(:groupName, $GROUP_TRIM_CHARACTERS)
+)
+"""
+
+private const val REPLACE_RULE_NO_GROUP_FILTER = """
+trim(coalesce(`group`, ''), $GROUP_TRIM_CHARACTERS) in ('', '未分组')
+"""
 
 @Dao
 interface ReplaceRuleDao {
@@ -31,13 +54,20 @@ interface ReplaceRuleDao {
     @Query("SELECT * FROM replace_rules WHERE isEnabled = 0 ORDER BY sortOrder ASC")
     fun flowDisabled(): Flow<List<ReplaceRule>>
 
-    @Query("SELECT * FROM replace_rules where `group` like :key ORDER BY sortOrder ASC")
-    fun flowGroupSearch(key: String): Flow<List<ReplaceRule>>
+    @Query(
+        """SELECT t2.* FROM replace_rules AS t2
+        WHERE """ + REPLACE_RULE_GROUP_FILTER + """
+        ORDER BY t2.sortOrder ASC"""
+    )
+    fun flowGroupSearch(groupName: String): Flow<List<ReplaceRule>>
 
     @Query("select `group` from replace_rules where `group` is not null and `group` <> ''")
     fun flowGroupsUnProcessed(): Flow<List<String>>
 
-    @Query("select * from replace_rules where `group` is null or trim(`group`) = '' or trim(`group`) like '%未分组%'")
+    @Query(
+        """select * from replace_rules
+        where """ + REPLACE_RULE_NO_GROUP_FILTER
+    )
     fun flowNoGroup(): Flow<List<ReplaceRule>>
 
     @get:Query("SELECT MIN(sortOrder) FROM replace_rules")
@@ -58,8 +88,15 @@ interface ReplaceRuleDao {
     @Query("SELECT * FROM replace_rules WHERE id = :id")
     fun findById(id: Long): ReplaceRule?
 
-    @Query("SELECT * FROM replace_rules WHERE id in (:ids)")
+    @Query("SELECT * FROM replace_rules WHERE id in (:ids) ORDER BY sortOrder ASC")
     fun findByIds(vararg ids: Long): List<ReplaceRule>
+
+    @Query(
+        "SELECT * FROM replace_rules " +
+            "WHERE NOT (scopeSource = 1 AND scopeTitle = 0 AND scopeContent = 0) " +
+            "ORDER BY sortOrder ASC"
+    )
+    fun findManualCandidates(): List<ReplaceRule>
 
     @Query(
         """SELECT * FROM replace_rules WHERE isEnabled = 1 and scopeContent = 1
@@ -77,6 +114,12 @@ interface ReplaceRuleDao {
     )
     fun findEnabledByTitleScope(name: String, origin: String): List<ReplaceRule>
 
+    @Query(
+        """SELECT * FROM replace_rules WHERE isEnabled = 1 and scopeSource = 1
+        ORDER BY sortOrder ASC"""
+    )
+    fun findEnabledBySourceScope(): List<ReplaceRule>
+
     @Query("select * from replace_rules where `group` like '%' || :group || '%'")
     fun getByGroup(group: String): List<ReplaceRule>
 
@@ -88,6 +131,16 @@ interface ReplaceRuleDao {
 
     @Query("UPDATE replace_rules SET isEnabled = :enable")
     fun enableAll(enable: Boolean)
+
+    @Query("UPDATE replace_rules SET isEnabled = :enable WHERE id = :id")
+    fun enable(id: Long, enable: Boolean)
+
+    @Transaction
+    fun enable(enable: Boolean, rules: List<ReplaceRule>) {
+        for (rule in rules) {
+            enable(rule.id, enable)
+        }
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(vararg replaceRule: ReplaceRule): List<Long>

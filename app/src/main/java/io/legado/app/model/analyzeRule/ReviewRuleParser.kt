@@ -1,5 +1,8 @@
 package io.legado.app.model.analyzeRule
 
+import androidx.annotation.Keep
+import com.jayway.jsonpath.PathNotFoundException
+import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -17,6 +20,7 @@ import kotlin.coroutines.CoroutineContext
 
 internal object ReviewRuleParser {
 
+    @Keep
     internal data class SummaryResult(
         val counts: Map<Int, Int>,
         val keys: Map<Int, String>,
@@ -27,10 +31,12 @@ internal object ReviewRuleParser {
         val nextPageUrl: String?,
     )
 
+    @Keep
     internal data class DetailItem(
         val id: String?,
         val avatar: String?,
         val name: String?,
+        val replyToName: String?,
         val badges: List<String>,
         val content: String?,
         val imageUrl: String?,
@@ -59,7 +65,13 @@ internal object ReviewRuleParser {
             .setChapter(chapter)
             .setCoroutineContext(context)
             .setContent(body, baseUrl)
-        val items = getElementList(analyzeRule, listRule)
+        val loggedRules = hashSetOf<String>()
+        val items = getElementList(
+            analyzeRule,
+            listRule,
+            "段评统计列表规则执行出错",
+            loggedRules,
+        )
         if (items.isEmpty()) return SummaryResult(emptyMap(), emptyMap())
 
         val counts = HashMap<Int, Int>()
@@ -72,16 +84,24 @@ internal object ReviewRuleParser {
 
         items.forEachIndexed { index, item ->
             itemRule.setContent(item, baseUrl)
-            val indexValue = safeRuleString(itemRule, indexRule, item)
+            val indexValue = safeRuleString(itemRule, indexRule, item, loggedRules)
             val paragraphIndex = parseInt(indexValue) ?: index + 1
             val count = if (countRule.isEmpty()) {
                 0
             } else {
-                parseInt(safeRuleString(itemRule, countRule, item)) ?: 0
+                parseInt(
+                    safeRuleString(
+                        itemRule,
+                        countRule,
+                        item,
+                        loggedRules,
+                        logMissingPath = true,
+                    )
+                ) ?: 0
             }
             if (paragraphIndex != 0 && count > 0) {
                 counts[paragraphIndex] = count
-                keys[paragraphIndex] = safeRuleString(itemRule, dataRule, item)
+                keys[paragraphIndex] = safeRuleString(itemRule, dataRule, item, loggedRules)
                     ?: indexValue
                     ?: paragraphIndex.toString()
             }
@@ -112,9 +132,15 @@ internal object ReviewRuleParser {
             .setLocal("paraIndex", paraIndex)
             .setLocal("paraData", paraData)
             .setLocal("page", page)
-        val items = getElementList(analyzeRule, listRule)
+        val loggedRules = hashSetOf<String>()
+        val items = getElementList(
+            analyzeRule,
+            listRule,
+            "段评详情列表规则执行出错",
+            loggedRules,
+        )
         val nextPageUrl = nextPageRule?.takeIf { it.isNotBlank() }
-            ?.let { safeRuleString(analyzeRule, it) }
+            ?.let { safeRuleString(analyzeRule, it, loggedRules = loggedRules) }
             ?.trim()
             ?.let { value ->
                 if (AnalyzeUrl.paramPattern.matcher(value).find()) {
@@ -125,10 +151,60 @@ internal object ReviewRuleParser {
             }
         return DetailPage(
             items = items.mapNotNull {
-                parseDetailItem(analyzeRule, it, rule, baseUrl, isReply = false)
+                parseDetailItem(
+                    analyzeRule,
+                    it,
+                    rule,
+                    baseUrl,
+                    isReply = false,
+                    loggedRules = loggedRules,
+                )
             },
             nextPageUrl = nextPageUrl,
         )
+    }
+
+    internal fun parseReplyPage(
+        body: String,
+        rule: ReviewRule,
+        baseUrl: String,
+        source: BaseSource,
+        book: Book,
+        chapter: BookChapter,
+        context: CoroutineContext,
+        paraIndex: String,
+        paraData: String,
+        page: String,
+    ): List<DetailItem> {
+        val listRule = rule.replyListRule?.trim().orEmpty()
+        require(body.isNotBlank()) { "段评回复内容为空" }
+        if (listRule.isEmpty()) return emptyList()
+
+        val analyzeRule = AnalyzeRule(book, source)
+            .setChapter(chapter)
+            .setCoroutineContext(context)
+            .setContent(body, baseUrl)
+            .setLocal("paraIndex", paraIndex)
+            .setLocal("paraData", paraData)
+            .setLocal("page", page)
+        val loggedRules = hashSetOf<String>()
+        val items = runCatching { normalizeList(analyzeRule.getElementsRaw(listRule)) }
+            .onFailure {
+                logRuleErrorOnce(loggedRules, "段评回复列表规则执行出错", listRule, it)
+            }
+            .getOrThrow()
+        val replies = items.mapNotNull {
+            parseDetailItem(
+                analyzeRule,
+                it,
+                rule,
+                baseUrl,
+                isReply = true,
+                loggedRules = loggedRules,
+            )
+        }
+        check(items.isEmpty() || replies.isNotEmpty()) { "段评回复解析为空" }
+        return replies
     }
 
     private fun parseDetailItem(
@@ -137,6 +213,7 @@ internal object ReviewRuleParser {
         rule: ReviewRule,
         baseUrl: String,
         isReply: Boolean,
+        loggedRules: MutableSet<String>,
     ): DetailItem? {
         analyzeRule.setContent(item, baseUrl)
         val idRule = if (isReply) rule.replyIdRule else rule.detailIdRule
@@ -145,18 +222,38 @@ internal object ReviewRuleParser {
         val badgeRule = if (isReply) rule.replyBadgeRule else rule.detailBadgeRule
         val contentRule = if (isReply) rule.replyContentRule else rule.detailContentRule
 
-        val id = safeRuleString(analyzeRule, idRule, item)
-        val avatar = safeRuleString(analyzeRule, avatarRule, item)?.let {
+        val id = safeRuleString(analyzeRule, idRule, item, loggedRules)
+        val avatar = safeRuleString(analyzeRule, avatarRule, item, loggedRules)?.let {
             NetworkUtils.getAbsoluteURL(baseUrl, it)
         }
-        val name = safeRuleString(analyzeRule, nameRule, item)
-        val badges = safeRuleList(analyzeRule, badgeRule, item)
-        val rawContent = safeRuleString(analyzeRule, contentRule, item)
+        val name = safeRuleString(analyzeRule, nameRule, item, loggedRules)
+        val badges = safeRuleList(analyzeRule, badgeRule, item, loggedRules)
+        val rawContent = safeRuleString(
+            analyzeRule,
+            contentRule,
+            item,
+            loggedRules,
+            logMissingPath = true,
+        )
         val protocol = parseContentProtocol(rawContent, baseUrl)
         val content = protocol?.text ?: if (protocol == null) rawContent else ""
-        val replies = if (!isReply && !rule.replyListRule.isNullOrBlank()) {
-            getElementList(analyzeRule, rule.replyListRule!!.trim()).mapNotNull {
-                parseDetailItem(analyzeRule, it, rule, baseUrl, isReply = true)
+        val replies = if (!isReply && rule.reviewQuoteUrl.isNullOrBlank() &&
+            !rule.replyListRule.isNullOrBlank()
+        ) {
+            getElementList(
+                analyzeRule,
+                rule.replyListRule!!.trim(),
+                "段评回复列表规则执行出错",
+                loggedRules,
+            ).mapNotNull {
+                parseDetailItem(
+                    analyzeRule,
+                    it,
+                    rule,
+                    baseUrl,
+                    isReply = true,
+                    loggedRules = loggedRules,
+                )
             }
         } else {
             emptyList()
@@ -171,19 +268,26 @@ internal object ReviewRuleParser {
             id = id,
             avatar = avatar,
             name = name,
+            replyToName = protocol?.replyToName,
             badges = badges,
             content = content,
             imageUrl = protocol?.imageUrl,
             audioUrl = protocol?.audioUrl,
             time = protocol?.time,
-            likeCount = if (isReply) null else protocol?.likeCount,
+            likeCount = protocol?.likeCount,
             replyCount = if (isReply) null else protocol?.replyCount,
             replies = replies,
         )
     }
 
-    private fun getElementList(analyzeRule: AnalyzeRule, rule: String): List<Any> {
+    private fun getElementList(
+        analyzeRule: AnalyzeRule,
+        rule: String,
+        errorMessage: String,
+        loggedRules: MutableSet<String>,
+    ): List<Any> {
         return runCatching { normalizeList(analyzeRule.getElementsRaw(rule)) }
+            .onFailure { logRuleErrorOnce(loggedRules, errorMessage, rule, it) }
             .getOrDefault(emptyList())
     }
 
@@ -209,8 +313,9 @@ internal object ReviewRuleParser {
         }
     }
 
-    private data class ContentProtocol(
+    internal data class ContentProtocol(
         val text: String?,
+        val replyToName: String?,
         val imageUrl: String?,
         val audioUrl: String?,
         val time: String?,
@@ -218,23 +323,25 @@ internal object ReviewRuleParser {
         val replyCount: Int?,
     )
 
-    private fun parseContentProtocol(raw: String?, baseUrl: String): ContentProtocol? {
+    internal fun parseContentProtocol(raw: String?, baseUrl: String): ContentProtocol? {
         val value = raw?.trim().orEmpty()
         if (!value.startsWith("{") || !value.endsWith("}")) return null
         val content = GSON.fromJsonObject<Map<String, Any?>>(value).getOrNull() ?: return null
         val text = content.stringValue("text")
+        val replyToName = content.stringValue("replyToName")
         val image = content.stringValue("img")
         val audio = content.stringValue("audio")
         val time = content.stringValue("time")
         val likeCount = parseInt(content["likeCount"])
         val replyCount = parseInt(content["replyCount"])
-        if (text == null && image == null && audio == null && time == null &&
+        if (text == null && replyToName == null && image == null && audio == null && time == null &&
             likeCount == null && replyCount == null
         ) {
             return null
         }
         return ContentProtocol(
             text = text,
+            replyToName = replyToName,
             imageUrl = image?.let { NetworkUtils.getAbsoluteURL(baseUrl, it) },
             audioUrl = audio?.let { NetworkUtils.getAbsoluteURL(baseUrl, it) },
             time = time,
@@ -261,14 +368,21 @@ internal object ReviewRuleParser {
         analyzeRule: AnalyzeRule,
         rule: String?,
         content: Any? = null,
+        loggedRules: MutableSet<String>,
+        logMissingPath: Boolean = false,
     ): String? {
         val value = rule?.trim().orEmpty()
         if (value.isEmpty()) return null
         val result = if (content is Map<*, *> && isJsonPath(value)) {
-            runCatching { AnalyzeByJSonPath(content).getString(value) }
+            runCatching { AnalyzeByJSonPath(content) { throw it }.getString(value) }
         } else {
             runCatching {
                 analyzeRule.getString(analyzeRule.splitSourceRule(value), content)
+            }
+        }
+        result.onFailure {
+            if (it !is PathNotFoundException || logMissingPath) {
+                logRuleErrorOnce(loggedRules, "段评规则执行出错", value, it)
             }
         }
         return result.getOrNull()?.takeIf { it.isNotBlank() }
@@ -278,23 +392,41 @@ internal object ReviewRuleParser {
         analyzeRule: AnalyzeRule,
         rule: String?,
         content: Any? = null,
+        loggedRules: MutableSet<String>,
     ): List<String> {
         val value = rule?.trim().orEmpty()
         if (value.isEmpty()) return emptyList()
-        val list = if (content is Map<*, *> && isJsonPath(value)) {
-            runCatching { AnalyzeByJSonPath(content).getStringList(value) }
+        val result = if (content is Map<*, *> && isJsonPath(value)) {
+            runCatching { AnalyzeByJSonPath(content) { throw it }.getStringList(value) }
         } else {
             runCatching { analyzeRule.getStringList(value, content).orEmpty() }
         }
+        if (result.exceptionOrNull() is PathNotFoundException) return emptyList()
+        val list = result
+            .onFailure { logRuleErrorOnce(loggedRules, "段评规则执行出错", value, it) }
             .getOrDefault(emptyList())
         if (list.isNotEmpty()) return list.flatMap(::splitBadgeValue).distinct()
-        return splitBadgeValue(safeRuleString(analyzeRule, value, content)).distinct()
+        return splitBadgeValue(safeRuleString(analyzeRule, value, content, loggedRules)).distinct()
     }
 
     private fun isJsonPath(rule: String): Boolean =
         rule.startsWith("$.") || rule.startsWith("$[")
 
-    private fun splitBadgeValue(value: String?): List<String> {
+    private fun logRuleError(message: String, rule: String, error: Throwable) {
+        AppLog.put("$message: $rule\n${error.localizedMessage}", error)
+    }
+
+    private fun logRuleErrorOnce(
+        loggedRules: MutableSet<String>,
+        message: String,
+        rule: String,
+        error: Throwable,
+    ) {
+        val key = "$rule\u0000${error::class.qualifiedName}\u0000${error.message}"
+        if (loggedRules.add(key)) logRuleError(message, rule, error)
+    }
+
+    internal fun splitBadgeValue(value: String?): List<String> {
         val raw = value?.trim().orEmpty()
         if (raw.isEmpty()) return emptyList()
         if (raw.isDataUrl()) return listOf(raw)

@@ -2,12 +2,15 @@
 
 package io.legado.app.ui.main
 
+import android.graphics.Rect
+import android.graphics.drawable.StateListDrawable
 import android.os.Bundle
 import android.text.format.DateUtils
 import android.view.MenuItem
 import android.view.ViewGroup
 import androidx.activity.addCallback
 import androidx.activity.viewModels
+import androidx.core.view.doOnLayout
 import androidx.core.view.get
 import androidx.core.view.postDelayed
 import androidx.fragment.app.Fragment
@@ -27,7 +30,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityMainBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppWebDav
-import io.legado.app.help.LifecycleHelp
+import io.legado.app.help.BottomBarSkinManager
 import io.legado.app.help.SourceSharePassphrase
 import io.legado.app.help.SourceSharePassphraseImportPolicy
 import io.legado.app.help.book.BookHelp
@@ -36,11 +39,13 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.update.AppUpdate
+import io.legado.app.help.update.isIgnoredAppUpdate
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.about.CrashLogsDialog
 import io.legado.app.ui.about.UpdateDialog
+import io.legado.app.ui.autoTask.ImportAutoTaskDialog
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.association.ImportDictRuleDialog
 import io.legado.app.ui.association.ImportHttpTtsDialog
@@ -56,8 +61,10 @@ import io.legado.app.ui.main.rss.RssFragment
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.text.BadgeView
 import io.legado.app.utils.clearClip
+import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getClipText
 import io.legado.app.utils.isCreated
+import io.legado.app.utils.imeHeight
 import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.observeEvent
 import io.legado.app.utils.setEdgeEffectColor
@@ -98,16 +105,25 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private var bottomMenuCount = 4
     private val EXIT_INTERVAL = 2000L
     private val realPositions = arrayOf(idBookshelf, idExplore, idRss, idMy)
+    private val menuIdToSlot = linkedMapOf(
+        R.id.menu_bookshelf to "bookshelf",
+        R.id.menu_discovery to "home",
+        R.id.menu_rss to "notes",
+        R.id.menu_my_config to "settings",
+    )
     private val adapter by lazy {
         TabFragmentPageAdapter(supportFragmentManager)
     }
     private var onUpBooksBadgeView: BadgeView? = null
     private var lastPassphraseText: String? = null
+    private var pendingPassphraseRead = false
+    private var passphraseReadGeneration = 0
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         upBottomMenu()
         initView()
         upHomePage()
+        upBottomBarSkin()
         onBackPressedDispatcher.addCallback(this) {
             if (pagePosition != 0) {
                 binding.viewPagerMain.currentItem = 0
@@ -149,7 +165,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             binding.viewPagerMain.postDelayed(1000) {
                 viewModel.ruleSubsUp()
             }
-            readSourceSharePassphrase(1500)
+            scheduleSourceSharePassphraseRead(1500)
             //自动更新书籍
             val isAutoRefreshedBook = savedInstanceState?.getBoolean("isAutoRefreshedBook") ?: false
             if (AppConfig.autoRefreshBook && !isAutoRefreshedBook) {
@@ -166,29 +182,52 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     override fun onResume() {
         super.onResume()
         if (SourceSharePassphraseImportPolicy.shouldScheduleOnResume(
-                privacyPolicyOk = LocalConfig.privacyPolicyOk,
-                activityCount = LifecycleHelp.activitySize()
+                privacyPolicyOk = LocalConfig.privacyPolicyOk
             )
         ) {
-            readSourceSharePassphrase(500)
+            scheduleSourceSharePassphraseRead(500)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        pendingPassphraseRead = false
+        passphraseReadGeneration++
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus && pendingPassphraseRead && canAwaitPassphraseWindowFocus()) {
+            readSourceSharePassphrase(200)
+        } else if (hasFocus) {
+            pendingPassphraseRead = false
         }
     }
 
     override fun onNavigationItemSelected(item: MenuItem): Boolean = binding.run {
         when (item.itemId) {
-            R.id.menu_bookshelf ->
+            R.id.menu_bookshelf -> {
                 viewPagerMain.setCurrentItem(0, false)
+                true
+            }
 
-            R.id.menu_discovery ->
+            R.id.menu_discovery -> {
                 viewPagerMain.setCurrentItem(realPositions.indexOf(idExplore), false)
+                true
+            }
 
-            R.id.menu_rss ->
+            R.id.menu_rss -> {
                 viewPagerMain.setCurrentItem(realPositions.indexOf(idRss), false)
+                true
+            }
 
-            R.id.menu_my_config ->
+            R.id.menu_my_config -> {
                 viewPagerMain.setCurrentItem(realPositions.indexOf(idMy), false)
+                true
+            }
+
+            else -> false
         }
-        return false
     }
 
     override fun onNavigationItemReselected(item: MenuItem) {
@@ -224,6 +263,18 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         bottomNavigationView.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
             val height = windowInsets.navigationBarHeight
             view.bottomPadding = height
+            view.doOnLayout {
+                val location = IntArray(2)
+                view.getLocationInWindow(location)
+                val keyboardTop = window.decorView.height - windowInsets.imeHeight
+                // The pager already ends above the bottom navigation, even when IME covers it.
+                viewPagerMain.bottomPadding = (location[1] - keyboardTop).coerceAtLeast(0)
+                if (windowInsets.imeHeight > 0) viewPagerMain.doOnLayout {
+                    currentFocus?.takeIf { it.onCheckIsTextEditor() }?.let { input ->
+                        input.requestRectangleOnScreen(Rect(0, 0, input.width, input.height), true)
+                    }
+                }
+            }
             windowInsets.inset(0, 0, 0, height)
         }
     }
@@ -258,6 +309,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 if (LocalConfig.lastCheckUpdate + 24.hours.inWholeMilliseconds < System.currentTimeMillis()) {
                     AppUpdate.gitHubUpdate.check(lifecycleScope)
                         .onSuccess {
+                            if (isIgnoredAppUpdate(it.tagName, LocalConfig.ignoreUpdateVersion)) {
+                                return@onSuccess
+                            }
+                            if (supportFragmentManager.isStateSaved) return@onSuccess
                             showDialogFragment(
                                 UpdateDialog(it)
                             )
@@ -271,7 +326,12 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         LocalConfig.versionCode = appInfo.versionCode
         if (LocalConfig.isFirstOpenApp) {
             val help = String(assets.open("web/help/md/appHelp.md").readBytes())
-            val dialog = TextDialog(getString(R.string.help), help, TextDialog.Mode.MD)
+            val dialog = TextDialog(
+                getString(R.string.help),
+                help,
+                TextDialog.Mode.MD,
+                showToc = true,
+            )
             dialog.setOnDismissListener {
                 block.resume(null)
             }
@@ -339,11 +399,18 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             val lastBackupFile =
                 withContext(IO) { AppWebDav.lastBackUp().getOrNull() } ?: return@launch
             if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
-                LocalConfig.lastBackup = lastBackupFile.lastModify
                 alert(R.string.restore, R.string.webdav_after_local_restore_confirm) {
-                    cancelButton()
+                    cancelButton {
+                        LocalConfig.lastBackup = maxOf(
+                            LocalConfig.lastBackup,
+                            lastBackupFile.lastModify,
+                        )
+                    }
                     okButton {
-                        viewModel.restoreWebDav(lastBackupFile.displayName)
+                        viewModel.restoreWebDav(
+                            lastBackupFile.displayName,
+                            lastBackupFile.lastModify,
+                        )
                     }
                 }
             }
@@ -395,10 +462,14 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     onUpBooksBadgeView = null
                 }
                 upBottomMenu()
+                upBottomBarSkin()
                 if (it) {
                     viewPagerMain.setCurrentItem(bottomMenuCount - 1, false)
                 }
             }
+        }
+        observeEvent<String>(EventBus.BOTTOM_BAR_SKIN) {
+            upBottomBarSkin()
         }
         observeEvent<String>(PreferKey.threadCount) {
             viewModel.upPool()
@@ -408,6 +479,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 it,
                 onlyUpdateRead = false,
                 policy = TocUpdatePolicy.SKIP_PRE_DOWNLOAD,
+                refreshBookInfo = true,
             )
         }
     }
@@ -434,13 +506,40 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         adapter.notifyDataSetChanged()
     }
 
-    private fun readSourceSharePassphrase(delayMillis: Long) {
+    private fun scheduleSourceSharePassphraseRead(delayMillis: Long) {
+        passphraseReadGeneration++
+        pendingPassphraseRead = true
+        if (hasWindowFocus()) {
+            readSourceSharePassphrase(delayMillis, passphraseReadGeneration)
+        }
+    }
+
+    private fun canAwaitPassphraseWindowFocus(): Boolean {
+        return SourceSharePassphraseImportPolicy.canAwaitWindowFocus(
+            privacyPolicyOk = LocalConfig.privacyPolicyOk,
+            isFinishing = isFinishing,
+            isResumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
+            isFragmentStateSaved = supportFragmentManager.isStateSaved
+        )
+    }
+
+    private fun readSourceSharePassphrase(
+        delayMillis: Long,
+        generation: Int = passphraseReadGeneration
+    ) {
+        pendingPassphraseRead = false
         binding.viewPagerMain.postDelayed(delayMillis) {
+            if (generation != passphraseReadGeneration) return@postDelayed
+            val hasWindowFocus = hasWindowFocus()
+            if (!hasWindowFocus) {
+                pendingPassphraseRead = canAwaitPassphraseWindowFocus()
+            }
             if (!SourceSharePassphraseImportPolicy.canReadClipboard(
                     privacyPolicyOk = LocalConfig.privacyPolicyOk,
                     isFinishing = isFinishing,
                     isResumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED),
-                    isFragmentStateSaved = supportFragmentManager.isStateSaved
+                    isFragmentStateSaved = supportFragmentManager.isStateSaved,
+                    hasWindowFocus = hasWindowFocus
                 )
             ) {
                 return@postDelayed
@@ -484,10 +583,27 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
                         SourceSharePassphrase.Type.TTS_RULE ->
                             showDialogFragment(ImportHttpTtsDialog(value.url))
+
+                        SourceSharePassphrase.Type.AUTO_TASK ->
+                            showDialogFragment(ImportAutoTaskDialog(value.url))
                     }
                 }
             }
         }
+    }
+
+    private fun upBottomBarSkin() {
+        val skin = BottomBarSkinManager.active
+        if (skin.isEmpty() || !BottomBarSkinManager.hasSkin(skin)) {
+            binding.bottomNavigationView.applySkin(null, 0)
+            return
+        }
+        val sizePx = 30.dpToPx()
+        val map = HashMap<Int, StateListDrawable>()
+        menuIdToSlot.forEach { (id, slot) ->
+            BottomBarSkinManager.getStateDrawable(skin, slot, sizePx)?.let { map[id] = it }
+        }
+        binding.bottomNavigationView.applySkin(map, sizePx)
     }
 
     private fun upHomePage() {

@@ -1,22 +1,29 @@
 package io.legado.app.ui.main.bookshelf
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import androidx.core.view.indices
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LiveData
+import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
+import io.legado.app.data.AppDatabase
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.DialogBookshelfConfigBinding
 import io.legado.app.databinding.DialogEditTextBinding
+import io.legado.app.databinding.ViewBookshelfHeaderBinding
 import io.legado.app.help.DirectLinkUpload
+import io.legado.app.help.book.readProgress
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.ui.about.AppLogDialog
@@ -24,6 +31,7 @@ import io.legado.app.ui.book.cache.CacheActivity
 import io.legado.app.ui.book.group.GroupManageDialog
 import io.legado.app.ui.book.import.local.ImportBookActivity
 import io.legado.app.ui.book.import.remote.RemoteBookActivity
+import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.manage.BookshelfManageActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.file.HandleFileContract
@@ -31,14 +39,25 @@ import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.ui.main.MainViewModel
 import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.utils.checkByIndex
+import io.legado.app.utils.flowWithLifecycleAndDatabaseChangeFirst
 import io.legado.app.utils.getCheckedIndex
+import io.legado.app.utils.gone
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.readText
 import io.legado.app.utils.sendToClip
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
+import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.toastOnUi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfViewModel>(layoutId),
     MainFragmentInterface {
@@ -83,6 +102,97 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
             setOnCancelListener {
                 viewModel.addBookJob?.cancel()
             }
+        }
+    }
+
+    private var shelfHeaderBinding: ViewBookshelfHeaderBinding? = null
+    private var continueBook: Book? = null
+    private var shelfHeaderFlowJob: Job? = null
+
+    override fun onDestroyView() {
+        shelfHeaderFlowJob?.cancel()
+        shelfHeaderFlowJob = null
+        shelfHeaderBinding = null
+        continueBook = null
+        super.onDestroyView()
+    }
+
+    fun bindShelfHeader(header: ViewBookshelfHeaderBinding) {
+        shelfHeaderBinding = header
+        header.continueReading.setOnClickListener {
+            continueBook?.let { startActivityForBook(it) }
+        }
+        header.continueReading.setOnLongClickListener {
+            continueBook?.let { book ->
+                startActivity(
+                    Intent(requireContext(), BookInfoActivity::class.java).apply {
+                        putExtra("name", book.name)
+                        putExtra("author", book.author)
+                    }
+                )
+                true
+            } ?: false
+        }
+        subscribeShelfHeaderRefresh()
+    }
+
+    private fun subscribeShelfHeaderRefresh() {
+        shelfHeaderFlowJob?.cancel()
+        shelfHeaderFlowJob = null
+        continueBook = null
+        val header = shelfHeaderBinding ?: return
+        val showRecentReading = AppConfig.showBookshelfRecentReading
+        val showBookshelfStats = AppConfig.showBookshelfStats
+        header.tvShelfStats.visibility = if (showBookshelfStats) View.VISIBLE else View.GONE
+        header.continueReading.gone()
+        header.root.visibility = if (showBookshelfStats) View.VISIBLE else View.GONE
+        if (!showRecentReading && !showBookshelfStats) return
+
+        shelfHeaderFlowJob = viewLifecycleOwner.lifecycleScope.launch {
+            appDb.bookDao.flowShelfBookCount()
+                .flowWithLifecycleAndDatabaseChangeFirst(
+                    viewLifecycleOwner.lifecycle,
+                    Lifecycle.State.RESUMED,
+                    AppDatabase.BOOK_TABLE_NAME
+                )
+                .catch { AppLog.put("书架头部刷新出错", it) }
+                .conflate()
+                .flowOn(Dispatchers.Default)
+                .collect { bookCount ->
+                    val currentHeader = shelfHeaderBinding ?: return@collect
+                    val (book, readingCount) = withContext(Dispatchers.IO) {
+                        val book = if (showRecentReading) {
+                            appDb.bookDao.lastReadBookOnShelf
+                        } else {
+                            null
+                        }
+                        val readingCount = if (showBookshelfStats) {
+                            appDb.bookDao.readingCount
+                        } else {
+                            0
+                        }
+                        book to readingCount
+                    }
+                    if (shelfHeaderBinding !== currentHeader) return@collect
+                    continueBook = book
+                    if (showBookshelfStats) {
+                        currentHeader.tvShelfStats.text =
+                            getString(R.string.bookshelf_stats, bookCount, readingCount)
+                    }
+                    currentHeader.root.visibility =
+                        if (showBookshelfStats || book != null) View.VISIBLE else View.GONE
+                    if (book == null) {
+                        currentHeader.continueReading.gone()
+                        return@collect
+                    }
+                    currentHeader.continueReading.visibility = View.VISIBLE
+                    currentHeader.tvContinueName.text = book.name
+                    currentHeader.tvContinueChapter.text = book.durChapterTitle
+                        .takeIf { it?.isNotBlank() == true }
+                        ?: getString(R.string.read_not_started)
+                    currentHeader.tvContinuePercent.text =
+                        "${((book.readProgress() ?: 0f) * 100).roundToInt().coerceIn(0, 100)}%"
+                }
         }
     }
 
@@ -170,6 +280,7 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
             var bookshelfLayout = AppConfig.bookshelfLayout
             var bookshelfSort = AppConfig.bookshelfSort
             var showBookname = AppConfig.showBookname
+            var readProgressMode = AppConfig.bookshelfReadProgressMode
             val alertBinding =
                 DialogBookshelfConfigBinding.inflate(layoutInflater)
                     .apply {
@@ -188,12 +299,18 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                             showBookname = 0
                             AppConfig.showBookname = 0
                         }
+                        if (readProgressMode !in 0..<spReadProgress.count) {
+                            readProgressMode = 1
+                            AppConfig.bookshelfReadProgressMode = readProgressMode
+                        }
                         spGroupStyle.setSelection(AppConfig.bookGroupStyle)
+                        spReadProgress.setSelection(readProgressMode)
                         swShowUnread.isChecked = AppConfig.showUnread
                         swShowLastUpdateTime.isChecked = AppConfig.showLastUpdateTime
-                        swShowReadProgress.isChecked = AppConfig.showBookshelfReadProgress
                         swShowWaitUpBooks.isChecked = AppConfig.showWaitUpCount
                         swShowBookshelfFastScroller.isChecked = AppConfig.showBookshelfFastScroller
+                        swShowRecentReading.isChecked = AppConfig.showBookshelfRecentReading
+                        swShowBookshelfStats.isChecked = AppConfig.showBookshelfStats
                         rgLayout.checkByIndex(bookshelfLayout)
                         rgbLayout.checkByIndex(showBookname)
                         if (bookshelfLayout < 2) {
@@ -231,8 +348,8 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                         AppConfig.showLastUpdateTime = swShowLastUpdateTime.isChecked
                         postEvent(EventBus.BOOKSHELF_REFRESH, "")
                     }
-                    if (AppConfig.showBookshelfReadProgress != swShowReadProgress.isChecked) {
-                        AppConfig.showBookshelfReadProgress = swShowReadProgress.isChecked
+                    if (readProgressMode != spReadProgress.selectedItemPosition) {
+                        AppConfig.bookshelfReadProgressMode = spReadProgress.selectedItemPosition
                         postEvent(EventBus.BOOKSHELF_REFRESH, "")
                     }
                     if (AppConfig.showWaitUpCount != swShowWaitUpBooks.isChecked) {
@@ -242,6 +359,14 @@ abstract class BaseBookshelfFragment(layoutId: Int) : VMBaseFragment<BookshelfVi
                     if (AppConfig.showBookshelfFastScroller != swShowBookshelfFastScroller.isChecked) {
                         AppConfig.showBookshelfFastScroller = swShowBookshelfFastScroller.isChecked
                         postEvent(EventBus.BOOKSHELF_REFRESH, "")
+                    }
+                    if (AppConfig.showBookshelfRecentReading != swShowRecentReading.isChecked) {
+                        AppConfig.showBookshelfRecentReading = swShowRecentReading.isChecked
+                        recreate = true
+                    }
+                    if (AppConfig.showBookshelfStats != swShowBookshelfStats.isChecked) {
+                        AppConfig.showBookshelfStats = swShowBookshelfStats.isChecked
+                        recreate = true
                     }
                     if (bookshelfSort != rgSort.getCheckedIndex()) {
                         AppConfig.bookshelfSort = rgSort.getCheckedIndex()

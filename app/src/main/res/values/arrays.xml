@@ -32,6 +32,12 @@
 		<item>Folder</item>
 	</string-array>
 
+	<string-array name="bookshelf_read_progress">
+		<item>@string/read_progress_hidden</item>
+		<item>@string/read_progress_standard</item>
+		<item>@string/read_progress_enhanced</item>
+	</string-array>
+
 	<string-array name="book_sort">
 		<item>@string/text_default</item>
 		<item>@string/bookshelf_px_0</item>
@@ -99,6 +105,13 @@
         <item>兼容旧版</item>
         <item>关闭点击</item>
         <item>双击生效</item>
+    </string-array>
+
+    <string-array name="highlight_action_trigger_title">
+        <item>@string/highlight_action_trigger_click</item>
+        <item>@string/highlight_action_trigger_double_tap</item>
+        <item>@string/highlight_action_trigger_long_press</item>
+        <item>@string/highlight_action_trigger_off</item>
     </string-array>
 
 	<string-array name="double_page_title">
@@ -196,6 +209,14 @@
 		<item>beta_releaseS_version</item>
 	</string-array>
 
+	<string-array name="punctuation_compress_title">
+		<item>@string/punctuation_compress_none</item>
+		<item>@string/punctuation_compress_line_end</item>
+		<item>@string/punctuation_compress_adjacent</item>
+		<item>@string/punctuation_compress_adjacent_line_end</item>
+		<item>@string/punctuation_compress_all</item>
+	</string-array>
+
 	<string-array name="tip_color">
 		<item>Same color as content</item>
 		<item>Customize</item>
@@ -207,4 +228,14 @@
 		<item>Customize</item>
 	</string-array>
 
+    <string-array name="book_metadata_sync_options">
+        <item>@string/book_metadata_sync_always</item>
+        <item>@string/book_metadata_sync_never</item>
+        <item>@string/book_metadata_sync_ask</item>
+    </string-array>
+    <string-array name="book_metadata_sync_values">
+        <item>always</item>
+        <item>never</item>
+        <item>ask</item>
+    </string-array>
 </resources>

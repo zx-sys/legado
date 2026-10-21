@@ -3,7 +3,7 @@ package io.legado.app.ui.welcome
 import android.content.Intent
 import android.os.Bundle
 import androidx.core.graphics.drawable.toDrawable
-import androidx.core.view.postDelayed
+import androidx.lifecycle.lifecycleScope
 import io.legado.app.base.BaseActivity
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Theme
@@ -25,13 +25,32 @@ import io.legado.app.utils.startActivity
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
 import io.legado.app.utils.windowSize
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>() {
 
     override val binding by viewBinding(ActivityWelcomeBinding::inflate)
+    private var startMainJob: Job? = null
+
+    private val broughtToFront: Boolean
+        get() = intent.flags and Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT != 0
+
+    override fun shouldShowWindowBackground(): Boolean =
+        getPrefInt(PreferKey.welcomeShowTime, 500) != 0 && !broughtToFront
+
+    override fun shouldCreateContentView(): Boolean {
+        if (broughtToFront || getPrefInt(PreferKey.welcomeShowTime, 500) == 0) {
+            if (!broughtToFront) startMainActivity()
+            finish()
+            return false
+        }
+        return true
+    }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        if (intent.flags and Intent.FLAG_ACTIVITY_BROUGHT_TO_FRONT != 0) {
+        if (broughtToFront) {
             // 避免从桌面启动程序后，会重新实例化入口类的activity
             finish()
         } else {
@@ -39,7 +58,10 @@ open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>() {
             if (welcomeShowTime == 0) {
                 startMainActivity()
             } else {
-                binding.root.postDelayed(welcomeShowTime.toLong()) { startMainActivity() }
+                startMainJob = lifecycleScope.launch {
+                    delay(welcomeShowTime.toLong())
+                    startMainActivity()
+                }
             }
         }
         binding.ivBook.setColorFilter(accentColor)
@@ -52,7 +74,19 @@ open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>() {
         upNavigationBarColor()
     }
 
+    override fun finish() {
+        startMainJob?.cancel()
+        startMainJob = null
+        super.finish()
+    }
+
     override fun upBackgroundImage() {
+        val isDarkTheme = ThemeConfig.getTheme() == Theme.Dark
+        val showText = if (isDarkTheme) AppConfig.welcomeShowTextDark else AppConfig.welcomeShowText
+        val showIcon = if (isDarkTheme) AppConfig.welcomeShowIconDark else AppConfig.welcomeShowIcon
+        binding.tvLegado.visible(showText)
+        binding.ivBook.visible(showIcon)
+        binding.tvGzh.visible(showText)
         if (getPrefBoolean(PreferKey.customWelcome)) {
             kotlin.runCatching {
                 when (ThemeConfig.getTheme()) {
@@ -69,9 +103,6 @@ open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>() {
                                 }
                             }
                         }
-                        binding.tvLegado.visible(AppConfig.welcomeShowTextDark)
-                        binding.ivBook.visible(AppConfig.welcomeShowIconDark)
-                        binding.tvGzh.visible(AppConfig.welcomeShowTextDark)
                         return
                     }
                     else -> {
@@ -87,9 +118,6 @@ open class WelcomeActivity : BaseActivity<ActivityWelcomeBinding>() {
                                 }
                             }
                         }
-                        binding.tvLegado.visible(AppConfig.welcomeShowText)
-                        binding.ivBook.visible(AppConfig.welcomeShowIcon)
-                        binding.tvGzh.visible(AppConfig.welcomeShowText)
                         return
                     }
                 }

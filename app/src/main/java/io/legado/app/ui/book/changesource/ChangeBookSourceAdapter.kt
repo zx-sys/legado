@@ -4,10 +4,11 @@ import android.content.Context
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.PopupMenu
+import androidx.appcompat.app.AlertDialog
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.R
 import io.legado.app.base.adapter.DiffRecyclerAdapter
 import io.legado.app.base.adapter.ItemViewHolder
@@ -15,6 +16,9 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.ItemChangeSourceBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.theme.accentColor
+import io.legado.app.ui.widget.popupActionMenu
+import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
@@ -28,6 +32,8 @@ class ChangeBookSourceAdapter(
     val viewModel: ChangeBookSourceViewModel,
     val callBack: CallBack
 ) : DiffRecyclerAdapter<SearchBook, ItemChangeSourceBinding>(context) {
+
+    private var deleteSourceDialog: AlertDialog? = null
 
     override val diffItemCallback = object : DiffUtil.ItemCallback<SearchBook>() {
         override fun areItemsTheSame(oldItem: SearchBook, newItem: SearchBook): Boolean {
@@ -60,7 +66,12 @@ class ChangeBookSourceAdapter(
                 tvLast.text = item.getDisplayLastChapterTitle()
                 tvCurrentChapterWordCount.text = item.chapterWordCountText
                 tvRespondTime.text = context.getString(R.string.respondTime, item.respondTime)
-                if (callBack.oldBookUrl == item.bookUrl) {
+                val isCurrent = callBack.oldBookUrl == item.bookUrl
+                viewSelectedBackground.setBackgroundColor(
+                    ColorUtils.withAlpha(context.accentColor, 0.1f)
+                )
+                viewSelectedBackground.visibility = if (isCurrent) View.VISIBLE else View.INVISIBLE
+                if (isCurrent) {
                     ivChecked.visible()
                 } else {
                     ivChecked.invisible()
@@ -72,10 +83,11 @@ class ChangeBookSourceAdapter(
                         when (it) {
                             "name" -> tvOrigin.text = item.originName
                             "latest" -> tvLast.text = item.getDisplayLastChapterTitle()
-                            "upCurSource" -> if (callBack.oldBookUrl == item.bookUrl) {
-                                ivChecked.visible()
-                            } else {
-                                ivChecked.invisible()
+                            "upCurSource" -> {
+                                val isCurrent = callBack.oldBookUrl == item.bookUrl
+                                viewSelectedBackground.visibility =
+                                    if (isCurrent) View.VISIBLE else View.INVISIBLE
+                                if (isCurrent) ivChecked.visible() else ivChecked.invisible()
                             }
                         }
                     }
@@ -188,38 +200,45 @@ class ChangeBookSourceAdapter(
 
     private fun showMenu(view: View, searchBook: SearchBook?) {
         searchBook ?: return
-        val popupMenu = PopupMenu(context, view)
-        popupMenu.inflate(R.menu.change_source_item)
-        popupMenu.setOnMenuItemClickListener {
-            when (it.itemId) {
-                R.id.menu_top_source -> {
-                    callBack.topSource(searchBook)
-                }
-
-                R.id.menu_bottom_source -> {
-                    callBack.bottomSource(searchBook)
-                }
-
-                R.id.menu_edit_source -> {
-                    callBack.editSource(searchBook)
-                }
-
-                R.id.menu_disable_source -> {
-                    callBack.disableSource(searchBook)
-                }
-
-                R.id.menu_delete_source -> context.alert(R.string.draw) {
-                    setMessage(context.getString(R.string.sure_del) + "\n" + searchBook.originName)
-                    noButton()
-                    yesButton {
-                        callBack.deleteSource(searchBook)
-                        updateItems(0, itemCount, listOf<Int>())
+        popupActionMenu(context) {
+            item(context.getString(R.string.to_top), "topSource")
+            item(context.getString(R.string.to_bottom), "bottomSource")
+            item(context.getString(R.string.edit_source), "editSource")
+            item(context.getString(R.string.disable_source), "disableSource")
+            item(context.getString(R.string.delete_source), "deleteSource")
+            danger("deleteSource")
+        }.show(view) { action ->
+            when (action) {
+                "topSource" -> callBack.topSource(searchBook)
+                "bottomSource" -> callBack.bottomSource(searchBook)
+                "editSource" -> callBack.editSource(searchBook)
+                "disableSource" -> callBack.disableSource(searchBook)
+                "deleteSource" -> {
+                    if (deleteSourceDialog == null) {
+                        deleteSourceDialog = context.alert(R.string.draw) {
+                            setMessage(
+                                context.getString(R.string.sure_del) +
+                                    "\n" + searchBook.originName
+                            )
+                            noButton()
+                            yesButton {
+                                callBack.deleteSource(searchBook)
+                                updateItems(0, itemCount, listOf<Int>())
+                            }
+                            onDismiss { dialog ->
+                                if (deleteSourceDialog === dialog) deleteSourceDialog = null
+                            }
+                        }
                     }
                 }
             }
-            true
         }
-        popupMenu.show()
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        deleteSourceDialog?.dismiss()
+        deleteSourceDialog = null
+        super.onDetachedFromRecyclerView(recyclerView)
     }
 
     interface CallBack {

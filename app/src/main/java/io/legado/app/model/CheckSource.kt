@@ -3,14 +3,20 @@ package io.legado.app.model
 import android.content.Context
 import io.legado.app.R
 import io.legado.app.constant.IntentAction
+import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.help.CacheManager
 import io.legado.app.help.IntentData
 import io.legado.app.service.CheckSourceService
 import io.legado.app.utils.startService
+import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.withContext
 import splitties.init.appCtx
 
 object CheckSource {
+    internal const val EXTRA_SESSION_ID = "checkSourceSessionId"
+    internal const val EXTRA_SELECTED_SOURCES_KEY = "checkSourceSelectedSourcesKey"
+
     var keyword = "我的"
 
     //校验设置
@@ -24,19 +30,33 @@ object CheckSource {
     var checkContent = CacheManager.get("checkContent")?.toBoolean() ?: true
     val summary get() = upSummary()
 
-    fun start(context: Context, sources: List<BookSourcePart>) {
-        val selectedIds = sources.map {
-            it.bookSourceUrl
+    suspend fun start(
+        context: Context,
+        sources: List<BookSourcePart>,
+        sessionId: Long,
+    ): String {
+        Debug.prepareCheckSession(sessionId, sources.map { it.bookSourceUrl })
+        var selectedSourcesKey: String? = null
+        try {
+            val queued = withContext(IO) { appDb.bookSourceDao.beginCheck(sources) }
+            selectedSourcesKey = IntentData.put(queued)
+            context.startService<CheckSourceService> {
+                action = IntentAction.start
+                putExtra(EXTRA_SESSION_ID, sessionId)
+                putExtra(EXTRA_SELECTED_SOURCES_KEY, selectedSourcesKey)
+            }
+        } catch (error: Exception) {
+            selectedSourcesKey?.let { IntentData.get<Any>(it) }
+            Debug.finishChecking(sessionId)
+            throw error
         }
-        IntentData.put("checkSourceSelectedIds", selectedIds)
-        context.startService<CheckSourceService> {
-            action = IntentAction.start
-        }
+        return requireNotNull(selectedSourcesKey)
     }
 
-    fun stop(context: Context) {
+    fun stop(context: Context, sessionId: Long) {
         context.startService<CheckSourceService> {
             action = IntentAction.stop
+            putExtra(EXTRA_SESSION_ID, sessionId)
         }
     }
 

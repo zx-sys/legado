@@ -42,10 +42,14 @@ object WebViewPool {
 
     // 获取一个WebView
     @Synchronized
-    fun acquire(context: Context): PooledWebView {
-        val pooledWebView = if (idlePool.isNotEmpty()) {
-            idlePool.pop() // 复用闲置实例
-        } else {
+    fun acquire(context: Context, forBackground: Boolean = false): PooledWebView {
+        val pooledWebView = when {
+            forBackground -> idlePool.indexOfFirst {
+                !it.realWebView.hasBeenAttachedToWindow
+            }.takeIf { it >= 0 }?.let(idlePool::removeAt)
+            !forBackground && idlePool.isNotEmpty() -> idlePool.pop() // 复用闲置实例
+            else -> null
+        } ?: run {
             if (needInitialize) {
                 needInitialize = false
                 startCleanupTimer()
@@ -57,9 +61,6 @@ object WebViewPool {
                 setDarkeningAllowed(AppConfig.isNightTheme) //设置是否夜间
                 userAgentString = AppConfig.userAgent
             }
-            if (inUsePool.isEmpty()) {
-                realWebView.resumeTimers()
-            }
             isInUse = true
         }
         inUsePool[pooledWebView.id] = pooledWebView
@@ -69,10 +70,9 @@ object WebViewPool {
     // 释放WebView回池
     @Synchronized
     fun release(pooledWebView: PooledWebView) {
-        if (inUsePool.remove(pooledWebView.id) == null) {
-            pooledWebView.realWebView.destroy()
-            return
-        }
+        if (inUsePool.remove(pooledWebView.id) == null) return
+        val recycleGeneration = ++pooledWebView.recycleGeneration
+        val recycleUrl = "$BLANK_HTML?legado-recycle=$recycleGeneration"
         // 重置WebView状态
         pooledWebView.realWebView.run {
             (parent as? ViewGroup)?.removeView(this)
@@ -81,7 +81,12 @@ object WebViewPool {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
             stopLoading()
+            removeJavascriptInterface(WebJsExtensions.nameBasic)
+            removeJavascriptInterface(WebJsExtensions.nameJava)
+            removeJavascriptInterface(WebJsExtensions.nameSource)
+            removeJavascriptInterface(WebJsExtensions.nameCache)
             clearFocus() //清除焦点
+            isNestedScrollingEnabled = false
             setOnLongClickListener(null)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 setOnScrollChangeListener(null)
@@ -103,28 +108,28 @@ object WebViewPool {
             webViewClient = object: WebViewClient() {
                 @SuppressLint("SetJavaScriptEnabled")
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    if (url != BLANK_HTML) return
-                    view?.let{ webview ->
-                        webview.settings.apply {
-                            javaScriptEnabled = false
-                            javaScriptEnabled = true // 禁用再启用来重置js环境，注意需要禁用的订阅源需要再次执行
-                            blockNetworkImage = false // 确保允许加载网络图片
-                            cacheMode = WebSettings.LOAD_DEFAULT // 重置缓存模式
-                            useWideViewPort = false // 恢复默认关闭宽视模式
-                            loadWithOverviewMode = false // 恢复默认
-                            textZoom = 100
+                    if (url != recycleUrl) return
+                    synchronized(this@WebViewPool) {
+                        if (!pooledWebView.isInUse || pooledWebView.id in inUsePool) return
+                        view?.let { webview ->
+                            webview.settings.apply {
+                                javaScriptEnabled = false
+                                javaScriptEnabled = true // 禁用再启用来重置js环境，注意需要禁用的订阅源需要再次执行
+                                blockNetworkImage = false // 确保允许加载网络图片
+                                cacheMode = WebSettings.LOAD_DEFAULT // 重置缓存模式
+                                useWideViewPort = false // 恢复默认关闭宽视模式
+                                loadWithOverviewMode = false // 恢复默认
+                                textZoom = 100
+                            }
+                            webview.onPause()
                         }
-                        if (inUsePool.isEmpty()) {
-                            webview.pauseTimers()
-                        }
-                        webview.onPause()
+                        pooledWebView.isInUse = false
+                        pooledWebView.lastUseTime = System.currentTimeMillis()
+                        idlePool.push(pooledWebView)
                     }
-                    pooledWebView.isInUse = false
-                    pooledWebView.lastUseTime = System.currentTimeMillis()
-                    idlePool.push(pooledWebView)
                 }
             }
-            loadUrl(BLANK_HTML)
+            loadUrl(recycleUrl)
         }
     }
 

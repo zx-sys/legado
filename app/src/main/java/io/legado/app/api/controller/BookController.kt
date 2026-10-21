@@ -14,6 +14,7 @@ import io.legado.app.help.CacheManager
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.model.BookCover
@@ -48,9 +49,14 @@ internal fun requireSafeUploadedBookFileName(fileName: String): String {
 
 object BookController {
 
-    private lateinit var book: Book
-    private var bookSource: BookSource? = null
-    private var bookUrl: String = ""
+    private data class ImageContext(
+        val bookUrl: String,
+        val book: Book,
+        val bookSource: BookSource?,
+    )
+
+    @Volatile
+    private var cachedImageContext: ImageContext? = null
     private val defaultCoverCache by lazy { WeakHashMap<Drawable, Bitmap>() }
 
     /**
@@ -112,19 +118,23 @@ object BookController {
     fun getImg(parameters: Map<String, List<String>>): ReturnData {
         val returnData = ReturnData()
         val bookUrl = parameters["url"]?.firstOrNull()
-            ?: return returnData.setErrorMsg("bookUrl为空")
+        if (bookUrl.isNullOrBlank()) {
+            return returnData.setErrorMsg("bookUrl为空")
+        }
         val src = parameters["path"]?.firstOrNull()
             ?: return returnData.setErrorMsg("图片链接为空")
         val width = parameters["width"]?.firstOrNull()?.toInt() ?: 640
-        if (this.bookUrl != bookUrl) {
-            this.book = appDb.bookDao.getBook(bookUrl)
-                ?: return returnData.setErrorMsg("bookUrl不对")
-            this.bookSource = appDb.bookSourceDao.getBookSource(book.origin)
-        }
-        this.bookUrl = bookUrl
+        val cachedContext = cachedImageContext
+        val imageContext = cachedContext?.takeIf { it.bookUrl == bookUrl }
+            ?: appDb.bookDao.getBook(bookUrl)?.let { book ->
+                val bookSource = appDb.bookSourceDao.getBookSource(book.origin)
+                ImageContext(bookUrl, book, bookSource).also {
+                    cachedImageContext = it
+                }
+            } ?: return returnData.setErrorMsg("bookUrl不对")
         val bitmap = runBlocking {
-            ImageProvider.cacheImage(book, src, bookSource)
-            ImageProvider.getImage(book, src, width)
+            ImageProvider.cacheImage(imageContext.book, src, imageContext.bookSource)
+            ImageProvider.getImage(imageContext.book, src, width)
         }
         return returnData.setData(bitmap)
     }
@@ -145,7 +155,7 @@ object BookController {
                 val toc = LocalBook.getChapterList(book)
                 appDb.bookChapterDao.delByBook(book.bookUrl)
                 appDb.bookChapterDao.insert(*toc.toTypedArray())
-                appDb.bookDao.update(book)
+                book.update()
                 return returnData.setData(toc)
             } else {
                 val bookSource = appDb.bookSourceDao.getBookSource(book.origin)
@@ -158,7 +168,7 @@ object BookController {
                 }
                 appDb.bookChapterDao.delByBook(book.bookUrl)
                 appDb.bookChapterDao.insert(*toc.toTypedArray())
-                appDb.bookDao.update(book)
+                book.update()
                 return returnData.setData(toc)
             }
         } catch (e: Exception) {
@@ -276,7 +286,7 @@ object BookController {
                     AppWebDav.uploadBookProgress(bookProgress) {
                         book.syncTime = System.currentTimeMillis()
                     }
-                    appDb.bookDao.update(book)
+                    book.update()
                     ReadBook.book?.let {
                         if (it.name == bookProgress.name &&
                             it.author == bookProgress.author

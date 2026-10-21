@@ -11,6 +11,7 @@ import io.legado.app.help.source.SourceHelp
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.cnCompare
+import io.legado.app.utils.moveRelativeTo
 import io.legado.app.utils.normalizeFileName
 import io.legado.app.utils.outputStream
 import io.legado.app.utils.renameGroupExact
@@ -60,11 +61,17 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         execute { appDb.bookSourceDao.update(*bookSource) }
     }
 
-    fun upOrder(items: List<BookSourcePart>) {
-        if (items.isEmpty()) return
-        execute {
-            appDb.bookSourceDao.upOrder(items)
-        }
+    fun move(sourceUrl: String, targetUrl: String, after: Boolean, onFinally: () -> Unit = {}) {
+        executeLazy {
+            appDb.runInTransaction {
+                val current = appDb.bookSourceDao.allPart
+                val reordered = moveRelativeTo(current, sourceUrl, targetUrl, after) { it.bookSourceUrl }
+                if (reordered == current) return@runInTransaction
+                appDb.bookSourceDao.upOrder(reordered.mapIndexed { index, source ->
+                    source.copy(customOrder = index)
+                })
+            }
+        }.onFinally { onFinally() }.start()
     }
 
     fun enable(enable: Boolean, items: List<BookSourcePart>) {
@@ -159,18 +166,8 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         execute {
             val selection = adapter.selection
             val selectionSize = selection.size
-            val selectedRate = selectionSize.toFloat() / adapter.itemCount.toFloat()
-            val sources = if (selectedRate == 1f) {
-                getBookSources(searchKey, sortAscending, sort)
-            } else if (selectedRate < 0.3) {
-                selection.toBookSource()
-            } else {
-                val keys = selection.map { it.bookSourceUrl }.toHashSet()
-                val bookSources = getBookSources(searchKey, sortAscending, sort)
-                bookSources.filter {
-                    keys.contains(it.bookSourceUrl)
-                }
-            }
+            // Export exactly what is visible and selected, including status/detail filters.
+            val sources = selection.toBookSource()
             val name = if (selectionSize == 1) {
                 "bookSource_${selection.first().bookSourceName.normalizeFileName()}.json"
             } else {
@@ -288,16 +285,6 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         }
     }
 
-    fun delGroup(group: String) {
-        execute {
-            execute {
-                val sources = appDb.bookSourceDao.getByGroup(group)
-                sources.forEach { source ->
-                    source.removeGroup(group)
-                }
-                appDb.bookSourceDao.update(*sources.toTypedArray())
-            }
-        }
-    }
+    fun delGroup(group: String) = upGroup(group, null)
 
 }

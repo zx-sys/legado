@@ -24,8 +24,10 @@ import io.legado.app.databinding.ItemSourceEditBinding
 import io.legado.app.databinding.ItemSelectorSingleBinding
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.model.jsSource.JsSourceEngine
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.utils.GSON
+import io.legado.app.utils.applyOpenTint
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.fromJsonArray
@@ -60,6 +62,7 @@ import io.legado.app.data.entities.rule.RowUi.Type
 import io.legado.app.ui.widget.text.TextInputLayout
 import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.indexOf
+import io.legado.app.utils.installMd3OverflowMenu
 import io.legado.app.utils.setSelectionSafely
 
 class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
@@ -75,6 +78,8 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
     private var loginUrl: String? = null
     private var renderJob: Job? = null
     private var isRenderingLoginUi = false
+    private var isLoginUiV2 = false
+    private var v2Delegate: SourceLoginV2Delegate? = null
     private val sourceLoginJsExtensions by lazy {
         SourceLoginJsExtensions(
             activity as AppCompatActivity,
@@ -110,13 +115,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
         if (view == null) return
         val source = viewModel.source ?: return
         val loginUiStr = source.loginUi ?: return
-        val codeStr = loginUiStr.let {
-            when {
-                it.startsWith("@js:") -> it.substring(4)
-                it.startsWith("<js>") -> it.substring(4, it.lastIndexOf("<"))
-                else -> null
-            }
-        }
+        val codeStr = source.getLoginUiJs()
         if (codeStr != null) {
             hasChange = true
             renderLoginUi(source, codeStr, deltaUp, installMenu = false)
@@ -237,11 +236,13 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
         return evaluateLoginUiScript(
             block = {
                 runScriptWithContext {
-                    source.evalJS("$loginJS\n$jsStr") {
-                        put("result", result)
-                        put("book", viewModel.book)
-                        put("chapter", viewModel.chapter)
-                    }.toString()
+                    JsSourceEngine.normalizeJsResult(
+                        source.evalJS("$loginJS\n$jsStr") {
+                            put("result", result)
+                            put("book", viewModel.book)
+                            put("chapter", viewModel.chapter)
+                        }
+                    ).orEmpty()
                 }
             },
             onFailure = { error ->
@@ -398,6 +399,8 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
                     }
                     editText.inputType =
                         InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
+                    it.textInputLayout.endIconMode =
+                        com.google.android.material.textfield.TextInputLayout.END_ICON_PASSWORD_TOGGLE
                     editText.setText(loginInfo[name] ?: default)
                     action?.let { jsStr ->
                         val watcher = object : TextWatcher {
@@ -672,15 +675,30 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
 
                 R.id.menu_show_login_header -> alert {
                     setTitle(R.string.login_header)
-                    source.getLoginHeader()?.let { loginHeader ->
+                    source.getLoginHeader()?.takeIf { it.isNotBlank() }?.let { loginHeader ->
                         setMessage(loginHeader)
                         positiveButton(R.string.copy_text) {
                             appCtx.sendToClip(loginHeader)
                         }
-                    }
+                    } ?: setMessage(R.string.empty)
                 }
 
                 R.id.menu_del_login_header -> source.removeLoginHeader()
+                R.id.menu_clear_login_info -> alert(
+                    R.string.clear_login_info,
+                    R.string.sure_del
+                ) {
+                    yesButton {
+                        source.removeLoginInfo()
+                        source.removeLoginHeader()
+                        viewModel.loginInfo.clear()
+                        oKToClose = true
+                        context?.toastOnUi(R.string.success)
+                        dismiss()
+                    }
+                    noButton()
+                }
+
                 R.id.menu_log -> showDialogFragment<AppLogDialog>()
             }
             return@setOnMenuItemClickListener true
@@ -691,24 +709,35 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
         val source = viewModel.source ?: return
         loginUrl = source.getLoginJs()
         val loginUiStr = source.loginUi ?: return
-        val codeStr = loginUiStr.let {
-            when {
-                it.startsWith("@js:") -> it.substring(4)
-                it.startsWith("<js>") -> it.substring(4, it.lastIndexOf("<"))
-                else -> null
-            }
-        }
-        if (codeStr != null) {
-            renderLoginUi(source, codeStr, deltaUp = false, installMenu = true)
+        isLoginUiV2 = source.isLoginUiV2()
+        if (isLoginUiV2) {
+            v2Delegate = SourceLoginV2Delegate(
+                this,
+                binding,
+                source,
+                viewModel.book,
+                viewModel.chapter,
+            )
         } else {
-            rowUis = loginUi(loginUiStr)
-            buttonUi(source, rowUis)
+            val codeStr = source.getLoginUiJs()
+            if (codeStr != null) {
+                renderLoginUi(source, codeStr, deltaUp = false, installMenu = true)
+            } else {
+                rowUis = loginUi(loginUiStr)
+                buttonUi(source, rowUis)
+            }
         }
         binding.toolBar.setBackgroundColor(primaryColor)
         binding.toolBar.title = getString(R.string.login_source, source.getTag())
         binding.toolBar.inflateMenu(R.menu.source_login)
         binding.toolBar.menu.applyTint(requireContext())
+        binding.toolBar.menu.findItem(R.id.menu_ok)?.isVisible = !isLoginUiV2
+        binding.toolBar.installMd3OverflowMenu(
+            showIcons = true,
+            onOpenCustomMenu = { it.applyOpenTint(requireContext()) }
+        )
         installToolbarActions(source)
+        v2Delegate?.start()
     }
 
     private fun renderLoginUi(
@@ -751,6 +780,8 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
     }
 
     override fun onDestroyView() {
+        v2Delegate?.destroy()
+        v2Delegate = null
         renderJob?.cancel()
         renderJob = null
         isRenderingLoginUi = false
@@ -835,7 +866,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
     }
 
     override fun onDismiss(dialog: DialogInterface) {
-        if (!oKToClose && hasChange) {
+        if (!isLoginUiV2 && !oKToClose && hasChange) {
             val loginInfo = viewModel.loginInfo
             if (loginInfo.isEmpty()) {
                 viewModel.source?.removeLoginInfo()

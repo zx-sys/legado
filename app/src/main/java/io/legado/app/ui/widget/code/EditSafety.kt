@@ -6,6 +6,9 @@ package io.legado.app.ui.widget.code
 object EditSafety {
 
     const val PREVIEW_LINES = 6
+    const val MAX_INLINE_TEXT_LENGTH = 12_000
+    // shortcut: 256 KiB, raise after the native editor supports larger buffers reliably.
+    const val MAX_NATIVE_EDITOR_TEXT_LENGTH = 256 * 1024
 
     private const val DENSITY_WINDOW = 64
     private const val MAX_COMBINING_RUN = 8
@@ -15,6 +18,15 @@ object EditSafety {
         val text: String,
         val isInlineEditable: Boolean
     )
+
+    fun isTooLongForInline(text: CharSequence): Boolean =
+        text.length > MAX_INLINE_TEXT_LENGTH
+
+    fun isTooLongForNativeEditor(text: CharSequence): Boolean =
+        text.length > MAX_NATIVE_EDITOR_TEXT_LENGTH
+
+    fun requiresSafeEditor(text: CharSequence): Boolean =
+        isCombiningHeavy(text) || isTooLongForNativeEditor(text)
 
     fun presentation(originalText: String, placeholder: String): Presentation {
         val isUnsafe = isCombiningHeavy(originalText)

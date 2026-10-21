@@ -15,6 +15,10 @@ object NotificationId {
     const val CheckSourceService = 107
     const val VideoPlayService = 108
     const val AudioCacheService = 109
+    const val McpService = 110
+    const val AutoTaskNotifyBase = 30000
+    const val AutoTaskBookUpdateBase = 50000
     const val Download = 10000
     const val ExportBook = 201
+
 }

@@ -10,6 +10,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
+import io.legado.app.help.book.ReadRecordIndex
 import io.legado.app.help.book.isNotShelf
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.webBook.SearchModel
@@ -17,13 +18,20 @@ import io.legado.app.utils.ConflateLiveData
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.mapLatest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchViewModel(application: Application) : BaseViewModel(application) {
     val handler = Handler(Looper.getMainLooper())
     val bookshelf: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    @Volatile
+    var readRecordIndex: ReadRecordIndex = ReadRecordIndex.EMPTY
+        private set
+
     val upAdapterLiveData = MutableLiveData<String>()
     var searchBookLiveData = ConflateLiveData<List<SearchBook>>(1000)
     val searchScope: SearchScope = SearchScope(AppConfig.searchScope)
@@ -33,6 +41,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
     var searchKey: String = ""
     var hasMore = true
     private var searchID = 0L
+    private val searchCommands = SearchCommandGate()
     private val searchModel = SearchModel(viewModelScope, object : SearchModel.CallBack {
 
         override fun getSearchScope(): SearchScope {
@@ -68,6 +77,17 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
 
     init {
         execute {
+            //阅读记录会在阅读后变化,用流监听保证返回搜索界面时是最新的
+            appDb.readRecordDao.flowBooks().distinctUntilChanged().catch {
+                AppLog.put("搜索界面获取阅读记录失败\n${it.localizedMessage}", it)
+            }.collect {
+                readRecordIndex = ReadRecordIndex.of(it)
+                upAdapterLiveData.postValue("hasReadRecord")
+            }
+        }.onError {
+            AppLog.put("加载阅读记录失败", it)
+        }
+        execute {
             appDb.bookDao.flowAll().mapLatest { books ->
                 val keys = arrayListOf<String>()
                 books.filterNot { it.isNotShelf }
@@ -97,22 +117,32 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
         return bookshelf.contains(key) || bookshelf.contains(bookUrl)
     }
 
+    fun hasReadRecord(book: SearchBook): Boolean {
+        if (!AppConfig.showSearchReadRecord) {
+            return false
+        }
+        return readRecordIndex.contains(book.name, book.author)
+    }
+
     /**
      * 开始搜索
      */
     fun search(key: String) {
+        val command = searchCommands.next()
         execute {
-            if ((searchKey == key) || key.isNotEmpty()) {
-                searchModel.cancelSearch()
-                searchID = System.currentTimeMillis()
-                searchBookLiveData.postValue(emptyList())
-                searchKey = key
-                hasMore = true
+            searchCommands.runIfCurrent(command) {
+                if ((searchKey == key) || key.isNotEmpty()) {
+                    searchModel.cancelSearch()
+                    searchID = command
+                    searchBookLiveData.postValue(emptyList())
+                    searchKey = key
+                    hasMore = true
+                }
+                if (searchKey.isEmpty()) {
+                    return@runIfCurrent
+                }
+                searchModel.search(searchID, searchKey)
             }
-            if (searchKey.isEmpty()) {
-                return@execute
-            }
-            searchModel.search(searchID, searchKey)
         }
     }
 
@@ -120,7 +150,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
      * 停止搜索
      */
     fun stop() {
-        searchModel.cancelSearch()
+        searchCommands.invalidate(searchModel::cancelSearch)
     }
 
     fun pause() {
@@ -161,7 +191,25 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        searchModel.close()
+        searchCommands.invalidate(searchModel::close)
     }
 
+}
+
+internal class SearchCommandGate {
+    private val sequence = AtomicLong()
+    private val lock = Any()
+
+    fun next(): Long = sequence.incrementAndGet()
+
+    fun runIfCurrent(command: Long, block: () -> Unit): Boolean = synchronized(lock) {
+        if (command != sequence.get()) return false
+        block()
+        true
+    }
+
+    fun invalidate(block: () -> Unit) {
+        sequence.incrementAndGet()
+        synchronized(lock) { block() }
+    }
 }

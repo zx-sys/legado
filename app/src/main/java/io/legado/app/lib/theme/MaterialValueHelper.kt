@@ -76,6 +76,19 @@ val Context.bottomBackground: Int
 val Context.primaryTextColor: Int
     get() = getPrimaryTextColor(isDarkTheme)
 
+@ColorInt
+fun Context.getToolbarTextColor(transparentBar: Boolean): Int {
+    val barColor = toolbarBackgroundColor(transparentBar, primaryColor, backgroundColor)
+    return getPrimaryTextColor(ColorUtils.isColorLight(barColor))
+}
+
+@ColorInt
+internal fun toolbarBackgroundColor(
+    transparentBar: Boolean,
+    @ColorInt primaryColor: Int,
+    @ColorInt backgroundColor: Int
+): Int = if (transparentBar) backgroundColor else primaryColor
+
 val Context.transparentNavBar: Boolean
     get() = ThemeStore.transparentNavBar(this)
 
@@ -147,5 +160,13 @@ val Context.filletBackground: GradientDrawable
         val background = GradientDrawable()
         background.cornerRadius = 3f.dpToPx()
         background.setColor(backgroundColor)
+        return background
+    }
+
+val Context.popupBackground: GradientDrawable
+    get() {
+        val background = GradientDrawable()
+        background.cornerRadius = 12f.dpToPx()
+        background.setColor(bottomBackground)
         return background
     }

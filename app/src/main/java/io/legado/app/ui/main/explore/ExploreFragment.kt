@@ -5,6 +5,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.SubMenu
 import android.view.View
+import android.view.ViewConfiguration
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.isGone
 import androidx.fragment.app.viewModels
@@ -26,6 +27,7 @@ import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.book.explore.ExploreShowActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
+import io.legado.app.ui.book.source.manage.BookSourceActivity
 import io.legado.app.ui.main.MainFragmentInterface
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.flowWithLifecycleAndDatabaseChange
@@ -42,6 +44,32 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+
+private const val GROUP_QUERY_PREFIX = "group:"
+
+internal fun exploreGroupFromQuery(query: CharSequence?): String? {
+    return query?.toString()
+        ?.takeIf { it.startsWith(GROUP_QUERY_PREFIX) }
+        ?.removePrefix(GROUP_QUERY_PREFIX)
+}
+
+internal fun isExploreAllQuery(query: CharSequence?): Boolean =
+    exploreGroupFromQuery(query) == null
+
+internal fun exploreScrollState(
+    pending: Pair<Int, Int>?,
+    position: Int,
+    currentTop: Int?,
+): Pair<Pair<Int, Int>?, Int> {
+    val offset = pending?.takeIf { it.first == position }?.second ?: currentTop ?: 0
+    val nextPending: Pair<Int, Int>? = if (pending?.first == position) null else position to offset
+    return nextPending to offset
+}
+
+internal fun selectedExploreGroup(
+    query: CharSequence?,
+    groups: Set<String>
+): String? = exploreGroupFromQuery(query)?.takeIf(groups::contains)
 
 /**
  * 发现界面
@@ -69,6 +97,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private val groups = linkedSetOf<String>()
     private var exploreFlowJob: Job? = null
     private var groupsMenu: SubMenu? = null
+    private var pendingExploreScroll: Pair<Int, Int>? = null
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(binding.titleBar.toolbar)
@@ -96,6 +125,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
             override fun onQueryTextChange(newText: String?): Boolean {
                 upExploreData(newText)
+                updateGroupsMenuChecks(newText)
                 return false
             }
         })
@@ -104,7 +134,11 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private fun initRecyclerView() {
         binding.rvFind.setEdgeEffectColor(primaryColor)
         binding.rvFind.layoutManager = linearLayoutManager
+        // Category height changes immediately; moving the following rows would overlap it.
+        binding.rvFind.itemAnimator = null
         binding.rvFind.adapter = adapter
+        binding.fastScroller.attachRecyclerView(binding.rvFind)
+        upFastScrollerBar()
         adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
 
             override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
@@ -114,6 +148,16 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 }
             }
         })
+    }
+
+    private fun upFastScrollerBar() {
+        val show = AppConfig.showDiscoveryFastScroller
+        binding.fastScroller.isEnabled = show
+        binding.rvFind.scrollBarSize = if (show) {
+            0
+        } else {
+            ViewConfiguration.get(requireContext()).scaledScrollBarSize
+        }
     }
 
     private fun initGroupData() {
@@ -129,7 +173,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
                 .collect {
                     groups.clear()
                     groups.addAll(it)
-                    upGroupsMenu()
+                    upGroupsMenu(resetMissingGroup = true)
                     delay(500)
                 }
         }
@@ -138,14 +182,14 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
     private fun upExploreData(searchKey: String? = null) {
         exploreFlowJob?.cancel()
         exploreFlowJob = viewLifecycleOwner.lifecycleScope.launch {
+            val selectedGroup = exploreGroupFromQuery(searchKey)
             when {
                 searchKey.isNullOrBlank() -> {
                     appDb.bookSourceDao.flowExplore()
                 }
 
-                searchKey.startsWith("group:") -> {
-                    val key = searchKey.substringAfter("group:")
-                    appDb.bookSourceDao.flowGroupExplore(key)
+                selectedGroup != null -> {
+                    appDb.bookSourceDao.flowGroupExplore(selectedGroup)
                 }
 
                 else -> {
@@ -167,6 +211,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     override fun onResume() {
         super.onResume()
+        upFastScrollerBar()
         adapter.upResumed(true)
     }
 
@@ -177,10 +222,47 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
         super.onPause()
     }
 
-    private fun upGroupsMenu() = groupsMenu?.transaction { subMenu ->
-        subMenu.removeGroup(R.id.menu_group_text)
-        groups.forEach {
-            subMenu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, it)
+    override fun onDestroyView() {
+        binding.fastScroller.detachRecyclerView()
+        super.onDestroyView()
+    }
+
+    private fun upGroupsMenu(resetMissingGroup: Boolean = false) {
+        val subMenu = groupsMenu ?: return
+        val requestedGroup = exploreGroupFromQuery(searchView.query)
+        if (resetMissingGroup && requestedGroup != null && requestedGroup !in groups) {
+            searchView.setQuery("", false)
+        }
+        subMenu.transaction { menu ->
+            menu.removeGroup(R.id.menu_group_text)
+            menu.add(
+                R.id.menu_group_text,
+                R.id.menu_group_all,
+                Menu.NONE,
+                R.string.all_source
+            )
+            groups.forEach { group ->
+                menu.add(R.id.menu_group_text, Menu.NONE, Menu.NONE, group)
+            }
+            menu.setGroupCheckable(R.id.menu_group_text, true, true)
+        }
+        updateGroupsMenuChecks()
+    }
+
+    private fun updateGroupsMenuChecks(query: CharSequence? = searchView.query) {
+        val selectedGroup = selectedExploreGroup(query, groups)
+        groupsMenu?.transaction { menu ->
+            menu.setGroupCheckable(R.id.menu_group_text, true, false)
+            for (index in 0 until menu.size()) {
+                val item = menu.getItem(index)
+                if (item.groupId != R.id.menu_group_text) continue
+                item.isChecked = if (item.itemId == R.id.menu_group_all) {
+                    isExploreAllQuery(query)
+                } else {
+                    item.title.toString() == selectedGroup
+                }
+            }
+            menu.setGroupCheckable(R.id.menu_group_text, true, true)
         }
     }
 
@@ -189,13 +271,27 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
 
     override fun onCompatOptionsItemSelected(item: MenuItem) {
         super.onCompatOptionsItemSelected(item)
-        if (item.groupId == R.id.menu_group_text) {
-            searchView.setQuery("group:${item.title}", true)
+        when {
+            item.itemId == R.id.menu_source_manage -> startActivity<BookSourceActivity>()
+
+            item.itemId == R.id.menu_group_all -> {
+                item.isChecked = true
+                searchView.setQuery("", true)
+            }
+
+            item.groupId == R.id.menu_group_text -> {
+                item.isChecked = true
+                searchView.setQuery("$GROUP_QUERY_PREFIX${item.title}", true)
+            }
         }
     }
 
     override fun scrollTo(pos: Int) {
-        (binding.rvFind.layoutManager as LinearLayoutManager).scrollToPositionWithOffset(pos, 0)
+        val layoutManager = binding.rvFind.layoutManager as LinearLayoutManager
+        val currentTop = layoutManager.findViewByPosition(pos)?.let { layoutManager.getDecoratedTop(it) }
+        val (nextPending, offset) = exploreScrollState(pendingExploreScroll, pos, currentTop)
+        pendingExploreScroll = nextPending
+        layoutManager.scrollToPositionWithOffset(pos, offset)
     }
 
     override fun openExplore(sourceUrl: String, title: String, exploreUrl: String?) {
@@ -204,6 +300,7 @@ class ExploreFragment() : VMBaseFragment<ExploreViewModel>(R.layout.fragment_exp
             putExtra("exploreName", title)
             putExtra("sourceUrl", sourceUrl)
             putExtra("exploreUrl", exploreUrl)
+            putExtra("showExploreCategories", true)
         }
     }
 

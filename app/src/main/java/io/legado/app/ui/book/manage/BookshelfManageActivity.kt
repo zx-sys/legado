@@ -7,6 +7,7 @@ import android.view.MenuItem
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.lifecycleScope
@@ -30,6 +31,7 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
+import io.legado.app.model.AutoTask
 import io.legado.app.ui.book.group.GroupManageDialog
 import io.legado.app.ui.book.group.GroupSelectDialog
 import io.legado.app.ui.book.info.BookInfoActivity
@@ -42,6 +44,7 @@ import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.ui.widget.recycler.VerticalDivider
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.cnCompare
+import io.legado.app.utils.CronSchedule
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.postEvent
@@ -133,6 +136,17 @@ class BookshelfManageActivity :
         viewModel.batchChangeSourceProcessLiveData.observe(this) {
             waitDialog.setText(it)
         }
+        viewModel.batchPersistCoverState.observe(this) {
+            if (it) {
+                waitDialog.setText(R.string.persist_network_covers)
+                waitDialog.show()
+            } else {
+                waitDialog.dismiss()
+            }
+        }
+        viewModel.batchPersistCoverProcess.observe(this) {
+            waitDialog.setText(it)
+        }
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -202,6 +216,7 @@ class BookshelfManageActivity :
         binding.selectActionBar.setCallBack(this)
         waitDialog.setOnCancelListener {
             viewModel.batchChangeSourceCoroutine?.cancel()
+            viewModel.batchPersistCoverCoroutine?.cancel()
         }
     }
 
@@ -314,10 +329,73 @@ class BookshelfManageActivity :
             R.id.menu_remove_to_group -> selectGroup(removeToGroupRequestCode, 0)
             R.id.menu_change_source -> showDialogFragment<SourcePickerDialog>()
             R.id.menu_clear_cache -> viewModel.clearCache(adapter.selection)
+            R.id.menu_persist_covers -> viewModel.persistNetworkCovers(adapter.selection)
+            R.id.menu_restore_network_covers -> alertRestoreNetworkCovers()
+            R.id.menu_restore_source_covers -> alertRestoreSourceCovers()
             R.id.menu_check_selected_interval -> adapter.checkSelectedInterval()
             R.id.menu_update_toc -> updateBooksToc()
+            R.id.menu_create_book_update_tasks -> showCreateBookUpdateTasksDialog()
         }
         return false
+    }
+
+    private fun alertRestoreNetworkCovers() {
+        alert(
+            titleResource = R.string.restore_network_covers,
+            messageResource = R.string.restore_network_covers_confirm
+        ) {
+            okButton {
+                viewModel.restoreNetworkCovers(adapter.selection)
+            }
+            noButton()
+        }
+    }
+
+    private fun alertRestoreSourceCovers() {
+        alert(
+            titleResource = R.string.restore_source_covers,
+            messageResource = R.string.restore_source_covers_confirm
+        ) {
+            okButton {
+                viewModel.restoreSourceCovers(adapter.selection)
+            }
+            noButton()
+        }
+    }
+
+    private fun showCreateBookUpdateTasksDialog() {
+        val selectedBooks = filterBooksForTocUpdate(adapter.selection)
+        if (selectedBooks.isEmpty()) {
+            toastOnUi(R.string.no_book_can_update)
+            return
+        }
+        val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+            editView.hint = getString(R.string.auto_task_cron_hint)
+            editView.setText(AutoTask.DEFAULT_CRON)
+        }
+        val dialog = alert(titleResource = R.string.create_book_update_task) {
+            customView { alertBinding.root }
+            okButton()
+            cancelButton()
+        }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val cron = alertBinding.editView.text?.toString()?.trim().orEmpty()
+            if (CronSchedule.parse(cron) == null) {
+                alertBinding.editView.error = getString(R.string.auto_task_cron_invalid)
+                return@setOnClickListener
+            }
+            lifecycleScope.launch(IO) {
+                val tasks = AutoTask.buildBookUpdateTasks(
+                    books = selectedBooks,
+                    existingTasks = AutoTask.all(),
+                    cron = cron,
+                    nameOf = { getString(R.string.auto_task_book_update_name, it.name) }
+                )
+                AutoTask.importRules(tasks, this@BookshelfManageActivity)
+                toastOnUi(R.string.success)
+            }
+            dialog.dismiss()
+        }
     }
 
     private fun updateBooksToc() {
@@ -327,7 +405,7 @@ class BookshelfManageActivity :
             return
         }
         postEvent(EventBus.UP_BOOKS_TOC, books)
-        toastOnUi(getString(R.string.update_toc_submitted, books.size))
+        toastOnUi(getString(R.string.update_book_info_toc_submitted, books.size))
     }
 
     private fun upMenu() {
@@ -401,8 +479,8 @@ class BookshelfManageActivity :
         binding.selectActionBar.upCountView(adapter.selection.size, adapter.getItems().size)
     }
 
-    override fun updateBook(vararg book: Book) {
-        viewModel.updateBook(*book)
+    override fun updateBookOrder(books: List<Book>, resetAll: Boolean) {
+        viewModel.updateBookOrder(books, resetAll)
     }
 
     override fun deleteBook(book: Book) {

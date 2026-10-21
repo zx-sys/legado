@@ -19,34 +19,36 @@ data class ReviewRule(
     var postReviewUrl: String? = null,      // 发送回复URL
     var postQuoteUrl: String? = null,       // 发送回复段评URL
     var deleteUrl: String? = null,          // 删除段评URL
-
-    // 段评摘要/概览规则
-    var summaryListRule: String? = null,              // 段评概览列表
-    var summaryParagraphIndexRule: String? = null,    // 段落索引规则
-    var summaryCountRule: String? = null,              // 段评计数规则
-    var summaryParagraphDataRule: String? = null,      // 段落数据规则
-
-    // 段评详情规则
-    var detailListRule: String? = null,               // 详情列表
-    var detailIdRule: String? = null,                 // 详情ID
-    var detailAvatarRule: String? = null,             // 详情头像
-    var detailNameRule: String? = null,               // 详情昵称
-    var detailBadgeRule: String? = null,              // 详情徽章
-    var detailContentRule: String? = null,            // 详情内容
-
-    // 回复规则
-    var replyIdRule: String? = null,                  // 回复ID
-    var replyAvatarRule: String? = null,              // 回复头像
-    var replyNameRule: String? = null,                // 回复昵称
-    var replyBadgeRule: String? = null,               // 回复徽章
-    var replyContentRule: String? = null,             // 回复内容
-    var replyListRule: String? = null,                // 回复列表
-
-    var reviewDetailUrl: String? = null,              // 段评详情URL
-    var reviewDetailNextPageUrl: String? = null,      // 段评下一页URL
-
-    var enabled: Boolean = false,                      // 是否启用
+    var enabled: Boolean = false,
+    var reviewSummaryUrl: String? = null,
+    var summaryListRule: String? = null,
+    var summaryParagraphIndexRule: String? = null,
+    var summaryParagraphDataRule: String? = null,
+    var summaryCountRule: String? = null,
+    var reviewDetailUrl: String? = null,
+    var reviewDetailNextPageUrl: String? = null,
+    var detailListRule: String? = null,
+    var detailIdRule: String? = null,
+    var detailAvatarRule: String? = null,
+    var detailNameRule: String? = null,
+    var detailBadgeRule: String? = null,
+    var detailContentRule: String? = null,
+    var replyListRule: String? = null,
+    var replyIdRule: String? = null,
+    var replyAvatarRule: String? = null,
+    var replyNameRule: String? = null,
+    var replyBadgeRule: String? = null,
+    var replyContentRule: String? = null,
 ) : Parcelable {
+
+    fun configuredSummaryUrl(): String? {
+        if (!enabled || summaryListRule.isNullOrBlank() ||
+            summaryParagraphIndexRule.isNullOrBlank() || summaryCountRule.isNullOrBlank()
+        ) {
+            return null
+        }
+        return reviewSummaryUrl?.takeIf { it.isNotBlank() }
+    }
 
     companion object {
 

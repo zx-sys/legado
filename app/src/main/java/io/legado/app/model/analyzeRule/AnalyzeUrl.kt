@@ -8,6 +8,7 @@ import cn.hutool.core.codec.PercentCodec
 import cn.hutool.core.net.RFC3986
 import cn.hutool.core.util.HexUtil
 import com.bumptech.glide.load.model.GlideUrl
+import com.google.gson.annotations.SerializedName
 import com.script.buildScriptBindings
 import com.script.rhino.RhinoScriptEngine
 import com.script.rhino.runScriptWithContext
@@ -38,6 +39,7 @@ import io.legado.app.help.http.postForm
 import io.legado.app.help.http.postJson
 import io.legado.app.help.http.postMultipart
 import io.legado.app.help.source.getShareScope
+import io.legado.app.help.source.getSharedGlobalStateKey
 import io.legado.app.model.Debug
 import io.legado.app.model.SharedJsScope
 import io.legado.app.utils.EncoderUtils
@@ -93,7 +95,7 @@ class AnalyzeUrl(
     headerMapF: Map<String, String>? = null,
     hasLoginHeader: Boolean = true,
     private val infoMap: MutableMap<String, String>? = null,
-    private val extraParams: Map<String, String>? = null,
+    private val extraParams: Map<String, String>? = null
 ) : JsExtensions {
     constructor(mUrl: String) : this(mUrl, null)
 
@@ -135,7 +137,7 @@ class AnalyzeUrl(
         val urlMatcher = paramPattern.matcher(baseUrl)
         if (urlMatcher.find()) baseUrl = baseUrl.substring(0, urlMatcher.start())
         (headerMapF ?: runScriptWithContext(coroutineContext) {
-            source?.getHeaderMap(hasLoginHeader)
+            source?.getHeaderMap(hasLoginHeader && isLoginHeaderSite(mUrl))
         })?.let {
             headerMap.putAll(it)
             if (it.containsKey("proxy")) {
@@ -143,12 +145,28 @@ class AnalyzeUrl(
                 headerMap.remove("proxy")
             }
         }
-        // 合并 extraParams 到 infoMap
-        if (!extraParams.isNullOrEmpty()) {
-            infoMap?.putAll(extraParams)
-        }
         initUrl()
-        domain = NetworkUtils.getSubDomain(source?.getKey() ?: url)
+        val sourceKey = source?.getKey()
+        domain = sourceKey?.takeIf { NetworkUtils.getBaseUrl(it) == null }
+            ?: NetworkUtils.getSubDomain(url)
+    }
+
+    /**
+     * 登录头(token/Authorization 等认证信息)只发送给书源同站请求。
+     * 封面等资源常托管在第三方 CDN,跨域携带认证头会被对方风控拦截;
+     * 与 cookie 的域处理保持同一粒度(按二级域名对齐)。
+     * 相对链接按 baseUrl 判定;无法判定域名时保持原有行为(仍附加登录头)。
+     * 注意:此处以初始 URL 判定,@js 重写后的跨域跳转不在此保护范围内,
+     * 需要跨域携带认证头的场景可经 urlOption headers 显式指定。
+     */
+    private fun isLoginHeaderSite(url: String): Boolean {
+        val source = this.source ?: return true
+        val sourceDomain = NetworkUtils.getSubDomainOrNull(source.getKey()) ?: return true
+        val target = url.takeIf { it.startsWith("http", true) }
+            ?: baseUrl.takeIf { it.isNotBlank() }
+            ?: return true
+        val targetDomain = NetworkUtils.getSubDomainOrNull(target) ?: return true
+        return targetDomain.equals(sourceDomain, ignoreCase = true)
     }
 
     /**
@@ -387,15 +405,19 @@ class AnalyzeUrl(
             bindings["book"] = ruleData as? Book
             bindings["source"] = source
             bindings["result"] = result
+            extraParams?.forEach { (name, value) ->
+                bindings[name] = if (name == "page") value.toIntOrNull() ?: value else value
+            }
             bindings["infoMap"] = infoMap
         }
+        val sharedGlobalStateKey = source?.getSharedGlobalStateKey()
         val sharedScope = source?.getShareScope(coroutineContext)
             ?: SharedJsScope.getCryptoScope(source ?: this, coroutineContext)
         val scope = if (sharedScope == null) {
             RhinoScriptEngine.getRuntimeScope(bindings)
         } else {
             bindings.apply {
-                chainTo(sharedScope)
+                chainTo(sharedScope, sharedGlobalStateKey)
             }
         }
         return RhinoScriptEngine.eval(jsStr, scope, coroutineContext)
@@ -411,6 +433,7 @@ class AnalyzeUrl(
     }
 
     fun get(key: String): String {
+        extraParams?.get(key)?.let { return it }
         when (key) {
             "bookName" -> (ruleData as? Book)?.let {
                 return it.name
@@ -629,8 +652,7 @@ class AnalyzeUrl(
                 ?: throw IllegalArgumentException("dnsIp requires a valid HTTP URL")
         }
         val cronetInterceptor = if (
-            AppConfig.isCronet &&
-            (urlTimeoutConfigured || followRedirects != null || dnsAddresses != null)
+            urlTimeoutConfigured || followRedirects != null || dnsAddresses != null
         ) {
             Cronet.interceptor
         } else {
@@ -840,6 +862,7 @@ class AnalyzeUrl(
         /**
          * 自定义的域名ip
          **/
+        @SerializedName(value = "dnsIp", alternate = ["resolveIp"])
         private var dnsIp: String? = null,
         /**
          * 解析完url参数时执行的js

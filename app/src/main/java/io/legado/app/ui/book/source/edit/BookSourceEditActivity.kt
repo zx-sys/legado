@@ -1,11 +1,15 @@
 package io.legado.app.ui.book.source.edit
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
+import android.widget.AdapterView
 import android.widget.EditText
+import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
@@ -20,9 +24,11 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.BookInfoRule
 import io.legado.app.data.entities.rule.ContentRule
 import io.legado.app.data.entities.rule.ExploreRule
+import io.legado.app.data.entities.rule.ReviewRule
 import io.legado.app.data.entities.rule.SearchRule
 import io.legado.app.data.entities.rule.TocRule
 import io.legado.app.databinding.ActivityBookSourceEditBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
@@ -30,18 +36,24 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.lib.theme.transparentNavBar
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.code.CodeTextTransfer
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
+import io.legado.app.ui.widget.bindFieldNavigation
+import io.legado.app.ui.widget.code.CodeView
 import io.legado.app.ui.widget.code.EditSafety
+import io.legado.app.ui.widget.code.resolveSelectionHandleClearance
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
 import io.legado.app.ui.widget.recycler.NoChildScrollLinearLayoutManager
+import io.legado.app.ui.widget.setFieldLabels
 import io.legado.app.ui.widget.text.EditEntity
 import io.legado.app.utils.GSON
 import io.legado.app.utils.imeHeight
@@ -79,12 +91,14 @@ class BookSourceEditActivity :
     private val infoEntities: ArrayList<EditEntity> = ArrayList()
     private val tocEntities: ArrayList<EditEntity> = ArrayList()
     private val contentEntities: ArrayList<EditEntity> = ArrayList()
+    private val reviewEntities: ArrayList<EditEntity> = ArrayList()
     private var redirectJsSourceUrl: String? = null
     private var pendingEditKey: String? = null
     private var pendingEditTabPosition = 0
     private var pendingResultAvailable = false
     private var pendingResultText: String? = null
     private var pendingResultCursor = -1
+    private var pendingEditTextPath: String? = null
 
     private val jsSourceEdit = registerForActivityResult(
         StartActivityContract(JsSourceEditActivity::class.java)
@@ -93,7 +107,6 @@ class BookSourceEditActivity :
         super.finish()
     }
 
-    //    private val reviewEntities: ArrayList<EditEntity> = ArrayList()
     private val qrCodeResult = registerForActivityResult(QrCodeResult()) {
         it ?: return@registerForActivityResult
         viewModel.importSource(it) { source ->
@@ -137,6 +150,7 @@ class BookSourceEditActivity :
             }
             return
         }
+        onBackPressedDispatcher.addCallback(this) { finish() }
         softKeyboardTool.attachToWindow(window)
         initView()
         viewModel.initData(intent) {
@@ -170,9 +184,14 @@ class BookSourceEditActivity :
     }
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        pendingEditTextPath?.let { CodeTextTransfer.delete(this, it) }
+        pendingEditTextPath = null
         if (result.resultCode == RESULT_OK) {
             pendingResultAvailable = true
             pendingResultText = result.data?.getStringExtra("text")
+                ?: result.data?.getStringExtra("textFile")?.let { path ->
+                    CodeTextTransfer.read(this, path).also { CodeTextTransfer.delete(this, path) }
+                }
             pendingResultCursor = result.data?.getIntExtra("cursorPosition", -1) ?: -1
             applyPendingEditResult()
         } else {
@@ -202,12 +221,22 @@ class BookSourceEditActivity :
     private fun openTextEditor(editEntity: EditEntity, cursorPosition: Int) {
         pendingEditTabPosition = binding.tabLayout.selectedTabPosition
         pendingEditKey = editEntity.key
+        val text = editEntity.value.orEmpty()
+        val textPath = text.takeIf { it.length > EditSafety.MAX_INLINE_TEXT_LENGTH }
+            ?.let { CodeTextTransfer.write(this, it) }
+        pendingEditTextPath = textPath
         val intent = Intent(this, CodeEditActivity::class.java).apply {
-            putExtra("text", editEntity.value.orEmpty())
+            putExtra("useTextFile", true)
+            if (textPath != null) putExtra("textFile", textPath) else putExtra("text", text)
             putExtra("title", editEntity.hint)
             putExtra("cursorPosition", cursorPosition)
         }
-        textEditLauncher.launch(intent)
+        runCatching { textEditLauncher.launch(intent) }
+            .onFailure {
+                CodeTextTransfer.delete(this, textPath)
+                pendingEditTextPath = null
+                throw it
+            }
     }
 
     private fun findEditEntity(tabPosition: Int, key: String): EditEntity? {
@@ -217,6 +246,7 @@ class BookSourceEditActivity :
             3 -> infoEntities
             4 -> tocEntities
             5 -> contentEntities
+            6 -> reviewEntities
             else -> sourceEntities
         }
         return entities.find { it.key == key }
@@ -227,7 +257,11 @@ class BookSourceEditActivity :
         if (index < 0) return
 
         adapter.notifyItemChanged(index)
-        if (cursorPosition < 0 || EditSafety.isCombiningHeavy(editEntity.value.orEmpty())) return
+        if (
+            cursorPosition < 0 ||
+            EditSafety.isCombiningHeavy(editEntity.value.orEmpty()) ||
+            EditSafety.isTooLongForInline(editEntity.value.orEmpty())
+        ) return
 
         binding.recyclerView.post {
             val holder = binding.recyclerView.findViewHolderForAdapterPosition(index)
@@ -243,12 +277,11 @@ class BookSourceEditActivity :
         when (item.itemId) {
             R.id.menu_fullscreen_edit -> onFullEditClicked()
 
-            R.id.menu_save -> viewModel.save(getSource()) {
-                setResult(RESULT_OK, Intent().putExtra("origin", it.bookSourceUrl))
+            R.id.menu_save -> saveSource {
                 finish()
             }
 
-            R.id.menu_debug_source -> viewModel.save(getSource()) { source ->
+            R.id.menu_debug_source -> saveSource { source ->
                 startActivity<BookSourceDebugActivity> {
                     putExtra("key", source.bookSourceUrl)
                 }
@@ -268,7 +301,7 @@ class BookSourceEditActivity :
 
             R.id.menu_log -> showDialogFragment<AppLogDialog>()
             R.id.menu_help -> showHelp("ruleHelp")
-            R.id.menu_login -> viewModel.save(getSource()) { source ->
+            R.id.menu_login -> saveSource { source ->
                 startActivity<SourceLoginActivity> {
                     putExtra("type", "bookSource")
                     putExtra("key", source.bookSourceUrl)
@@ -276,7 +309,7 @@ class BookSourceEditActivity :
             }
 
             R.id.menu_set_source_variable -> setSourceVariable()
-            R.id.menu_search -> viewModel.save(getSource()) { source ->
+            R.id.menu_search -> saveSource { source ->
                 SearchActivity.start(this, source)
             }
 
@@ -284,7 +317,15 @@ class BookSourceEditActivity :
         return super.onCompatOptionsItemSelected(item)
     }
 
+    private fun saveSource(onSuccess: (BookSource) -> Unit) {
+        viewModel.save(getSource()) { source ->
+            setResult(RESULT_OK, Intent().putExtra("origin", source.bookSourceUrl))
+            onSuccess(source)
+        }
+    }
+
     private fun initView() {
+        initOptionPanel()
         binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
             setText(R.string.source_tab_base)
         })
@@ -303,18 +344,26 @@ class BookSourceEditActivity :
         binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
             setText(R.string.source_tab_content)
         })
+        binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
+            setText(R.string.source_tab_review)
+        })
         binding.recyclerView.setEdgeEffectColor(primaryColor)
-        if (adapter.editEntityMaxLine < 999) {
-            binding.recyclerView.layoutManager = NoChildScrollLinearLayoutManager(this) //启用后会阻止RecyclerView跟随光标滚动,行数少时,用的TextView跟随
-        }
+        binding.recyclerView.layoutManager = NoChildScrollLinearLayoutManager(this)
         binding.recyclerView.adapter = adapter
-        binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
-            if (newFocus is EditText) {
-                newFocus.postDelayed({ sendText("") }, 120)
-            }
+        binding.fieldNav.bindFieldNavigation(binding.recyclerView)
+        binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener { oldFocus, newFocus ->
+            (oldFocus as? CodeView)?.keepSelectionVisible = false
+            (newFocus as? CodeView)?.keepSelectionVisible = true
         }
-        binding.tabLayout.setBackgroundColor(backgroundColor)
-        binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
+        binding.recyclerView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            (binding.recyclerView.findFocus() as? CodeView)?.requestSelectionVisible()
+        }
+        val transparentBar = transparentNavBar && !AppConfig.isEInkMode
+        listOf(binding.tabLayout, binding.fieldNav).forEach { tabs ->
+            tabs.setBackgroundColor(if (transparentBar) Color.TRANSPARENT else backgroundColor)
+            if (transparentBar) tabs.elevation = 0f
+            tabs.setSelectedTabIndicatorColor(accentColor)
+        }
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabReselected(tab: TabLayout.Tab?) {
 
@@ -328,13 +377,68 @@ class BookSourceEditActivity :
                 setEditEntities(tab?.position)
             }
         })
+        val selectionHandleClearance = resolveSelectionHandleClearance(this)
         binding.recyclerView.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
             val navigationBarHeight = windowInsets.navigationBarHeight
             val imeHeight = windowInsets.imeHeight
-            view.bottomPadding = if (imeHeight == 0) navigationBarHeight else 0
+            view.bottomPadding = if (imeHeight == 0) navigationBarHeight
+            else selectionHandleClearance
             softKeyboardTool.initialPadding = imeHeight
             windowInsets
         }
+    }
+
+    private fun initOptionPanel() {
+        binding.optionsHeader.setOnClickListener {
+            updateOptionPanel(binding.optionsContent.visibility != View.VISIBLE)
+        }
+        listOf(
+            binding.cbIsEnable,
+            binding.cbIsEnableExplore,
+            binding.cbIsEnableCookie,
+            binding.cbIsEnableReview,
+            binding.cbIsEventListener,
+            binding.cbIsCustomButton
+        ).forEach { checkBox ->
+            checkBox.setOnCheckedChangeListener { _, _ -> updateOptionPanel() }
+        }
+        binding.spType.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) = updateOptionPanel()
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = updateOptionPanel()
+        }
+        updateOptionPanel(false)
+    }
+
+    private fun updateOptionPanel(expanded: Boolean = binding.optionsContent.visibility == View.VISIBLE) {
+        binding.optionsContent.visibility = if (expanded) View.VISIBLE else View.GONE
+        binding.ivOptionsExpand.setImageResource(
+            if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more
+        )
+        val summary = mutableListOf(
+            binding.spType.selectedItem?.toString() ?: getString(R.string.book_type)
+        )
+        listOf(
+            getString(R.string.is_enable) to binding.cbIsEnable.isChecked,
+            getString(R.string.discovery) to binding.cbIsEnableExplore.isChecked,
+            getString(R.string.auto_save_cookie) to binding.cbIsEnableCookie.isChecked,
+            getString(R.string.review) to binding.cbIsEnableReview.isChecked,
+            getString(R.string.is_event_listener) to binding.cbIsEventListener.isChecked,
+            getString(R.string.custom_button) to binding.cbIsCustomButton.isChecked
+        ).forEach { (label, checked) ->
+            if (checked) summary.add(label)
+        }
+        binding.tvOptionsSummary.text = summary.joinToString(" | ")
+        val action = getString(
+            if (expanded) R.string.book_intro_collapse else R.string.book_intro_expand
+        )
+        binding.optionsHeader.contentDescription =
+            "${getString(R.string.setting)}, ${binding.tvOptionsSummary.text}, $action"
     }
 
     override fun finish() {
@@ -358,15 +462,17 @@ class BookSourceEditActivity :
     }
 
     private fun setEditEntities(tabPosition: Int?) {
-        adapter.editEntities = when (tabPosition) {
+        val entities = when (tabPosition) {
             1 -> searchEntities
             2 -> exploreEntities
             3 -> infoEntities
             4 -> tocEntities
             5 -> contentEntities
-//            6 -> reviewEntities
+            6 -> reviewEntities
             else -> sourceEntities
         }
+        adapter.editEntities = entities
+        binding.fieldNav.setFieldLabels(entities.map { it.hint })
         binding.recyclerView.scrollToPosition(0)
         window.decorView.rootView.clearFocus()
     }
@@ -377,6 +483,7 @@ class BookSourceEditActivity :
             binding.cbIsEnable.isChecked = it.enabled
             binding.cbIsEnableExplore.isChecked = it.enabledExplore
             binding.cbIsEnableCookie.isChecked = it.enabledCookieJar ?: false
+            binding.cbIsEnableReview.isChecked = it.ruleReview?.enabled ?: false
             binding.spType.setSelection(
                 when (it.bookSourceType) {
                     BookSourceType.video -> 4
@@ -389,6 +496,7 @@ class BookSourceEditActivity :
             binding.cbIsEventListener.isChecked = it.eventListener
             binding.cbIsCustomButton.isChecked = it.customButton
         }
+        updateOptionPanel()
         // 基本信息
         sourceEntities.clear()
         sourceEntities.apply {
@@ -483,22 +591,36 @@ class BookSourceEditActivity :
             add(EditEntity("webJs", cr.webJs, R.string.rule_web_js))
             add(EditEntity("payAction", cr.payAction, R.string.rule_pay_action))
             add(EditEntity("callBackJs", cr.callBackJs, R.string.rule_call_back))
+            add(EditEntity("contentBatch", cr.contentBatch, R.string.rule_content_batch))
+            add(EditEntity("maxBatchSize", cr.maxBatchSize?.toString(), R.string.rule_max_batch_size))
         }
         // 段评
-//        val rr = bs.getReviewRule()
-//        reviewEntities.clear()
-//        reviewEntities.apply {
-//            add(EditEntity("reviewUrl", rr.reviewUrl, R.string.rule_review_url))
-//            add(EditEntity("avatarRule", rr.avatarRule, R.string.rule_avatar))
-//            add(EditEntity("contentRule", rr.contentRule, R.string.rule_review_content))
-//            add(EditEntity("postTimeRule", rr.postTimeRule, R.string.rule_post_time))
-//            add(EditEntity("reviewQuoteUrl", rr.reviewQuoteUrl, R.string.rule_review_quote))
-//            add(EditEntity("voteUpUrl", rr.voteUpUrl, R.string.review_vote_up))
-//            add(EditEntity("voteDownUrl", rr.voteDownUrl, R.string.review_vote_down))
-//            add(EditEntity("postReviewUrl", rr.postReviewUrl, R.string.post_review_url))
-//            add(EditEntity("postQuoteUrl", rr.postQuoteUrl, R.string.post_quote_url))
-//            add(EditEntity("deleteUrl", rr.deleteUrl, R.string.delete_review_url))
-//        }
+        val rr = bs.ruleReview ?: ReviewRule()
+        reviewEntities.clear()
+        reviewEntities.apply {
+            add(EditEntity("reviewSummaryUrl", rr.reviewSummaryUrl, R.string.rule_review_summary_url))
+            add(EditEntity("summaryListRule", rr.summaryListRule, R.string.rule_review_summary_list))
+            add(EditEntity("summaryParagraphIndexRule", rr.summaryParagraphIndexRule, R.string.rule_review_summary_id))
+            add(EditEntity("summaryCountRule", rr.summaryCountRule, R.string.rule_review_summary_count))
+            add(EditEntity("summaryParagraphDataRule", rr.summaryParagraphDataRule, R.string.rule_review_summary_key))
+
+            add(EditEntity("reviewDetailUrl", rr.reviewDetailUrl, R.string.rule_review_detail_url))
+            add(EditEntity("reviewDetailNextPageUrl", rr.reviewDetailNextPageUrl, R.string.rule_review_detail_next_url))
+            add(EditEntity("detailListRule", rr.detailListRule, R.string.rule_review_detail_list))
+            add(EditEntity("detailIdRule", rr.detailIdRule, R.string.rule_review_detail_id))
+            add(EditEntity("detailAvatarRule", rr.detailAvatarRule, R.string.rule_review_detail_avatar))
+            add(EditEntity("detailNameRule", rr.detailNameRule, R.string.rule_review_detail_name))
+            add(EditEntity("detailBadgeRule", rr.detailBadgeRule, R.string.rule_review_detail_badge))
+            add(EditEntity("detailContentRule", rr.detailContentRule, R.string.rule_review_detail_content))
+
+            add(EditEntity("reviewQuoteUrl", rr.reviewQuoteUrl, R.string.rule_review_quote))
+            add(EditEntity("replyListRule", rr.replyListRule, R.string.rule_review_reply_list))
+            add(EditEntity("replyIdRule", rr.replyIdRule, R.string.rule_review_reply_id))
+            add(EditEntity("replyAvatarRule", rr.replyAvatarRule, R.string.rule_review_reply_avatar))
+            add(EditEntity("replyNameRule", rr.replyNameRule, R.string.rule_review_reply_name))
+            add(EditEntity("replyBadgeRule", rr.replyBadgeRule, R.string.rule_review_reply_badge))
+            add(EditEntity("replyContentRule", rr.replyContentRule, R.string.rule_review_reply_content))
+        }
         binding.tabLayout.selectTab(binding.tabLayout.getTabAt(0))
         setEditEntities(0)
         applyPendingEditResult()
@@ -540,7 +662,8 @@ class BookSourceEditActivity :
         val bookInfoRule = BookInfoRule()
         val tocRule = TocRule()
         val contentRule = ContentRule()
-//        val reviewRule = ReviewRule()
+        val reviewRule = source.ruleReview?.copy() ?: ReviewRule()
+        reviewRule.enabled = binding.cbIsEnableReview.isChecked
         sourceEntities.forEach {
             it.value = it.value?.takeIf { s -> s.isNotBlank() }
             when (it.key) {
@@ -696,36 +819,45 @@ class BookSourceEditActivity :
                 "imageDecode" -> contentRule.imageDecode = it.value
                 "payAction" -> contentRule.payAction = it.value
                 "callBackJs" -> contentRule.callBackJs = it.value
+                "contentBatch" -> contentRule.contentBatch = it.value
+                "maxBatchSize" -> contentRule.maxBatchSize = it.value?.toIntOrNull()
             }
         }
-//        reviewEntities.forEach {
-//            when (it.key) {
-//                "reviewUrl" -> reviewRule.reviewUrl = it.value
-//                "avatarRule" -> reviewRule.avatarRule =
-//                    viewModel.ruleComplete(it.value, reviewRule.reviewUrl, 3)
-//
-//                "contentRule" -> reviewRule.contentRule =
-//                    viewModel.ruleComplete(it.value, reviewRule.reviewUrl)
-//
-//                "postTimeRule" -> reviewRule.postTimeRule =
-//                    viewModel.ruleComplete(it.value, reviewRule.reviewUrl)
-//
-//                "reviewQuoteUrl" -> reviewRule.reviewQuoteUrl =
-//                    viewModel.ruleComplete(it.value, reviewRule.reviewUrl, 2)
-//
-//                "voteUpUrl" -> reviewRule.voteUpUrl = it.value
-//                "voteDownUrl" -> reviewRule.voteDownUrl = it.value
-//                "postReviewUrl" -> reviewRule.postReviewUrl = it.value
-//                "postQuoteUrl" -> reviewRule.postQuoteUrl = it.value
-//                "deleteUrl" -> reviewRule.deleteUrl = it.value
-//            }
-//        }
+        reviewEntities.forEach {
+            it.value = it.value?.takeIf { value -> value.isNotBlank() }
+            when (it.key) {
+                "reviewSummaryUrl" -> reviewRule.reviewSummaryUrl = it.value
+                "summaryListRule" -> reviewRule.summaryListRule = it.value
+                "summaryParagraphIndexRule" -> reviewRule.summaryParagraphIndexRule = it.value
+                "summaryCountRule" -> reviewRule.summaryCountRule = it.value
+                "summaryParagraphDataRule" -> reviewRule.summaryParagraphDataRule = it.value
+                "reviewDetailUrl" -> reviewRule.reviewDetailUrl = it.value
+                "reviewDetailNextPageUrl" -> reviewRule.reviewDetailNextPageUrl = it.value
+                "detailListRule" -> reviewRule.detailListRule = it.value
+                "detailIdRule" -> reviewRule.detailIdRule = it.value
+                "detailAvatarRule" -> reviewRule.detailAvatarRule = it.value
+                "detailNameRule" -> reviewRule.detailNameRule = it.value
+                "detailBadgeRule" -> reviewRule.detailBadgeRule = it.value
+                "detailContentRule" -> reviewRule.detailContentRule = it.value
+                "reviewQuoteUrl" -> reviewRule.reviewQuoteUrl = it.value
+                "replyListRule" -> reviewRule.replyListRule = it.value
+                "replyIdRule" -> reviewRule.replyIdRule = it.value
+                "replyAvatarRule" -> reviewRule.replyAvatarRule = it.value
+                "replyNameRule" -> reviewRule.replyNameRule = it.value
+                "replyBadgeRule" -> reviewRule.replyBadgeRule = it.value
+                "replyContentRule" -> reviewRule.replyContentRule = it.value
+            }
+        }
         source.ruleSearch = searchRule
         source.ruleExplore = exploreRule
         source.ruleBookInfo = bookInfoRule
         source.ruleToc = tocRule
         source.ruleContent = contentRule
-//        source.ruleReview = reviewRule
+        source.ruleReview = reviewRule.takeIf {
+            source.ruleReview != null || it.enabled || reviewEntities.any { entity ->
+                !entity.value.isNullOrBlank()
+            }
+        }
         return source
     }
 
@@ -797,36 +929,11 @@ class BookSourceEditActivity :
                     edit.replace(start, end, text)//光标所在位置插入文字
                 }
             }
-            if (adapter.editEntityMaxLine >= 999) {
-                view.post {
-                    val editTextLocation = IntArray(2)
-                    view.getLocationOnScreen(editTextLocation)
-                    val recyclerViewLocation = IntArray(2)
-                    binding.recyclerView.getLocationOnScreen(recyclerViewLocation)
-                    val layout = view.layout
-                    if (layout != null) {
-                        val line = layout.getLineForOffset(end)
-                        val cursorYInEditText = layout.getLineTop(line)
-                        // 光标相对于屏幕的位置
-                        val cursorYOnScreen = editTextLocation[1] + cursorYInEditText
-                        // 光标相对于RecyclerView的位置
-                        val cursorYInRecyclerView = cursorYOnScreen - recyclerViewLocation[1]
-                        val recyclerViewBottom = binding.recyclerView.height - 120 //考虑键盘的经验值
-                        // 如果光标不在可见范围内，则滚动到光标位置
-                        if (cursorYInRecyclerView !in 0..recyclerViewBottom) {
-                            val scrollDistance = cursorYInRecyclerView - recyclerViewBottom / 3
-                            if (scrollDistance > 0 && binding.recyclerView.canScrollVertically(1) || scrollDistance < 0 && binding.recyclerView.canScrollVertically(-1)) {
-                                binding.recyclerView.smoothScrollBy(0, scrollDistance)
-                            }
-                        }
-                    }
-                }
-            }
         }
     }
 
     private fun setSourceVariable() {
-        viewModel.save(getSource()) { source ->
+        saveSource { source ->
             lifecycleScope.launch {
                 val comment =
                     source.getDisplayVariableComment("源变量可在js中通过source.getVariable()获取")

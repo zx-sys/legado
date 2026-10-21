@@ -1,13 +1,16 @@
 package io.legado.app.model.jsSource
 
+import io.legado.app.constant.BookSourceType
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.data.entities.rule.RowUi
+import io.legado.app.model.login.LoginUiV2
 import io.legado.app.utils.GSON
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -26,6 +29,65 @@ class JsSourceConfigTest {
         function getChapters(book) { return []; }
         function getContent(chapter, book) { return "content"; }
     """.trimIndent()
+
+    @Test
+    fun `batch size requires a numeric exact int without truncation`() {
+        for (value in listOf("2.5", "2147483648", "4294967298", "1e100", "'2'", "null", "true")) {
+            assertExtractError(
+                validScript + "\nconfig.maxBatchSize = $value; function getContentBatch(chapters, book) {}",
+                "必须是整数",
+            )
+        }
+        assertEquals(2, JsSourceConfig.extract(
+            validScript + "\nconfig.maxBatchSize = 2.0; function getContentBatch(chapters, book) {}"
+        ).contentBatchSize())
+        assertEquals(io.legado.app.data.entities.BookSource.MAX_CONTENT_BATCH_SIZE,
+            JsSourceConfig.extract(
+                validScript + "\nconfig.maxBatchSize = 2147483647; function getContentBatch(chapters, book) {}"
+            ).contentBatchSize())
+    }
+
+    @Test
+    fun `review capability ignores comments and requires both functions`() {
+        assertFalse(
+            JsSourceConfig.declaresReviewFunctions(
+                "/* function getReviewSummary() {} function getReviewDetail() {} */"
+            )
+        )
+        assertFalse(
+            JsSourceConfig.declaresReviewFunctions("function getReviewSummary() {}")
+        )
+        assertTrue(
+            JsSourceConfig.declaresReviewFunctions(
+                "function getReviewSummary() {} function getReviewDetail() {}"
+            )
+        )
+        assertTrue(
+            JsSourceConfig.declaresReviewFunctions(
+                "var getReviewSummary = function() {}; " +
+                    "var getReviewDetail = function() {};"
+            )
+        )
+    }
+
+    @Test
+    fun `review reply capability ignores comments and accepts a top level function`() {
+        assertFalse(
+            JsSourceConfig.declaresReviewRepliesFunction(
+                "/* function getReviewReplies() {} */"
+            )
+        )
+        assertTrue(
+            JsSourceConfig.declaresReviewRepliesFunction(
+                "function getReviewReplies() {}"
+            )
+        )
+        assertTrue(
+            JsSourceConfig.declaresReviewRepliesFunction(
+                "var getReviewReplies = function() {};"
+            )
+        )
+    }
 
     @Test
     fun `extracts metadata and keeps full script`() {
@@ -165,6 +227,53 @@ class JsSourceConfigTest {
     }
 
     @Test
+    fun `file source requires only search and book info`() {
+        val source = JsSourceConfig.extract(
+            """
+                var config = {
+                    bookSourceUrl: "https://a.com",
+                    bookSourceName: "文件源",
+                    bookSourceType: 3
+                };
+                function search(key, page) { return []; }
+                function getBookInfo(book) { return {}; }
+            """.trimIndent()
+        )
+
+        assertEquals(BookSourceType.file, source.bookSourceType)
+    }
+
+    @Test
+    fun `file source requires book info`() {
+        assertExtractError(
+            """
+                var config = {
+                    bookSourceUrl: "https://a.com",
+                    bookSourceName: "文件源",
+                    bookSourceType: 3
+                };
+                function search(key, page) { return []; }
+            """.trimIndent(),
+            "getBookInfo",
+        )
+    }
+
+    @Test
+    fun `file source still requires search`() {
+        assertExtractError(
+            """
+                var config = {
+                    bookSourceUrl: "https://a.com",
+                    bookSourceName: "文件源",
+                    bookSourceType: 3
+                };
+                function getBookInfo(book) { return {}; }
+            """.trimIndent(),
+            "search",
+        )
+    }
+
+    @Test
     fun `strips declarative rules from config`() {
         val source = JsSourceConfig.extract(
             validScript.replace(
@@ -277,6 +386,86 @@ class JsSourceConfigTest {
         assertEquals("https://example.com/login", source.loginUrl)
     }
 
+    @Test
+    fun `review functions accept optional paged replies`() {
+        val source = JsSourceConfig.extract(
+            validScript + "\n" + """
+                function getReviewSummary(chapter, book) { return []; }
+                function getReviewDetail(chapter, book, paraIndex, paraData, page) {
+                    return { items: [] };
+                }
+                function getReviewReplies(chapter, book, paraIndex, paraData, reviewId, page) {
+                    return { items: [] };
+                }
+            """.trimIndent()
+        )
+
+        assertTrue(source.mainJs.orEmpty().contains("getReviewSummary"))
+        assertTrue(JsSourceReview.hasReviewRepliesCapability(source))
+    }
+
+    @Test
+    fun `review summary requires matching detail function`() {
+        assertExtractError(
+            validScript + "\nfunction getReviewSummary(chapter, book) { return []; }",
+            "getReviewDetail",
+        )
+    }
+
+    @Test
+    fun `review detail requires matching summary function`() {
+        assertExtractError(
+            validScript + "\n" + """
+                function getReviewDetail(chapter, book, paraIndex, paraData, page) {
+                    return { items: [] };
+                }
+            """.trimIndent(),
+            "getReviewSummary",
+        )
+    }
+
+    @Test
+    fun `review properties must be functions`() {
+        assertExtractError(
+            validScript + "\n" + """
+                var getReviewSummary = [];
+                function getReviewDetail() { return { items: [] }; }
+            """.trimIndent(),
+            "getReviewSummary",
+        )
+    }
+
+    @Test
+    fun `both review properties must be functions`() {
+        assertExtractError(
+            validScript + "\n" + """
+                var getReviewSummary = [];
+                var getReviewDetail = {};
+            """.trimIndent(),
+            "getReviewSummary",
+        )
+    }
+
+    @Test
+    fun `review replies require the review function pair`() {
+        assertExtractError(
+            validScript + "\nfunction getReviewReplies() { return { items: [] }; }",
+            "getReviewSummary/getReviewDetail",
+        )
+    }
+
+    @Test
+    fun `review replies property must be a function`() {
+        assertExtractError(
+            validScript + "\n" + """
+                function getReviewSummary() { return []; }
+                function getReviewDetail() { return { items: [] }; }
+                var getReviewReplies = [];
+            """.trimIndent(),
+            "getReviewReplies",
+        )
+    }
+
     @Test(timeout = 5_000)
     fun `cancellation escapes infinite top level script`() {
         JsSourceConfig.extract(validScript)
@@ -343,6 +532,62 @@ class JsSourceConfigTest {
         """.trimIndent()
 
         assertEquals(expected, JsSourceConfig.stampLastUpdateTime(script, 123456))
+    }
+
+    @Test
+    fun `ignores comments and unrelated objects before declared update time`() {
+        val script = """
+            // lastUpdateTime: 1
+            var metadata = { lastUpdateTime: 2 };
+            var config = { "lastUpdateTime": Date.now() };
+        """.trimIndent()
+        val expected = """
+            // lastUpdateTime: 1
+            var metadata = { lastUpdateTime: 2 };
+            var config = { "lastUpdateTime": 123456 };
+        """.trimIndent()
+
+        assertEquals(expected, JsSourceConfig.stampLastUpdateTime(script, 123456))
+    }
+
+    @Test
+    fun `loginUi function enables v2`() {
+        val source = JsSourceConfig.extract(
+            validScript + "\n" + """
+                function loginUi(state) { return { rows: [] }; }
+                function loginAction(action, state, form) { return {}; }
+            """.trimIndent()
+        )
+
+        assertEquals(LoginUiV2.MARKER, source.loginUi)
+    }
+
+    @Test
+    fun `loginUi function requires loginAction`() {
+        assertExtractError(
+            validScript + "\nfunction loginUi(state) { return { rows: [] }; }",
+            "loginAction",
+        )
+    }
+
+    @Test
+    fun `loginUi function conflicts with config data`() {
+        assertExtractError(
+            """
+                var config = {
+                    bookSourceUrl: "https://example.com",
+                    bookSourceName: "冲突源",
+                    loginUi: [{ name: "账号", type: "text" }]
+                };
+                function search(key, page) { return []; }
+                function getChapters(book) { return []; }
+                function getContent(chapter, book) { return ""; }
+                function login() {}
+                function loginUi(state) { return { rows: [] }; }
+                function loginAction(action, state, form) { return {}; }
+            """.trimIndent(),
+            "二选一",
+        )
     }
 
     private fun assertExtractError(script: String, messagePart: String) {

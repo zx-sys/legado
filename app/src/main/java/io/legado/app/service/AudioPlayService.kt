@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.AudioManager
@@ -17,8 +18,10 @@ import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import androidx.media.AudioFocusRequestCompat
+import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -30,6 +33,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
 import io.legado.app.constant.NotificationId
+import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Status
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.MediaHelp
@@ -44,6 +48,7 @@ import io.legado.app.receiver.MediaButtonReceiver
 import io.legado.app.ui.book.audio.AudioPlayActivity
 import io.legado.app.utils.activityPendingIntent
 import io.legado.app.utils.broadcastPendingIntent
+import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.printOnDebug
@@ -59,21 +64,29 @@ import splitties.systemservices.audioManager
 import splitties.systemservices.notificationManager
 import splitties.systemservices.powerManager
 import splitties.systemservices.wifiManager
+import java.io.File
 
 /**
  * 音频播放服务
  */
 class AudioPlayService : BaseService(),
     AudioManager.OnAudioFocusChangeListener,
-    Player.Listener {
+    SharedPreferences.OnSharedPreferenceChangeListener {
 
     companion object {
+        private const val ACTION_UPDATE_NOTIFICATION = "updateNotification"
+
         @JvmStatic
         var isRun = false
             private set
 
         @JvmStatic
         var pause = true
+            private set
+
+        @JvmStatic
+        @Volatile
+        var isPlaying = false
             private set
 
         @JvmStatic
@@ -102,6 +115,15 @@ class AudioPlayService : BaseService(),
 
         private const val APP_ACTION_STOP = "Stop"
         private const val APP_ACTION_TIMER = "Timer"
+
+        internal fun updateNotification(context: Context) {
+            if (isRun) {
+                context.startService(
+                    Intent(context, AudioPlayService::class.java)
+                        .setAction(ACTION_UPDATE_NOTIFICATION)
+                )
+            }
+        }
     }
 
     private val useWakeLock = AppConfig.audioPlayUseWakeLock
@@ -133,6 +155,10 @@ class AudioPlayService : BaseService(),
     private var dsJob: Job? = null
     private var upNotificationJob: Coroutine<*>? = null
     private var upPlayProgressJob: Job? = null
+    private var introSkipEvaluated = false
+    private var chapterCompletionHandled = false
+    private var playbackGeneration = AudioPlay.currentPlaybackGeneration()
+    private var playerListener: Player.Listener? = null
     private var cover: Bitmap =
         BitmapFactory.decodeResource(appCtx.resources, R.drawable.icon_read_book)
 
@@ -143,15 +169,20 @@ class AudioPlayService : BaseService(),
         if (chapterToStop > 0) {
             timeMinute = 0
         }
-        exoPlayer.addListener(this)
+        defaultSharedPreferences.registerOnSharedPreferenceChangeListener(this)
         AudioPlay.registerService(this)
         initMediaSession()
         initBroadcastReceiver()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
         doDs()
         execute {
+            val book = AudioPlay.book
             ImageLoader
-                .loadBitmap(this@AudioPlayService, AudioPlay.book?.getDisplayCover())
+                .loadBitmap(
+                    this@AudioPlayService,
+                    book?.getDisplayCover(),
+                    book?.getCoverSourceOrigin(),
+                )
                 .submit()
                 .get()
         }.onSuccess {
@@ -167,22 +198,32 @@ class AudioPlayService : BaseService(),
         intent?.action?.let { action ->
             when (action) {
                 IntentAction.play, IntentAction.playNew -> {
+                    val generation = AudioPlay.currentPlaybackGeneration()
+                    var requestPosition = 0
+                    var requestUrl = ""
+                    val current = AudioPlay.runIfPlaybackCurrent(generation) {
+                        requestPosition = when (action) {
+                            IntentAction.playNew -> 0
+                            else -> AudioPlay.book?.durChapterPos ?: 0
+                        }
+                        requestUrl = AudioPlay.durMediaUrl
+                    }
+                    if (!current) return@let
                     exoPlayer.stop()
                     upPlayProgressJob?.cancel()
                     pause = false
-                    position = when (action) {
-                        IntentAction.playNew -> 0
-                        else -> AudioPlay.book?.durChapterPos ?: 0
-                    }
-                    url = AudioPlay.durPlayUrl
+                    position = requestPosition
+                    url = requestUrl
                     if (playSpeed != 1f) {
                         upSpeed(playSpeed)
                     }
                     upMediaSessionPlaybackState(PlaybackStateCompat.STATE_BUFFERING)
-                    play()
+                    play(generation = generation)
                 }
 
                 IntentAction.stopPlay -> {
+                    isPlaying = false
+                    AudioPlay.upReadTime()
                     exoPlayer.stop()
                     upPlayProgressJob?.cancel()
                     AudioPlay.status = Status.STOP
@@ -204,6 +245,11 @@ class AudioPlayService : BaseService(),
                     adjustProgress(intent.getIntExtra("position", position))
                 }
 
+                ACTION_UPDATE_NOTIFICATION -> {
+                    upMediaMetadata()
+                    upAudioPlayNotification()
+                }
+
                 IntentAction.stop -> stopSelf()
             }
         }
@@ -212,6 +258,9 @@ class AudioPlayService : BaseService(),
 
     override fun onDestroy() {
         super.onDestroy()
+        isPlaying = false
+        AudioPlay.upReadTime()
+        defaultSharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
         if (useWakeLock) {
             wakeLock.release()
             wifiLock?.release()
@@ -223,6 +272,8 @@ class AudioPlayService : BaseService(),
         postEvent(EventBus.AUDIO_DS, 0)
         postEvent(EventBus.AUDIO_CHAPTER_STOP, 0)
         abandonFocus()
+        playerListener?.let(exoPlayer::removeListener)
+        playerListener = null
         exoPlayer.release()
         mediaSessionCompat.release()
         unregisterReceiver(broadcastReceiver)
@@ -240,48 +291,79 @@ class AudioPlayService : BaseService(),
      */
     @OptIn(UnstableApi::class)
     @SuppressLint("WakelockTimeout")
-    private fun play() {
-        if (useWakeLock) {
-            wakeLock.acquire()
-            wifiLock?.acquire()
-        }
-        upAudioPlayNotification()
-        if (!requestFocus()) {
-            return
-        }
-        val book = AudioPlay.book
+    private fun play(
+        preservePosition: Boolean = false,
+        generation: Long = AudioPlay.currentPlaybackGeneration(),
+    ) {
+        val requestUrl = url
+        val requestPosition = position
         execute(context = Main) {
-            AudioPlay.status = Status.STOP
-            postEvent(EventBus.AUDIO_STATE, Status.STOP)
-            upPlayProgressJob?.cancel()
-            if (url.isJsonArray()) {
-                val mediaSource = ExoPlayerHelper.getMediaSource(this@AudioPlayService, url)
-                if (mediaSource ==  null) {
-                    NoStackTraceException("url格式错误")
-                    return@execute
+            val handled = AudioPlay.runIfPlaybackCurrent(generation) {
+                installPlayerListener(generation)
+                resetAudioSkipState(generation)
+                AudioPlay.status = Status.STOP
+                postEvent(EventBus.AUDIO_STATE, Status.STOP)
+                upPlayProgressJob?.cancel()
+                val startPosition = if (requestUrl.isJsonArray() && !preservePosition) {
+                    0
+                } else {
+                    requestPosition
                 }
-                exoPlayer.setMediaSource(mediaSource)
-                position = 0
-            } else {
-                val analyzeUrl = AnalyzeUrl(
-                    url,
-                    source = AudioPlay.bookSource,
-                    ruleData = book,
-                    chapter = AudioPlay.durChapter,
-                    coroutineContext = coroutineContext
-                )
-                exoPlayer.setMediaItem(analyzeUrl.getMediaItem())
+                if (requestUrl.isJsonArray()) {
+                    val mediaSource = ExoPlayerHelper.getMediaSource(
+                        this@AudioPlayService,
+                        requestUrl
+                    ) ?: throw NoStackTraceException("url格式错误")
+                    exoPlayer.setMediaSource(mediaSource)
+                } else {
+                    val analyzeUrl = AnalyzeUrl(
+                        requestUrl,
+                        source = AudioPlay.bookSource,
+                        ruleData = AudioPlay.book,
+                        chapter = AudioPlay.durChapter,
+                        coroutineContext = coroutineContext
+                    )
+                    exoPlayer.setMediaItem(localMediaItem(requestUrl) ?: analyzeUrl.getMediaItem())
+                }
+                position = startPosition
+                if (!requestFocus()) return@runIfPlaybackCurrent
+                if (useWakeLock) {
+                    wakeLock.acquire()
+                    wifiLock?.acquire()
+                }
+                upAudioPlayNotification()
+                exoPlayer.playWhenReady = false
+                exoPlayer.seekTo(startPosition.toLong())
+                exoPlayer.prepare()
             }
-            exoPlayer.playWhenReady = true
-            //获取片头设定
-            val skipStartMs = (book?.getOpenCredits() ?: 0) * 1000L
-            val playtime = if (position == 0) skipStartMs else position.toLong()
-            exoPlayer.seekTo(playtime)
-            exoPlayer.prepare()
+            if (!handled) return@execute
         }.onError {
-            AppLog.put("播放出错\n${it.localizedMessage}", it)
-            toastOnUi("$url ${it.localizedMessage}")
-            stopSelf()
+            AudioPlay.runIfPlaybackCurrent(generation) {
+                AppLog.put("播放出错\n${it.localizedMessage}", it)
+                toastOnUi("$requestUrl ${it.localizedMessage}")
+                stopSelf()
+            }
+        }
+    }
+
+    /**
+     * Build local media items without URL analysis or request headers.
+     */
+    private fun localMediaItem(url: String): MediaItem? {
+        return when {
+            url.startsWith("content://", true) -> MediaItem.fromUri(url.toUri())
+            url.startsWith("file:", true) -> {
+                val uri = url.toUri()
+                val path = uri.path
+                if (!path.isNullOrBlank() && File(path).exists()) {
+                    MediaItem.fromUri(File(path).toUri())
+                } else {
+                    MediaItem.fromUri(uri)
+                }
+            }
+
+            File(url).exists() -> MediaItem.fromUri(File(url).toUri())
+            else -> null
         }
     }
 
@@ -300,6 +382,7 @@ class AudioPlayService : BaseService(),
             }
             upPlayProgressJob?.cancel()
             position = exoPlayer.currentPosition.toInt()
+            AudioPlay.playPositionChanged(position)
             if (exoPlayer.isPlaying) exoPlayer.pause()
             upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PAUSED)
             AudioPlay.status = Status.PAUSE
@@ -315,29 +398,43 @@ class AudioPlayService : BaseService(),
      */
     @SuppressLint("WakelockTimeout")
     private fun resume() {
-        if (useWakeLock) {
-            wakeLock.acquire()
-            wifiLock?.acquire()
-        }
         try {
+            val generation = AudioPlay.currentPlaybackGeneration()
+            var currentUrl = ""
+            var currentPosition = position
+            val current = AudioPlay.runIfPlaybackCurrent(generation) {
+                currentUrl = AudioPlay.durMediaUrl
+                currentPosition = AudioPlay.book?.durChapterPos ?: position
+            }
+            if (!current) return
             pause = false
-            if (url.isEmpty()) {
+            if (currentUrl.isEmpty()) {
                 AudioPlay.loadOrUpPlayUrl()
                 return
             }
-            if (exoPlayer.playbackState == Player.STATE_IDLE) {
-                // 如果播放器处于空闲状态，重新开始播放
-                position = 0
-                play()
+            if (exoPlayer.playbackState == Player.STATE_IDLE || url != currentUrl) {
+                exoPlayer.stop()
+                url = currentUrl
+                position = currentPosition
+                play(preservePosition = true, generation = generation)
                 return
             }
-            if (!exoPlayer.isPlaying) {
-                exoPlayer.play()
+            var startProgress = false
+            val resumed = AudioPlay.runIfPlaybackCurrent(generation) {
+                if (useWakeLock) {
+                    wakeLock.acquire()
+                    wifiLock?.acquire()
+                }
+                if (!introSkipEvaluated) return@runIfPlaybackCurrent
+                if (!exoPlayer.isPlaying) {
+                    exoPlayer.play()
+                }
+                AudioPlay.status = Status.PLAY
+                postEvent(EventBus.AUDIO_STATE, Status.PLAY)
+                upAudioPlayNotification()
+                startProgress = true
             }
-            upPlayProgress()
-            AudioPlay.status = Status.PLAY
-            postEvent(EventBus.AUDIO_STATE, Status.PLAY)
-            upAudioPlayNotification()
+            if (resumed && startProgress) upPlayProgress()
         } catch (e: Exception) {
             e.printOnDebug()
             stopSelf()
@@ -369,8 +466,28 @@ class AudioPlayService : BaseService(),
     /**
      * 播放状态监控
      */
-    override fun onPlaybackStateChanged(playbackState: Int) {
-        super.onPlaybackStateChanged(playbackState)
+    private fun installPlayerListener(generation: Long) {
+        playerListener?.let(exoPlayer::removeListener)
+        playerListener = object : Player.Listener {
+            private fun isCurrent(): Boolean {
+                return this === playerListener && isCurrentPlayback(generation)
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (isCurrent()) handlePlaybackStateChanged(playbackState, generation)
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isCurrent()) handleIsPlayingChanged(isPlaying, generation)
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                if (isCurrent()) handlePlayerError(error, generation)
+            }
+        }.also(exoPlayer::addListener)
+    }
+
+    private fun handlePlaybackStateChanged(playbackState: Int, generation: Long) {
         when (playbackState) {
             Player.STATE_IDLE -> {
                 // 空闲
@@ -382,39 +499,61 @@ class AudioPlayService : BaseService(),
 
             Player.STATE_READY -> {
                 // 准备好
-                AudioPlay.upLoading(false)
-                if (exoPlayer.playWhenReady) {
-                    AudioPlay.status = Status.PLAY
-                    postEvent(EventBus.AUDIO_STATE, Status.PLAY)
-                } else {
-                    AudioPlay.status = Status.PAUSE
-                    postEvent(EventBus.AUDIO_STATE, Status.PAUSE)
+                var startProgress = false
+                val handled = AudioPlay.runIfPlaybackCurrent(generation) {
+                    applyIntroSkipIfNeeded()
+                    if (!pause) {
+                        exoPlayer.play()
+                        startProgress = true
+                    }
+                    AudioPlay.upLoading(false)
+                    if (exoPlayer.playWhenReady) {
+                        AudioPlay.status = Status.PLAY
+                        postEvent(EventBus.AUDIO_STATE, Status.PLAY)
+                    } else {
+                        AudioPlay.status = Status.PAUSE
+                        postEvent(EventBus.AUDIO_STATE, Status.PAUSE)
+                    }
+                    postEvent(EventBus.AUDIO_SIZE, exoPlayer.duration.toInt())
+                    upMediaMetadata()
+                    AudioPlay.saveDurChapter(exoPlayer.duration)
+                    upAudioPlayNotification()
                 }
-                postEvent(EventBus.AUDIO_SIZE, exoPlayer.duration.toInt())
-                upMediaMetadata()
-                upPlayProgress()
-                AudioPlay.saveDurChapter(exoPlayer.duration)
+                if (!handled) return
+                if (startProgress) upPlayProgress()
+                return
             }
 
             Player.STATE_ENDED -> {
-                // 结束
-                upPlayProgressJob?.cancel()
-                AudioPlay.playPositionChanged(exoPlayer.duration.toInt())
-                val stopResult = chapterStopTimer.onChapterCompleted()
-                if (stopResult == null) {
-                    AudioPlay.next()
-                } else {
-                    chapterToStop = stopResult.remaining
-                    postEvent(EventBus.AUDIO_CHAPTER_STOP, chapterToStop)
-                    if (stopResult.shouldStop) {
-                        AudioPlay.stop()
-                    } else {
-                        AudioPlay.next()
-                    }
-                }
+                completeCurrentChapter(generation)
             }
         }
-        upAudioPlayNotification()
+        AudioPlay.runIfPlaybackCurrent(generation) {
+            upAudioPlayNotification()
+        }
+    }
+
+    private fun handleIsPlayingChanged(isPlaying: Boolean, generation: Long) {
+        AudioPlay.runIfPlaybackCurrent(generation) {
+            AudioPlayService.isPlaying = isPlaying
+            if (isPlaying) {
+                AudioPlay.markReadTimeStart()
+            } else {
+                AudioPlay.upReadTime()
+            }
+        }
+    }
+
+    override fun onSharedPreferenceChanged(
+        sharedPreferences: SharedPreferences?,
+        key: String?,
+    ) {
+        if (key != PreferKey.enableReadRecord) return
+        if (AppConfig.enableReadRecord && exoPlayer.isPlaying) {
+            AudioPlay.markReadTimeStart()
+        } else {
+            AudioPlay.upReadTime()
+        }
     }
 
     private fun upMediaMetadata() {
@@ -428,17 +567,100 @@ class AudioPlayService : BaseService(),
         mediaSessionCompat.setMetadata(metadata)
     }
 
+    private fun resetAudioSkipState(generation: Long) {
+        introSkipEvaluated = false
+        chapterCompletionHandled = false
+        playbackGeneration = generation
+    }
+
+    private fun isCurrentPlayback(generation: Long = playbackGeneration): Boolean {
+        return generation == AudioPlay.currentPlaybackGeneration()
+    }
+
+    private fun currentAudioSkipWindow(durationMs: Long): AudioSkipWindow? {
+        val book = AudioPlay.book ?: return null
+        return resolveAudioSkipWindow(
+            durationMs = durationMs,
+            introSeconds = book.getOpenCredits(),
+            outroSeconds = book.getCloseCredits(),
+        )
+    }
+
+    private fun applyIntroSkipIfNeeded() {
+        if (introSkipEvaluated || !isCurrentPlayback()) return
+        introSkipEvaluated = true
+        val duration = exoPlayer.duration
+        if (duration <= 0L) return
+        if (position > 0) return
+        if (!exoPlayer.isCurrentMediaItemSeekable) return
+        val introEndMs = currentAudioSkipWindow(duration)?.introEndMs ?: return
+        if (introEndMs <= 0L) return
+        exoPlayer.seekTo(introEndMs)
+    }
+
+    private fun tryAutoSkipOutro(currentPosition: Long, generation: Long): Boolean {
+        if (pause || chapterCompletionHandled || !isCurrentPlayback(generation)) return false
+        val book = AudioPlay.book ?: return false
+        if (book.getCloseCredits() <= 0) return false
+        val window = currentAudioSkipWindow(exoPlayer.duration) ?: return false
+        if (currentPosition < window.outroStartMs) return false
+        exoPlayer.pause()
+        pause = true
+        completeCurrentChapter(generation)
+        return true
+    }
+
+    private fun completeCurrentChapter(generation: Long = playbackGeneration) {
+        if (chapterCompletionHandled) return
+        AudioPlay.runIfPlaybackCurrent(generation) {
+            if (chapterCompletionHandled) return@runIfPlaybackCurrent
+            chapterCompletionHandled = true
+            upPlayProgressJob?.cancel()
+            val duration = exoPlayer.duration
+                .coerceAtLeast(0L)
+                .coerceAtMost(Int.MAX_VALUE.toLong())
+                .toInt()
+            AudioPlay.playPositionChanged(duration)
+            val stopResult = chapterStopTimer.onChapterCompleted()
+            if (stopResult == null) {
+                AudioPlay.next()
+                return@runIfPlaybackCurrent
+            }
+            chapterToStop = stopResult.remaining
+            postEvent(EventBus.AUDIO_CHAPTER_STOP, chapterToStop)
+            if (stopResult.shouldStop) {
+                AudioPlay.stop()
+            } else {
+                AudioPlay.next()
+            }
+        }
+    }
+
     /**
      * 播放错误事件
      */
-    override fun onPlayerError(error: PlaybackException) {
-        super.onPlayerError(error)
-        AudioPlay.status = Status.STOP
-        postEvent(EventBus.AUDIO_STATE, Status.STOP)
-        AudioPlay.upLoading(false)
-        val errorMsg = "音频播放出错\n${error.errorCodeName} ${error.errorCode}"
-        AppLog.put(errorMsg, error)
-        toastOnUi(errorMsg)
+    private fun handlePlayerError(error: PlaybackException, generation: Long) {
+        AudioPlay.runIfPlaybackCurrent(generation) {
+            AudioPlay.upReadTime()
+            val resumePosition = exoPlayer.currentPosition
+                .coerceAtLeast(0L)
+                .coerceAtMost(Int.MAX_VALUE.toLong())
+                .toInt()
+            if (AudioPlay.retryAfterCachedPlaybackError(resumePosition)) {
+                exoPlayer.stop()
+                upPlayProgressJob?.cancel()
+                AudioPlay.upLoading(true)
+                AppLog.put("Broken audio cache detected, retrying from source", error)
+                toastOnUi(R.string.audio_cache_corrupted_retry)
+            } else {
+                AudioPlay.status = Status.STOP
+                postEvent(EventBus.AUDIO_STATE, Status.STOP)
+                AudioPlay.upLoading(false)
+                val errorMsg = "音频播放出错\n${error.errorCodeName} ${error.errorCode}"
+                AppLog.put(errorMsg, error)
+                toastOnUi(errorMsg)
+            }
+        }
     }
 
     private fun setTimer(minute: Int) {
@@ -450,16 +672,10 @@ class AudioPlayService : BaseService(),
     }
 
     private fun addTimer() {
-        if (timeMinute == 180) {
-            timeMinute = 0
-        } else {
-            timeMinute += 10
-            if (timeMinute > 180) timeMinute = 180
-        }
-        chapterStopTimer.clear()
-        chapterToStop = 0
-        postEvent(EventBus.AUDIO_CHAPTER_STOP, 0)
-        doDs()
+        val next = nextSleepTimerIncrement(
+            timeMinute, chapterToStop, AppConfig.sleepTimerPreferChapter
+        )
+        if (next.chapter > 0) setChapterStop(next.chapter) else setTimer(next.minute)
     }
 
     private fun setChapterStop(count: Int) {
@@ -503,32 +719,25 @@ class AudioPlayService : BaseService(),
      */
     private fun upPlayProgress() {
         upPlayProgressJob?.cancel()
+        val generation = playbackGeneration
         upPlayProgressJob = lifecycleScope.launch {
-            val skipEnds = AudioPlay.book?.getCloseCredits() ?: 0
             while (isActive) {
-                val durP = exoPlayer.currentPosition
-                //更新buffer位置
-                AudioPlay.playPositionChanged(durP.toInt())
-                postEvent(EventBus.AUDIO_BUFFER_PROGRESS, exoPlayer.bufferedPosition.toInt())
-                postEvent(EventBus.AUDIO_PROGRESS, AudioPlay.durChapterPos)
-                postEvent(EventBus.AUDIO_SIZE, exoPlayer.duration.toInt())
-                upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
-                //更新歌词
-                AudioPlay.callback?.upLyricP(durP.toInt())
-                // === 添加片尾跳过检查 ===
-                if (skipEnds > 0) {
-                    val duration = exoPlayer.duration
-                    if (duration > 0) {
-                        val skipThreshold = duration - (skipEnds * 1000L)
-                        if (durP >= skipThreshold) {
-                            //同Player.STATE_ENDED
-                            upPlayProgressJob?.cancel()
-                            AudioPlay.playPositionChanged(exoPlayer.duration.toInt())
-                            pause = true
-                            AudioPlay.next()
-                        }
-                    }
+                if (pause) break
+                var chapterCompleted = false
+                val handled = AudioPlay.runIfPlaybackCurrent(generation) {
+                    if (pause) return@runIfPlaybackCurrent
+                    val durP = exoPlayer.currentPosition
+                    //更新buffer位置
+                    AudioPlay.playPositionChanged(durP.toInt())
+                    postEvent(EventBus.AUDIO_BUFFER_PROGRESS, exoPlayer.bufferedPosition.toInt())
+                    postEvent(EventBus.AUDIO_PROGRESS, AudioPlay.durChapterPos)
+                    postEvent(EventBus.AUDIO_SIZE, exoPlayer.duration.toInt())
+                    upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
+                    //更新歌词
+                    AudioPlay.callback?.upLyricP(durP.toInt())
+                    chapterCompleted = tryAutoSkipOutro(durP, generation)
                 }
+                if (!handled || pause || chapterCompleted) break
                 delay(500)
             }
         }
@@ -569,6 +778,7 @@ class AudioPlayService : BaseService(),
         mediaSessionCompat.setCallback(object : MediaSessionCompat.Callback() {
             override fun onSeekTo(pos: Long) {
                 position = pos.toInt()
+                AudioPlay.playPositionChanged(position)
                 exoPlayer.seekTo(pos)
             }
 
@@ -684,7 +894,11 @@ class AudioPlayService : BaseService(),
             .setContentTitle(nTitle)
             .setContentText(nSubtitle)
             .setContentIntent(
-                activityPendingIntent<AudioPlayActivity>("activity")
+                activityPendingIntent<AudioPlayActivity>("activity") {
+                    AudioPlay.book?.let {
+                        putExtra("bookUrl", it.bookUrl)
+                    }
+                }
             )
         builder.setLargeIcon(cover)
         builder.addAction(

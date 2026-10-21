@@ -71,32 +71,31 @@ object SourceHelp {
     }
 
     fun deleteBookSourceParts(sources: List<BookSourcePart>) {
-        appDb.runInTransaction {
-            sources.forEach {
-                deleteBookSourceInternal(it.bookSourceUrl)
-            }
-        }
-        AppCacheManager.clearSourceVariables()
+        deleteBookSourceKeys(sources.map { it.bookSourceUrl })
     }
 
     fun deleteBookSources(sources: List<BookSource>) {
+        deleteBookSourceKeys(sources.map { it.bookSourceUrl })
+    }
+
+    private fun deleteBookSourceKeys(keys: Collection<String>) {
+        if (keys.isEmpty()) return
+        val sourceKeys = keys.distinct()
         appDb.runInTransaction {
-            sources.forEach {
-                deleteBookSourceInternal(it.bookSourceUrl)
-            }
+            sourceKeys.forEach(::deleteBookSourceInternal)
         }
+        SourceConfig.removeSources(sourceKeys)
         AppCacheManager.clearSourceVariables()
     }
 
     private fun deleteBookSourceInternal(key: String) {
+        clearSharedGlobalStateBySourceKey(BookSource::class.java, key)
         appDb.bookSourceDao.delete(key)
         appDb.cacheDao.deleteSourceVariables(key)
-        SourceConfig.removeSource(key)
     }
 
     fun deleteBookSource(key: String) {
-        deleteBookSourceInternal(key)
-        AppCacheManager.clearSourceVariables()
+        deleteBookSourceKeys(listOf(key))
     }
 
     fun deleteRssSources(sources: List<RssSource>) {
@@ -109,6 +108,7 @@ object SourceHelp {
     }
 
     private fun deleteRssSourceInternal(key: String) {
+        clearSharedGlobalStateBySourceKey(RssSource::class.java, key)
         appDb.rssSourceDao.delete(key)
         appDb.rssArticleDao.delete(key)
         appDb.cacheDao.deleteSourceVariables(key)
@@ -196,6 +196,7 @@ object SourceHelp {
             ContextCompat.startForegroundService(appCtx, intent)
         } else {
             appCtx.startActivity<VideoPlayerActivity> {
+                putExtra("forceNormalPlayer", true)
                 putExtra("videoUrl", url)
                 putExtra("videoTitle", title)
                 putExtra("sourceKey", source?.getKey())

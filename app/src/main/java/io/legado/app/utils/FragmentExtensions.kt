@@ -42,7 +42,7 @@ fun Fragment.showDialogFragment(dialogFragment: DialogFragment) {
 }
 
 fun Fragment.getPrefBoolean(key: String, defValue: Boolean = false) =
-    requireContext().defaultSharedPreferences.getBoolean(key, defValue)
+    requireContext().defaultSharedPreferences.getBooleanCompat(key, defValue)
 
 fun Fragment.putPrefBoolean(key: String, value: Boolean = false) =
     requireContext().defaultSharedPreferences.edit { putBoolean(key, value) }
@@ -110,7 +110,9 @@ fun Fragment.startActivityForBook(
 
 fun Fragment.showHelp(fileName: String) {
     val mdText = String(requireContext().assets.open("web/help/md/${fileName}.md").readBytes())
-    showDialogFragment(TextDialog(getString(R.string.help), mdText, TextDialog.Mode.MD))
+    showDialogFragment(
+        TextDialog(getString(R.string.help), mdText, TextDialog.Mode.MD, showToc = true)
+    )
 }
 
 val Fragment.isCreated

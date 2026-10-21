@@ -1,7 +1,6 @@
 package io.legado.app.data.entities
 
 import android.os.Parcelable
-import android.text.TextUtils
 import android.webkit.JavascriptInterface
 import androidx.room.ColumnInfo
 import androidx.room.Entity
@@ -26,6 +25,9 @@ data class RssSource(
     var sourceComment: String? = null,
     // 是否启用
     var enabled: Boolean = true,
+    // 是否记录阅读历史
+    @ColumnInfo(defaultValue = "1")
+    var enableReadRecord: Boolean = true,
     // 自定义变量说明
     var variableComment: String? = null,
     // js库
@@ -70,6 +72,8 @@ data class RssSource(
     var ruleLink: String? = null,
     /**正文规则**/
     var ruleContent: String? = null,
+    /**正文下一页规则**/
+    var nextContentUrl: String? = null,
     /**正文url白名单**/
     var contentWhitelist: String? = null,
     /**正文url黑名单**/
@@ -142,6 +146,7 @@ data class RssSource(
                 && equal(sourceGroup, source.sourceGroup)
                 && enabledCookieJar == source.enabledCookieJar
                 && equal(sourceComment, source.sourceComment)
+                && enableReadRecord == source.enableReadRecord
                 && equal(concurrentRate, source.concurrentRate)
                 && equal(header, source.header)
                 && equal(loginUrl, source.loginUrl)
@@ -158,6 +163,7 @@ data class RssSource(
                 && equal(ruleDescription, source.ruleDescription)
                 && equal(ruleLink, source.ruleLink)
                 && equal(ruleContent, source.ruleContent)
+                && equal(nextContentUrl, source.nextContentUrl)
                 && enableJs == source.enableJs
                 && loadWithBaseUrl == source.loadWithBaseUrl
                 && equal(variableComment, source.variableComment)
@@ -187,18 +193,20 @@ data class RssSource(
     }
 
     fun addGroup(groups: String): RssSource {
-        sourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)?.toHashSet()?.let {
+        sourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)
+            ?.toCollection(linkedSetOf())?.let {
             it.addAll(groups.splitNotBlank(AppPattern.splitGroupRegex))
-            sourceGroup = TextUtils.join(",", it)
+            sourceGroup = it.joinToString(",")
         }
         if (sourceGroup.isNullOrBlank()) sourceGroup = groups
         return this
     }
 
     fun removeGroup(groups: String): RssSource {
-        sourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)?.toHashSet()?.let {
+        sourceGroup?.splitNotBlank(AppPattern.splitGroupRegex)
+            ?.toCollection(linkedSetOf())?.let {
             it.removeAll(groups.splitNotBlank(AppPattern.splitGroupRegex).toSet())
-            sourceGroup = TextUtils.join(",", it)
+            sourceGroup = it.joinToString(",")
         }
         return this
     }

@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -17,6 +18,18 @@ class ReadPaddingBehaviorSourceTest {
         val stopBlock = source.substringAfter("override fun onStopTrackingTouch")
             .substringBefore("\n    }")
         assertTrue(stopBlock.indexOf("onChanged?.invoke") < stopBlock.indexOf("onTrackingStop?.invoke"))
+    }
+
+    @Test
+    fun `detail seek bar owns its saved progress state`() {
+        val source = projectFile(
+            "src/main/java/io/legado/app/ui/widget/DetailSeekBar.kt"
+        ).readText().normalizeLines()
+
+        assertTrue(source.contains("dispatchFreezeSelfOnly(container)"))
+        assertTrue(source.contains("dispatchThawSelfOnly(container)"))
+        assertTrue(source.contains("putInt(STATE_PROGRESS, progress)"))
+        assertTrue(source.contains("progress = state.getInt(STATE_PROGRESS)"))
     }
 
     @Test
@@ -44,6 +57,16 @@ class ReadPaddingBehaviorSourceTest {
         assertTrue(source.contains("ReadBookConfig.save()"))
         assertTrue(source.contains("bottomDialog++"))
         assertTrue(source.contains("bottomDialog--"))
+    }
+
+    @Test
+    fun `padding panel is centered without covering the page footer`() {
+        val source = paddingDialogSource()
+
+        assertTrue(source.contains("gravity = Gravity.CENTER"))
+        assertFalse(source.contains("gravity = Gravity.BOTTOM"))
+        assertTrue(source.contains("setLayout(0.9f, ViewGroup.LayoutParams.WRAP_CONTENT)"))
+        assertTrue(source.contains("cornerRadius = radius"))
     }
 
     private fun paddingDialogSource(): String = projectFile(

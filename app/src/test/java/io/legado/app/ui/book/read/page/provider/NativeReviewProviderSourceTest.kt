@@ -1,10 +1,42 @@
 package io.legado.app.ui.book.read.page.provider
 
+import io.legado.app.model.isContentLoadFailurePlaceholder
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 class NativeReviewProviderSourceTest {
+
+    @Test
+    fun `failed body content cannot enable review rendering`() {
+        val provider = projectFile(
+            "src/main/java/io/legado/app/ui/book/read/page/provider/ChapterProvider.kt"
+        ).readText().normalizeLines()
+        val readBook = projectFile(
+            "src/main/java/io/legado/app/model/ReadBook.kt"
+        ).readText().normalizeLines()
+        val providerBlock = provider.substringAfter("fun getTextChapterAsync(")
+            .substringBefore("fun upStyle()")
+
+        assertTrue("获取正文失败\ntimeout".isContentLoadFailurePlaceholder())
+        assertTrue("加载正文失败\n没有书源".isContentLoadFailurePlaceholder())
+        assertFalse("获取正文失败是章节正文".isContentLoadFailurePlaceholder())
+        assertTrue(
+            providerBlock.contains(
+                "hasBodyContent: Boolean = bookContent.textList.isNotEmpty()"
+            )
+        )
+        assertTrue(providerBlock.contains("hasBodyContent = hasBodyContent"))
+        assertEquals(
+            2,
+            Regex(
+                """hasBodyContent\s*=\s*contents\.textList\.isNotEmpty\(\)\s*&&\s*""" +
+                    """!content\.isContentLoadFailurePlaceholder\(\)"""
+            ).findAll(readBook).count()
+        )
+    }
 
     @Test
     fun `summary providers stay scoped to their chapter`() {
@@ -49,11 +81,35 @@ class NativeReviewProviderSourceTest {
         assertTrue(provider.contains("val reviewId = paragraphNum - titleOffset"))
         assertTrue(contentView.contains("textLine.paragraphNum - textLine.reviewTitleOffset"))
         assertTrue(
+            Regex(
+                """callBack\.onReviewClick\(\s*resolveReviewId\(textLine\),\s*""" +
+                    """column\.count,\s*textPage\.chapterIndex\s*\)"""
+            ).containsMatchIn(contentView)
+        )
+        assertTrue(
+            contentView.contains(
+                "fun onReviewClick(paragraphNum: Int, count: Int, chapterIndex: Int)"
+            )
+        )
+        assertTrue(
             layout.contains(
                 "titleMode != 2 || bookChapter.isVolume || !textChapter.hasBodyContent"
             )
         )
         assertTrue(layout.contains("reviewTitleOffset = reviewTitleOffset"))
+    }
+
+    @Test
+    fun `drawing overflow remains inside the screen clip`() {
+        val provider = projectFile(
+            "src/main/java/io/legado/app/ui/book/read/page/provider/ChapterProvider.kt"
+        ).readText().normalizeLines()
+        val layoutBlock = provider.substringAfter("fun upLayout()")
+            .substringBefore("private fun setFallbackLayout()")
+        val visibleRectBlock = layoutBlock.substringAfter("visibleRect.set(")
+
+        assertTrue(visibleRectBlock.contains("viewWidth.toFloat(),"))
+        assertTrue(visibleRectBlock.contains("visibleBottom.toFloat() + 10f.dpToPx()"))
     }
 
     private fun String.normalizeLines(): String = replace("\r\n", "\n")

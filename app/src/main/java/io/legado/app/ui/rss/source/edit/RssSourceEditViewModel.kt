@@ -11,10 +11,10 @@ import io.legado.app.help.AppCacheManager
 import io.legado.app.help.ConcurrentRateLimiter.Companion.concurrentRecordMap
 import io.legado.app.help.RuleComplete
 import io.legado.app.help.http.CookieStore
+import io.legado.app.help.source.clearSharedGlobalState
 import io.legado.app.help.source.removeSortCache
 import io.legado.app.model.SharedJsScope
-import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonObject
+import io.legado.app.ui.association.parseSingleRssSourceJson
 import io.legado.app.utils.getClipText
 import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.stackTraceStr
@@ -58,6 +58,7 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
                 appDb.rssSourceDao.delete(it)
                 //更新收藏的源地址
                 if (it.sourceUrl != source.sourceUrl) {
+                    it.clearSharedGlobalState()
                     appDb.rssStarDao.updateOrigin(source.sourceUrl, it.sourceUrl)
                     appDb.rssArticleDao.updateOrigin(source.sourceUrl, it.sourceUrl)
                     appDb.cacheDao.deleteSourceVariables(it.sourceUrl)
@@ -78,11 +79,7 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
 
     fun pasteSource(onSuccess: (source: RssSource) -> Unit) {
         execute(context = Dispatchers.Main) {
-            var source: RssSource? = null
-            context.getClipText()?.let { json ->
-                source = GSON.fromJsonObject<RssSource>(json).getOrThrow()
-            }
-            source
+            context.getClipText()?.let(::parseSingleRssSourceJson)
         }.onError {
             context.toastOnUi(it.localizedMessage)
         }.onSuccess {
@@ -96,10 +93,7 @@ class RssSourceEditViewModel(application: Application) : BaseViewModel(applicati
 
     fun importSource(text: String, finally: (source: RssSource) -> Unit) {
         execute {
-            val text1 = text.trim()
-            GSON.fromJsonObject<RssSource>(text1).getOrThrow().let {
-                finally.invoke(it)
-            }
+            finally.invoke(parseSingleRssSourceJson(text))
         }.onError {
             context.toastOnUi(it.stackTraceStr)
         }

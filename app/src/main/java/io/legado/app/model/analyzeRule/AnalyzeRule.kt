@@ -6,6 +6,7 @@ import com.google.gson.internal.LinkedTreeMap
 import com.script.CompiledScript
 import com.script.buildScriptBindings
 import com.script.rhino.RhinoScriptEngine
+import com.script.rhino.runScriptWithContext
 import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.constant.AppPattern.WebJS_PATTERN
 import io.legado.app.data.entities.BaseBook
@@ -20,6 +21,8 @@ import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.BackstageWebView
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.getShareScope
+import io.legado.app.help.source.getSharedGlobalStateKey
+import io.legado.app.model.BatchContentContext
 import io.legado.app.model.Debug
 import io.legado.app.model.SharedJsScope
 import io.legado.app.model.webBook.WebBook
@@ -40,6 +43,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.apache.commons.text.StringEscapeUtils
 import org.jsoup.nodes.Node
+import org.htmlunit.corejs.javascript.NativeArray
 import org.htmlunit.corejs.javascript.NativeObject
 import org.htmlunit.corejs.javascript.Scriptable
 import org.htmlunit.corejs.javascript.TopLevel
@@ -68,6 +72,7 @@ class AnalyzeRule(
 
     private var chapter: BookChapter? = null
     private var nextChapterUrl: String? = null
+    private var batchContext: BatchContentContext? = null
     private var content: Any? = null
     private var baseUrl: String? = null
     private var redirectUrl: URL? = null
@@ -81,6 +86,7 @@ class AnalyzeRule(
     private val stringRuleCache = hashMapOf<String, List<SourceRule>>()
     private val regexCache = hashMapOf<String, Regex?>()
     private val scriptCache = hashMapOf<String, CompiledScript>()
+    private val localBindings = HashMap<String, String>()
     private var topScopeRef: WeakReference<TopLevel>? = null
     private var evalJSCallCount = 0
 
@@ -177,12 +183,12 @@ class AnalyzeRule(
         if (isMainThread) {
             error("webJs must be called on a background thread")
         }
-        return runBlocking {
+        return runBlocking(coroutineContext) {
             BackstageWebView(
                 url = baseUrl,
                 html = content.toString(),
                 javaScript = jsStr,
-                headerMap = getSource()?.getHeaderMap(true),
+                headerMap = runScriptWithContext(coroutineContext) { getSource()?.getHeaderMap(true) },
                 tag = getSource()?.getKey(),
                 cacheFirst = true,
                 timeout = 10000,
@@ -216,7 +222,9 @@ class AnalyzeRule(
                 val sourceRule = ruleList.first()
                 putRule(sourceRule.putMap)
                 sourceRule.makeUpRule(result)
-                result = if (sourceRule.mode == Mode.Json) {
+                result = if (sourceRule.mode == Mode.Js) {
+                    evalJS(sourceRule.rule, result)
+                } else if (sourceRule.mode == Mode.Json) {
                     getAnalyzeByJSonPath(result).getStringList(sourceRule.rule)
                 } else if (sourceRule.getParamSize() > 1) {
                     // get {{}}
@@ -292,7 +300,7 @@ class AnalyzeRule(
      */
     @JvmOverloads
     fun getString(ruleStr: String?, mContent: Any? = null, isUrl: Boolean = false): String {
-        if (TextUtils.isEmpty(ruleStr)) return ""
+        if (ruleStr.isNullOrEmpty()) return ""
         val ruleList = splitSourceRuleCacheString(ruleStr)
         return getString(ruleList, mContent, isUrl)
     }
@@ -318,16 +326,13 @@ class AnalyzeRule(
                 val sourceRule = ruleList.first()
                 putRule(sourceRule.putMap)
                 sourceRule.makeUpRule(result)
-                result = if (sourceRule.mode == Mode.Json) {
-                    getAnalyzeByJSonPath(result).getString(sourceRule.rule)
-                } else if (sourceRule.getParamSize() > 1) {
-                    // get {{}}
-                    sourceRule.rule
-                } else {
-                    // 键值直接访问
-                    result[sourceRule.rule]?.toString()
+                result = when {
+                    sourceRule.mode == Mode.Js -> evalJS(sourceRule.rule, result)
+                    sourceRule.mode == Mode.Json -> getAnalyzeByJSonPath(result).getString(sourceRule.rule)
+                    sourceRule.getParamSize() > 1 -> sourceRule.rule // get {{}}
+                    else -> result[sourceRule.rule] // 键值直接访问
                 }?.let {
-                    replaceRegex(it, sourceRule)
+                    replaceRegex(it.toString(), sourceRule)
                 }
             } else if (result is LinkedTreeMap<*, *>) {
                 // 键值直接访问
@@ -414,6 +419,36 @@ class AnalyzeRule(
     /**
      * 获取列表
      */
+    internal fun getElementsRaw(ruleStr: String): Any? {
+        var result: Any? = null
+        val content = this.content
+        val ruleList = splitSourceRule(ruleStr, true)
+        if (content != null && ruleList.isNotEmpty()) {
+            result = content
+            for (sourceRule in ruleList) {
+                putRule(sourceRule.putMap)
+                result ?: continue
+                val rule = sourceRule.rule
+                result = when (sourceRule.mode) {
+                    Mode.Regex -> AnalyzeByRegex.getElements(
+                        result.toString(),
+                        rule.splitNotBlank("&&")
+                    )
+
+                    Mode.WebJs -> GSON.fromJsonArray<Map<String, Any?>>(
+                        getWebJsResult(rule, result)
+                    ).getOrNull()
+
+                    Mode.Js -> evalJS(rule, result)
+                    Mode.Json -> getAnalyzeByJSonPath(result).getList(rule)
+                    Mode.XPath -> getAnalyzeByXPath(result).getElements(rule)
+                    else -> getAnalyzeByJSoup(result).getElements(rule)
+                }
+            }
+        }
+        return result
+    }
+
     @Suppress("UNCHECKED_CAST")
     fun getElements(ruleStr: String): List<Any> {
         var result: Any? = null
@@ -439,40 +474,31 @@ class AnalyzeRule(
                 }
             }
         }
-        result?.let {
-            return it as List<Any>
-        }
-        return ArrayList()
-    }
-
-    /**
-     * 获取 Element，返回原始 Any? 类型，不强制转换为 List
-     */
-    fun getElementsRaw(ruleStr: String): Any? {
-        var result: Any? = null
-        val content = this.content
-        val ruleList = splitSourceRule(ruleStr, true)
-        if (content != null && ruleList.isNotEmpty()) {
-            result = content
-            for (sourceRule in ruleList) {
-                putRule(sourceRule.putMap)
-                result ?: continue
-                val rule = sourceRule.rule
-                result = when (sourceRule.mode) {
-                    Mode.Regex -> AnalyzeByRegex.getElements(
-                        result.toString(),
-                        rule.splitNotBlank("&&")
-                    )
-
-                    Mode.WebJs -> GSON.fromJsonArray<Map<String, Any?>>(getWebJsResult(rule, result)).getOrNull()
-                    Mode.Js -> evalJS(rule, result)
-                    Mode.Json -> getAnalyzeByJSonPath(result).getList(rule)
-                    Mode.XPath -> getAnalyzeByXPath(result).getElements(rule)
-                    else -> getAnalyzeByJSoup(result).getElements(rule)
+        when (val value = result) {
+            is List<*> -> {
+                if (value.none { it == null || it === Scriptable.NOT_FOUND }) {
+                    @Suppress("UNCHECKED_CAST")
+                    return value as List<Any>
                 }
+                return value.mapNotNull { it?.takeUnless { item -> item === Scriptable.NOT_FOUND } }
+            }
+
+            is Array<*> -> {
+                return value.mapNotNull { it?.takeUnless { item -> item === Scriptable.NOT_FOUND } }
+            }
+
+            is NativeArray -> {
+                val values = ArrayList<Any>(value.length.toInt())
+                for (index in 0 until value.length.toInt()) {
+                    val item = value.get(index, value)
+                    if (item != null && item !== Scriptable.NOT_FOUND) {
+                        values.add(item)
+                    }
+                }
+                return values
             }
         }
-        return result
+        return ArrayList()
     }
 
     /**
@@ -838,10 +864,16 @@ class AnalyzeRule(
         return value
     }
 
+    fun setLocal(key: String, value: String): AnalyzeRule {
+        localBindings[key] = value
+        return this
+    }
+
     /**
      * 获取保存的数据
      */
     fun get(key: String): String {
+        localBindings[key]?.let { return it }
         when (key) {
             "bookName" -> book?.let {
                 return it.name
@@ -859,16 +891,6 @@ class AnalyzeRule(
     }
 
     /**
-     * 设置本地变量(用于规则解析时传递上下文参数)
-     */
-    fun setLocal(key: String, value: Any?): AnalyzeRule {
-        if (value != null) {
-            put(key, value.toString())
-        }
-        return this
-    }
-
-    /**
      * 执行JS
      */
     fun evalJS(jsStr: String, result: Any? = null): Any? {
@@ -881,12 +903,17 @@ class AnalyzeRule(
             bindings["result"] = result
             bindings["baseUrl"] = baseUrl
             bindings["chapter"] = chapter
+            bindings["chapters"] = batchContext?.chapters
             bindings["title"] = chapter?.title
             bindings["src"] = content
             bindings["nextChapterUrl"] = nextChapterUrl
             bindings["rssArticle"] = rssArticle
             bindings["fromBookInfo"] = isFromBookInfo
+            localBindings["paraIndex"]?.let { bindings["paraIndex"] = it }
+            localBindings["paraData"]?.let { bindings["paraData"] = it }
+            localBindings["page"]?.let { bindings["page"] = it.toIntOrNull() ?: it }
         }
+        val sharedGlobalStateKey = source?.getSharedGlobalStateKey()
         val topScope: TopLevel? = source?.getShareScope(coroutineContext)
             ?: topScopeRef?.get()
             ?: SharedJsScope.getCryptoScope(source ?: this, coroutineContext)
@@ -900,7 +927,7 @@ class AnalyzeRule(
             }
         } else {
             bindings.apply {
-                chainTo(topScope)
+                chainTo(topScope, sharedGlobalStateKey)
             }
         }
         val script = compileScriptCache(jsStr)
@@ -916,6 +943,10 @@ class AnalyzeRule(
 
     override fun getSource(): BaseSource? {
         return source
+    }
+
+    override fun getBatchContext(): BatchContentContext? {
+        return batchContext
     }
 
     override fun getTag(): String? {
@@ -1015,6 +1046,11 @@ class AnalyzeRule(
 
         fun AnalyzeRule.setChapter(chapter: BookChapter?): AnalyzeRule {
             this.chapter = chapter
+            return this
+        }
+
+        fun AnalyzeRule.setBatchContext(batchContext: BatchContentContext?): AnalyzeRule {
+            this.batchContext = batchContext
             return this
         }
 

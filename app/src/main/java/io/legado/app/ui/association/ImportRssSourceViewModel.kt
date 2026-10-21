@@ -15,34 +15,43 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.decompressed
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.source.requireSourceUrl
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.model.RuleUpdate
 import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isJsonArray
 import io.legado.app.utils.isJsonObject
 import io.legado.app.utils.isUri
-import io.legado.app.utils.jsonPath
 import io.legado.app.utils.readText
 import io.legado.app.utils.splitNotBlank
 import splitties.init.appCtx
 
 class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
     private val importRequestGate = RssSourceImportRequestGate()
-    var isAddGroup = false
-    var groupName: String? = null
+    var isAddGroup = AppConfig.importRememberGroup && AppConfig.importLastGroupAdd
+    var groupName: String? = AppConfig.importLastGroup.takeIf { AppConfig.importRememberGroup }
+    var searchQuery = ""
     val errorLiveData = MutableLiveData<String>()
     val successLiveData = MutableLiveData<Int>()
+    val sourceUpdatePending = MutableLiveData(false)
 
     val allSources = arrayListOf<RssSource>()
     val checkSources = arrayListOf<RssSource?>()
     val selectStatus = arrayListOf<Boolean>()
+    private val sourceCandidates = arrayListOf<RssSourceImportCandidate>()
+    private val manualSelections = arrayListOf<Boolean?>()
+    var automaticSourceReplacement = AppConfig.importReplaceSource
+        private set
+    private val manualRuleIds = hashMapOf<Int, List<Long>>()
+    val useSourceReplacement: Boolean
+        get() = automaticSourceReplacement || manualRuleIds.isNotEmpty()
 
     val isSelectAll: Boolean
         get() {
-            selectStatus.forEach {
-                if (!it) {
+            selectStatus.forEachIndexed { index, selected ->
+                if (canImportSource(index) && !selected) {
                     return false
                 }
             }
@@ -68,7 +77,7 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
             val keepEnable = AppConfig.importKeepEnable
             val selectSource = arrayListOf<RssSource>()
             selectStatus.forEachIndexed { index, b ->
-                if (b) {
+                if (b && canImportSource(index)) {
                     val source = allSources[index]
                     checkSources[index]?.let {
                         if (keepName) {
@@ -111,8 +120,35 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
             errorLiveData.postValue("ImportError:${it.localizedMessage}")
             AppLog.put("ImportError:${it.localizedMessage}", it)
         }.onSuccess {
-            comparisonSource()
+            prepareSourceCandidates()
         }
+    }
+
+    private fun prepareSourceCandidates() {
+        executeLazy {
+            val rules = appDb.replaceRuleDao.findEnabledBySourceScope()
+            allSources.mapIndexed { index, source ->
+                prepareRssSourceImportCandidate(source, selectedRules(index, rules))
+            }
+        }.onSuccess { candidates ->
+            sourceCandidates.clear()
+            sourceCandidates.addAll(candidates)
+            applyCandidateSources()
+            comparisonSource()
+        }.onError {
+            errorLiveData.value = "ImportError:${it.localizedMessage}"
+            AppLog.put("ImportError:${it.localizedMessage}", it)
+        }.start()
+    }
+
+    private fun applyCandidateSources() {
+        allSources.clear()
+        allSources.addAll(sourceCandidates.map { it.source(useSourceReplacement) })
+    }
+
+    fun setUseSourceReplacement(enabled: Boolean) {
+        if (enabled == automaticSourceReplacement) return
+        refreshSourceReplacements(automatic = enabled)
     }
 
     private suspend fun importSourceAwait(text: String) {
@@ -153,30 +189,146 @@ class ImportRssSourceViewModel(app: Application) : BaseViewModel(app) {
                 url(url)
             }
         }.decompressed().byteStream().use { body ->
-            val items: List<Map<String, Any>> = jsonPath.parse(body).read("$")
-            for (item in items) {
-                if (!item.containsKey("sourceUrl")) {
-                    throw NoStackTraceException("不是订阅源")
-                }
-                val jsonItem = jsonPath.parse(item)
-                GSON.fromJsonObject<RssSource>(jsonItem.jsonString()).getOrThrow().let { source ->
-                    allSources.add(source)
-                }
-            }
+            val sources = GSON.fromJsonArray<RssSource>(body).getOrThrow()
+            sources.forEach { source -> source.requireSourceUrl() }
+            allSources.addAll(sources)
         }
     }
 
-    private fun comparisonSource() {
+    private fun comparisonSource(
+        preserveManualSelections: Boolean = false,
+        onError: () -> Unit = {},
+        finally: () -> Unit = {},
+    ) {
+        val savedManualSelections = manualSelections.toList()
         execute {
+            lateinit var comparison: RssSourceImportComparison
             appDb.runInTransaction {
-                val comparison = compareImportedRssSources(allSources) { sourceUrls ->
+                comparison = compareImportedRssSources(allSources) { sourceUrls ->
                     appDb.rssSourceDao.getRssSources(*sourceUrls.toTypedArray())
                 }
-                checkSources.addAll(comparison.existingSources)
-                selectStatus.addAll(comparison.selectStatus)
+            }
+            comparison
+        }.onSuccess { comparison ->
+            checkSources.clear()
+            selectStatus.clear()
+            manualSelections.clear()
+            comparison.existingSources.forEachIndexed { index, existingSource ->
+                val manualSelection = if (preserveManualSelections) {
+                    savedManualSelections.getOrNull(index)
+                } else {
+                    null
+                }
+                checkSources.add(existingSource)
+                selectStatus.add(
+                    canImportSource(index) &&
+                        (manualSelection ?: comparison.selectStatus[index])
+                )
+                manualSelections.add(manualSelection)
             }
             successLiveData.postValue(allSources.size)
+        }.onError {
+            onError()
+            errorLiveData.value = "ImportError:${it.localizedMessage}"
+            AppLog.put("ImportError:${it.localizedMessage}", it)
+        }.onFinally {
+            finally()
         }
     }
+
+    fun setSelection(index: Int, selected: Boolean) {
+        if (index !in selectStatus.indices || sourceUpdatePending.value == true ||
+            !canImportSource(index)
+        ) return
+        selectStatus[index] = selected
+        if (index in manualSelections.indices) manualSelections[index] = selected
+    }
+
+    var pendingReplacementDialog: Pair<Boolean, Int>? = null
+
+    fun refreshSourceReplacements(
+        index: Int = -1,
+        source: RssSource? = null,
+        ids: List<Long>? = null,
+        openDialog: Boolean? = null,
+        automatic: Boolean = automaticSourceReplacement,
+    ): Boolean {
+        if (sourceUpdatePending.value == true || (index != -1 && index !in sourceCandidates.indices)) return false
+        if (automatic && (ids != null || openDialog == true)) return false
+        val previousCandidates = sourceCandidates.toList()
+        val previousIds = manualRuleIds.toMap()
+        val previousMode = automaticSourceReplacement
+        automaticSourceReplacement = automatic
+        fun restorePreviousState() {
+            automaticSourceReplacement = previousMode
+            sourceCandidates.clear()
+            sourceCandidates.addAll(previousCandidates)
+            manualRuleIds.clear()
+            manualRuleIds.putAll(previousIds)
+            applyCandidateSources()
+        }
+        if (ids != null) {
+            if (index == -1) sourceCandidates.indices.forEach { manualRuleIds[it] = ids }
+            else manualRuleIds[index] = ids
+        }
+        val selectedIds = manualRuleIds.toMap().takeUnless { automatic }
+        sourceUpdatePending.value = true
+        executeLazy {
+            refreshRssSourceImportCandidates(
+                previousCandidates,
+                index,
+                source,
+                appDb.replaceRuleDao.findEnabledBySourceScope(),
+                selectedIds,
+            )
+        }.onSuccess { candidates ->
+            var comparisonSucceeded = true
+            sourceCandidates.clear()
+            sourceCandidates.addAll(candidates)
+            applyCandidateSources()
+            comparisonSource(
+                preserveManualSelections = true,
+                onError = {
+                    comparisonSucceeded = false
+                    restorePreviousState()
+                },
+            ) {
+                if (comparisonSucceeded) {
+                    AppConfig.importReplaceSource = automatic
+                    if (openDialog != null) pendingReplacementDialog = openDialog to index
+                }
+                sourceUpdatePending.value = false
+            }
+        }.onError {
+            errorLiveData.value = "ImportError:${it.localizedMessage}"
+            AppLog.put("ImportError:${it.localizedMessage}", it)
+            restorePreviousState()
+            sourceUpdatePending.value = false
+        }.start()
+        return true
+    }
+
+    private fun selectedRules(index: Int, rules: List<io.legado.app.data.entities.ReplaceRule>) =
+        if (automaticSourceReplacement) rules else rules.filter { it.id in manualRuleIds[index].orEmpty() }
+
+    fun selectedManualRuleIds(index: Int = -1): List<Long> = if (index >= 0) manualRuleIds[index].orEmpty()
+        else sourceCandidates.indices.map { manualRuleIds[it].orEmpty().toSet() }
+            .reduceOrNull { all, ids -> all.intersect(ids) }?.toList().orEmpty()
+
+    fun effectiveRuleIds(index: Int = -1): List<Long> = if (!useSourceReplacement) emptyList() else
+        (if (index >= 0) listOfNotNull(sourceCandidates.getOrNull(index)) else sourceCandidates)
+            .flatMap { it.effectiveRuleIds }.distinct()
+
+    fun canImportSource(index: Int): Boolean =
+        sourceCandidates.getOrNull(index)?.canImport(useSourceReplacement) != false
+
+    fun originalSourceJson(index: Int): String? =
+        sourceCandidates.getOrNull(index)?.originalJson
+
+    fun replacedSourceJson(index: Int): String? =
+        sourceCandidates.getOrNull(index)?.replacedJson
+
+    fun sourceReplacementError(index: Int): String? =
+        sourceCandidates.getOrNull(index)?.replacementError
 
 }

@@ -21,6 +21,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeUtils
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.model.AudioCacheKey
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.gone
@@ -36,7 +37,9 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
     DiffRecyclerAdapter<TocListItem, ItemChapterListBinding>(context) {
 
     val cacheFileNames = hashSetOf<String>()
-    private val displayTitleMap = ConcurrentHashMap<String, String>()
+    val audioCacheKeys = hashSetOf<AudioCacheKey>()
+    @Volatile
+    private var displayTitleMap = ConcurrentHashMap<String, String>()
     private val handler = Handler(Looper.getMainLooper())
     private val baseStartPadding = 12.dpToPx()
     private val depthIndent = 10.dpToPx()
@@ -59,7 +62,8 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
                 if (oldItem::class != newItem::class || oldItem.depth != newItem.depth) {
                     return false
                 }
-                if (!sameChapterContent(oldItem.chapter, newItem.chapter)) return false
+                if (!sameChapterContent(oldItem.chapter, newItem.chapter) ||
+                    oldItem.readingChapter?.index != newItem.readingChapter?.index) return false
                 return when {
                     oldItem is TocListItem.Volume && newItem is TocListItem.Volume ->
                         oldItem.collapsed == newItem.collapsed &&
@@ -108,12 +112,13 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
 
     fun clearDisplayTitle() {
         upDisplayTitleJob?.cancel()
-        displayTitleMap.clear()
+        displayTitleMap = ConcurrentHashMap()
     }
 
     fun upDisplayTitles(startIndex: Int) {
         if (released) return
         upDisplayTitleJob?.cancel()
+        val displayTitleMap = displayTitleMap
         upDisplayTitleJob = Coroutine.async(callback.scope) {
             val book = callback.book ?: return@async
             val items = getItems()
@@ -124,12 +129,16 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
             val useReplace = AppConfig.tocUiUseReplace && book.getUseReplaceRule()
             launch {
                 for (i in safeStartIndex until items.size) {
-                    updateDisplayTitle(items, i, replaceRules, useReplace, replaceBook)
+                    updateDisplayTitle(
+                        items, i, replaceRules, useReplace, replaceBook, displayTitleMap
+                    )
                 }
             }
             launch {
                 for (i in safeStartIndex - 1 downTo 0) {
-                    updateDisplayTitle(items, i, replaceRules, useReplace, replaceBook)
+                    updateDisplayTitle(
+                        items, i, replaceRules, useReplace, replaceBook, displayTitleMap
+                    )
                 }
             }
         }
@@ -141,10 +150,14 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
         replaceRules: List<io.legado.app.data.entities.ReplaceRule>,
         useReplace: Boolean,
         replaceBook: ReplaceBook,
+        displayTitleMap: ConcurrentHashMap<String, String>,
     ) {
         val item = items[index]
-        val chapter = item.chapter
-        if (displayTitleMap[chapter.title] != null) return
+        val chapter = item.readingChapter?.let { reading ->
+            if (reading.index == item.chapter.index) item.chapter
+            else item.chapter.copy(index = reading.index)
+        } ?: item.chapter
+        if (displayTitleMap[item.key] != null) return
         currentCoroutineContext().ensureActive()
         val displayTitle = chapter.getDisplayTitle(
             replaceRules,
@@ -152,16 +165,18 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
             replaceBook = replaceBook,
         )
         currentCoroutineContext().ensureActive()
-        displayTitleMap[chapter.title] = displayTitle
+        displayTitleMap[item.key] = displayTitle
         handler.post {
-            if (!released && getItem(index)?.key == item.key) {
+            if (displayTitleMap === this.displayTitleMap &&
+                !released && getItem(index)?.key == item.key
+            ) {
                 notifyItemChanged(index, true)
             }
         }
     }
 
-    private fun getDisplayTitle(chapter: BookChapter): String {
-        return displayTitleMap[chapter.title] ?: chapter.title
+    private fun getDisplayTitle(item: TocListItem): String {
+        return displayTitleMap[item.key] ?: item.chapter.title
     }
 
     override fun getViewBinding(parent: ViewGroup): ItemChapterListBinding {
@@ -177,10 +192,15 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
         binding.run {
             val chapter = item.chapter
             val isVolume = item is TocListItem.Volume
-            val isCurrentChapter = callback.durChapterIndex() == chapter.index
+            val isCurrentChapter = callback.durChapterIndex() == item.readingChapter?.index
             val cached = callback.isLocalBook || isVolume ||
-                    cacheFileNames.contains(chapter.getFileName())
-            tvChapterName.text = getDisplayTitle(chapter)
+                    if (callback.isAudioBook) {
+                        !callback.isAudioCacheStateReady ||
+                                audioCacheKeys.contains(AudioCacheKey.from(chapter))
+                    } else {
+                        cacheFileNames.contains(chapter.getFileName())
+                    }
+            tvChapterName.text = getDisplayTitle(item)
 
             if (payloads.isEmpty()) {
                 val isCurrentGroup = isCurrentChapter ||
@@ -278,7 +298,9 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
     override fun registerListener(holder: ItemViewHolder, binding: ItemChapterListBinding) {
         holder.itemView.setOnClickListener {
             getItem(holder.layoutPosition)?.let { item ->
-                callback.openChapter(item.chapter)
+                val readingChapter = item.readingChapter
+                if (readingChapter != null) callback.openChapter(readingChapter)
+                else if (item is TocListItem.Volume && item.canToggle) callback.onVolumeToggled(item.chapter.index)
             }
         }
         binding.endActions.setOnClickListener {
@@ -286,13 +308,13 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
                 if (item is TocListItem.Volume && item.canToggle) {
                     callback.onVolumeToggled(item.chapter.index)
                 } else {
-                    callback.openChapter(item.chapter)
+                    item.readingChapter?.let(callback::openChapter)
                 }
             }
         }
         holder.itemView.setOnLongClickListener {
             getItem(holder.layoutPosition)?.let { item ->
-                context.longToastOnUi(getDisplayTitle(item.chapter))
+                context.longToastOnUi(getDisplayTitle(item))
             }
             true
         }
@@ -310,7 +332,13 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
 
     fun findVisiblePositionByChapterIndex(chapterIndex: Int): Int {
         return getItems().indexOfFirst {
-            it is TocListItem.Chapter && it.chapter.index == chapterIndex
+            it is TocListItem.Chapter && it.readingChapter?.index == chapterIndex
+        }
+    }
+
+    fun findVisiblePositionByAudioCacheKey(key: AudioCacheKey): Int {
+        return getItems().indexOfFirst {
+            it is TocListItem.Chapter && AudioCacheKey.from(it.chapter) == key
         }
     }
 
@@ -332,6 +360,8 @@ class ChapterListAdapter(context: Context, val callback: Callback) :
         val scope: CoroutineScope
         val book: Book?
         val isLocalBook: Boolean
+        val isAudioBook: Boolean
+        val isAudioCacheStateReady: Boolean
         fun openChapter(bookChapter: BookChapter)
         fun durChapterIndex(): Int
         fun onListChanged()

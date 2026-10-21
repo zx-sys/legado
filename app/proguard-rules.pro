@@ -61,6 +61,9 @@
 -keep class * extends io.legado.app.help.JsExtensions{*;}
 # 数据类
 -keep class **.data.entities.**{*;}
+# HighlightStyle is serialized outside data.entities; keep nested enum names for Gson.
+-keep class io.legado.app.help.HighlightStyle { *; }
+-keep class io.legado.app.help.HighlightStyle$** { *; }
 # hutool-core hutool-crypto
 -keep class
 !cn.hutool.core.util.RuntimeUtil,
@@ -72,6 +75,10 @@ cn.hutool.core.codec.**,
 cn.hutool.core.util.**{*;}
 -keep class cn.hutool.crypto.**{*;}
 -dontwarn cn.hutool.**
+# Bouncy Castle registers provider implementations by class name.
+-keep class org.bouncycastle.jce.provider.** { *; }
+-keep class org.bouncycastle.jcajce.provider.** { *; }
+-keep class org.bouncycastle.pqc.jcajce.provider.** { *; }
 # 缓存 Cookie
 -keep class **.help.http.CookieStore{*;}
 -keep class **.help.CacheManager{*;}
@@ -123,6 +130,14 @@ cn.hutool.core.util.**{*;}
 
 # Cronet 151 references the API 37 private compute service behind an SDK check.
 -dontwarn android.app.privatecompute.PccSandboxManager
+
+# Ktor's optional IDE debugger detector references JDK-only management APIs.
+-dontwarn java.lang.management.ManagementFactory
+-dontwarn java.lang.management.RuntimeMXBean
+
+# PDFBox reads outline metadata only; Android PdfRenderer renders images.
+# Its optional JPEG 2000 decoder is guarded by Class.forName in JPXFilter.
+-dontwarn com.gemalto.jp2.JP2Decoder
 
 ## ExoPlayer 如果还不能播放就取消注释这个
 # -keep class com.google.android.exoplayer2.** {*;}

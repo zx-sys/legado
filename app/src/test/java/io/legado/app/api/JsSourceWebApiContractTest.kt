@@ -10,14 +10,51 @@ import java.io.File
 class JsSourceWebApiContractTest {
 
     @Test
-    fun `web route forwards the script body without a rename parameter`() {
+    fun `web route forwards the script body and opened source URL`() {
         val server = readProjectFile("app/src/main/java/io/legado/app/web/HttpServer.kt")
 
+        assertTrue(server.contains("\"/saveJsSource\" -> BookSourceController.saveJsSource("))
+        assertTrue(server.contains("session.parameters[\"openedSourceUrl\"]?.firstOrNull()"))
+    }
+
+    @Test
+    fun `token storage commits before process exit`() {
+        val appConfig = readProjectFile(
+            "app/src/main/java/io/legado/app/help/config/AppConfig.kt"
+        )
+        val tokenStorage = appConfig.substringAfter("var jsSourceApiToken")
+            .substringBefore("var tocUiUseReplace")
+
+        assertTrue(tokenStorage.contains(".commit()"))
+        assertFalse(tokenStorage.contains(".apply()"))
+    }
+
+    @Test
+    fun `token protection defaults on and restarts active services`() {
+        val appConfig = readProjectFile(
+            "app/src/main/java/io/legado/app/help/config/AppConfig.kt"
+        )
+        val preferences = readProjectFile("app/src/main/res/xml/pref_config_other.xml")
+        val settings = readProjectFile(
+            "app/src/main/java/io/legado/app/ui/config/OtherConfigFragment.kt"
+        )
+        val protectionPreference = preferences
+            .substringBefore("android:key=\"jsSourceApiToken\"")
+            .substringAfterLast("<io.legado.app.lib.prefs.SwitchPreference")
+        val protectionChange = settings
+            .substringAfter("PreferKey.jsSourceApiTokenRequired ->")
+            .substringBefore("PreferKey.defaultBookTreeUri ->")
+
         assertTrue(
-            server.contains(
-                "\"/saveJsSource\" -> BookSourceController.saveJsSource(postData)"
+            appConfig.contains(
+                "getPrefBoolean(PreferKey.jsSourceApiTokenRequired, true)"
             )
         )
+        assertTrue(protectionPreference.contains("android:defaultValue=\"true\""))
+        assertTrue(protectionPreference.contains("android:key=\"jsSourceApiTokenRequired\""))
+        assertTrue(protectionChange.contains("WebService.stop(requireContext())"))
+        assertTrue(protectionChange.contains("WebService.start(requireContext())"))
+        assertTrue(protectionChange.contains("McpService.restart(requireContext())"))
     }
 
     @Test
@@ -76,6 +113,41 @@ class JsSourceWebApiContractTest {
                 validHeaders,
                 null,
             )!!.isSuccess
+        )
+        assertTrue(
+            BookSourceController.validateJsSourceRequest(
+                validHeaders - "x-legado-token",
+                null,
+                tokenRequired = false,
+            ) == null
+        )
+        assertTrue(
+            BookSourceController.hasValidJsSourceApiToken(
+                emptyMap(),
+                null,
+                tokenRequired = false,
+            )
+        )
+        assertTrue(
+            BookSourceController.hasValidJsSourceWebSocketProtocol(
+                mapOf("sec-websocket-protocol" to "legado"),
+                null,
+                tokenRequired = false,
+            )
+        )
+        assertFalse(
+            BookSourceController.hasValidJsSourceWebSocketProtocol(
+                emptyMap(),
+                null,
+                tokenRequired = false,
+            )
+        )
+        assertTrue(
+            BookSourceController.hasValidJsSourceWebSocketProtocol(
+                mapOf("sec-websocket-protocol" to "legado, legado.token.stale"),
+                null,
+                tokenRequired = false,
+            )
         )
         assertFalse(
             BookSourceController.validateJsSourceRequest(
@@ -151,15 +223,92 @@ class JsSourceWebApiContractTest {
         val bookDebugWebSocket = readProjectFile(
             "app/src/main/java/io/legado/app/web/socket/BookSourceDebugWebSocket.kt"
         )
+        val rssDebugWebSocket = readProjectFile(
+            "app/src/main/java/io/legado/app/web/socket/RssSourceDebugWebSocket.kt"
+        )
         assertFalse(bookSearchWebSocket.contains("matchesJsSourceApiToken"))
         assertFalse(bookSearchWebSocket.contains("searchMap[\"token\"]"))
         assertTrue(bookSearchWebSocket.contains("AUTH_TIMEOUT_MILLIS"))
         assertFalse(bookSearchWebSocket.contains("tokenRequired"))
         assertFalse(bookDebugWebSocket.contains("matchesJsSourceApiToken"))
         assertFalse(bookDebugWebSocket.contains("debugBean[\"token\"]"))
-        assertTrue(bookDebugWebSocket.contains("Debug.callback === this"))
+        assertTrue(bookDebugWebSocket.contains("Debug.tryAcquireCallback"))
+        assertTrue(bookDebugWebSocket.contains("Debug.cancelDebug(this)"))
         assertTrue(bookDebugWebSocket.contains("cancelOwnedDebug()"))
         assertFalse(bookDebugWebSocket.contains("tokenRequired"))
+        assertDebugSocketFailureReleasesOwner(bookDebugWebSocket)
+        assertDebugSocketFailureReleasesOwner(rssDebugWebSocket)
+
+        val bookDebugModel = readProjectFile(
+            "app/src/main/java/io/legado/app/ui/book/source/debug/BookSourceDebugModel.kt"
+        )
+        val rssDebugModel = readProjectFile(
+            "app/src/main/java/io/legado/app/ui/rss/source/debug/RssSourceDebugModel.kt"
+        )
+        assertTrue(bookDebugModel.contains("state == -1 || state == 1000"))
+        assertTrue(rssDebugModel.contains("state == -1 || state == 1000"))
+        assertTrue(bookDebugModel.contains("Debug.cancelDebug(this)"))
+        assertTrue(rssDebugModel.contains("Debug.cancelDebug(this)"))
+        assertTrue(bookDebugModel.contains("error: ((Throwable) -> Unit)?"))
+        assertTrue(rssDebugModel.contains("error: ((Throwable) -> Unit)?"))
+        assertTrue(bookDebugModel.contains("error?.invoke(it)"))
+        assertTrue(rssDebugModel.contains("error?.invoke(it)"))
+
+        val bookDebugActivity = readProjectFile(
+            "app/src/main/java/io/legado/app/ui/book/source/debug/BookSourceDebugActivity.kt"
+        )
+        val rssDebugActivity = readProjectFile(
+            "app/src/main/java/io/legado/app/ui/rss/source/debug/RssSourceDebugActivity.kt"
+        )
+        assertTrue(bookDebugActivity.contains("error.localizedMessage ?: \"调试失败\""))
+        assertTrue(rssDebugActivity.contains("error.localizedMessage ?: \"调试失败\""))
+
+        val debugModel = readProjectFile("app/src/main/java/io/legado/app/model/Debug.kt")
+        assertTrue(debugModel.contains("withActiveDebugSession"))
+        assertTrue(debugModel.contains("trackDebugTask"))
+        assertTrue(debugModel.contains("debugSessionId"))
+        assertTrue(debugModel.contains("没有正文章节\", state = -1"))
+        assertTrue(
+            debugModel.substringAfter("private fun trackDebugTask")
+                .contains("tasks.add(task)")
+        )
+        val sourceActivity = readProjectFile(
+            "app/src/main/java/io/legado/app/ui/book/source/manage/BookSourceActivity.kt"
+        )
+        assertFalse(
+            sourceActivity.contains(
+                "CheckSource.stop(this)\n                        Debug.finishChecking()"
+            )
+        )
+    }
+
+    @Test
+    fun `HTTP log read routes require the source API token`() {
+        val server = readProjectFile("app/src/main/java/io/legado/app/web/HttpServer.kt")
+        val tokenCheck = server.indexOf("uri in PROTECTED_HTTP_LOG_READ_ROUTES")
+        val logsRoute = server.indexOf("\"/getHttpLogs\" -> HttpLogController.getLogs")
+        val detailRoute = server.indexOf("\"/getHttpLog\" -> HttpLogController.getLog")
+
+        assertTrue(tokenCheck >= 0)
+        assertTrue(logsRoute > tokenCheck)
+        assertTrue(detailRoute > tokenCheck)
+        assertTrue(server.contains("BookSourceController.hasValidJsSourceApiToken(session.headers)"))
+        assertTrue(server.contains("PROTECTED_HTTP_LOG_READ_ROUTES"))
+        val getBranch = server.substringAfter("Method.GET ->")
+            .substringBefore("else -> Unit")
+        val rejectionBranch = getBranch.substringAfter("if (requestError != null)")
+            .substringBefore("} else")
+        assertTrue(rejectionBranch.contains("shouldCloseConnection = true"))
+        val optionsBranch = server.substringAfter("Method.OPTIONS ->")
+            .substringBefore("Method.POST ->")
+        assertTrue(
+            optionsBranch.contains(
+                "response.addHeader(\"Access-Control-Allow-Methods\", \"GET, POST\")"
+            )
+        )
+        val webHeaders = server.substringAfter("private fun Response.addWebHeaders")
+        assertTrue(webHeaders.contains("addHeader(\"Cache-Control\", \"no-store\")"))
+        assertFalse(server.contains("/setHttpLogRecording"))
     }
 
     @Test
@@ -201,14 +350,19 @@ class JsSourceWebApiContractTest {
         assertTrue(api.contains("去除脚本文本首尾空白"))
         assertTrue(api.contains("X-Legado-Token"))
         assertTrue(api.contains("其他设置"))
-        assertTrue(api.contains("Web 书源访问令牌"))
+        assertTrue(api.contains("Web 与 MCP 访问令牌"))
         assertTrue(api.contains("Sec-WebSocket-Protocol"))
         assertTrue(api.contains("读取任何 WebSocket 帧前"))
         assertTrue(api.contains("不会进入应用备份"))
         assertTrue(api.contains("浏览器同源状态不作为身份凭据"))
         assertTrue(api.contains("旧 JSON 书源写入接口"))
-        assertTrue(api.contains("页面重载后需要重新输入"))
+        assertTrue(api.contains("当前浏览器标签页会话"))
         assertTrue(api.contains("可信局域网"))
+        assertTrue(api.contains("关闭访问令牌保护"))
+        assertTrue(api.contains("/getHttpLogs?limit=50"))
+        assertTrue(api.contains("/getHttpLog?id=1"))
+        assertTrue(api.contains("8 KiB"))
+        assertTrue(api.contains("X-Legado-Token = 设置中配置的令牌"))
         assertTrue(updateLog.contains("Web API 新增带令牌保护的纯 JavaScript 单文件书源保存接口"))
         assertTrue(backupConfig.contains("PreferKey.jsSourceApiToken"))
         assertTrue(manifest.contains("@xml/backup_rules"))
@@ -222,20 +376,108 @@ class JsSourceWebApiContractTest {
         assertFalse(sourceToken.contains("localStorage.setItem"))
         assertFalse(sourceToken.contains("localStorage.getItem"))
         assertTrue(sourceToken.contains("localStorage.removeItem('apiToken')"))
+        assertTrue(sourceToken.contains("sessionStorage.getItem"))
+        assertTrue(sourceToken.contains("sessionStorage.setItem"))
+        assertTrue(sourceToken.contains("sessionStorage.removeItem"))
+        assertTrue(sourceToken.contains("bindSourceApiTokenEndpoint"))
+        assertTrue(sourceToken.contains("sourceApiEndpoint !== endpoint"))
+        assertTrue(webApi.contains("bindSourceApiTokenEndpoint(nextHttpEntryPoint)"))
         assertTrue(sourceToken.contains("sourceApiTokenWebSocketProtocol"))
+        assertTrue(sourceToken.contains("getJsSourceApiTokenRequired"))
+        assertTrue(sourceToken.contains("cache: 'no-store'"))
         assertFalse(webApi.contains("apiToken_localStorage_key"))
-        assertTrue(webApi.contains("token: string"))
-        assertTrue(webApi.contains("sourceApiTokenWebSocketProtocol(token)"))
-        assertTrue(webApi.contains("['legado', sourceApiTokenWebSocketProtocol(token)]"))
-        assertTrue(sourceToken.contains("Web 书源访问令牌"))
+        assertTrue(webApi.contains("token: string | undefined"))
+        assertTrue(webApi.contains("sourceApiTokenWebSocketProtocols(token)"))
+        assertTrue(sourceToken.contains("Web 与 MCP 访问令牌"))
         assertTrue(webShelf.contains("requestSourceApiToken({ remember: false })"))
         assertTrue(sourceEditor.contains("v-if=\"authorized\""))
-        assertTrue(sourceEditor.contains("onUnmounted(clearSourceApiToken)"))
+        assertTrue(sourceEditor.contains("await requestSourceApiToken()"))
+        assertFalse(sourceEditor.contains("onUnmounted(clearSourceApiToken)"))
         assertTrue(chapterContent.contains("DOMPurify.sanitize"))
         assertTrue(apiIndex.contains("url.pathname += '/'"))
         assertTrue(server.contains("application/json; charset=utf-8"))
         assertTrue(server.contains("X-Content-Type-Options"))
         assertTrue(server.contains("Content-Security-Policy"))
+        assertTrue(server.contains("/getJsSourceApiTokenRequired"))
+        assertTrue(server.contains("uri == \"/getJsSourceApiTokenRequired\""))
+    }
+
+    @Test
+    fun `web source editor supports JavaScript sources and native review rules`() {
+        val sourceEditor = readProjectFile("modules/web/src/views/SourceEditor.vue")
+        val jsEditor = readProjectFile("modules/web/src/components/JsSourceEditor.vue")
+        val form = readProjectFile("modules/web/src/components/SourceTabForm.vue")
+        val config = readProjectFile("modules/web/src/config/bookSourceEditConfig.ts")
+        val webApi = readProjectFile("modules/web/src/api/api.ts")
+        val controller = readProjectFile(
+            "app/src/main/java/io/legado/app/api/controller/BookSourceController.kt"
+        )
+
+        assertTrue(sourceEditor.contains("JSON 书源"))
+        assertTrue(sourceEditor.contains("JavaScript 书源"))
+        assertTrue(sourceEditor.contains("JsSourceEditor"))
+        assertTrue(jsEditor.contains("API.saveJsSource"))
+        assertTrue(jsEditor.contains("text/javascript;charset=utf-8"))
+        assertFalse(jsEditor.contains("new Function"))
+        assertTrue(webApi.contains("'Content-Type': 'text/plain; charset=utf-8'"))
+        assertTrue(webApi.contains("params: { openedSourceUrl }"))
+        assertTrue(controller.contains("openedSourceUrl = openedSourceUrl"))
+        assertTrue(form.contains("source[namespace] ||= {}"))
+
+        val reviewFields = listOf(
+            "enabled",
+            "reviewSummaryUrl",
+            "summaryListRule",
+            "summaryParagraphIndexRule",
+            "summaryCountRule",
+            "summaryParagraphDataRule",
+            "reviewDetailUrl",
+            "reviewDetailNextPageUrl",
+            "detailListRule",
+            "detailIdRule",
+            "detailAvatarRule",
+            "detailNameRule",
+            "detailBadgeRule",
+            "detailContentRule",
+            "reviewQuoteUrl",
+            "replyListRule",
+            "replyIdRule",
+            "replyAvatarRule",
+            "replyNameRule",
+            "replyBadgeRule",
+            "replyContentRule",
+        )
+        reviewFields.forEach { field ->
+            assertTrue("Missing Web review field: $field", config.contains("id: '$field'"))
+        }
+        assertFalse(config.contains("id: 'reviewUrl'"))
+    }
+
+    @Test
+    fun `batch push routes JavaScript sources through the extraction endpoint`() {
+        val toolbar = readProjectFile("modules/web/src/components/ToolBar.vue")
+        val sourceUtils = readProjectFile("modules/web/src/utils/souce.ts")
+
+        assertTrue(sourceUtils.contains("export const isJsBookSource"))
+        val splitIndex = toolbar.indexOf("const jsSources = sources.filter(isJsBookSource)")
+        val batchIndex = toolbar.indexOf("API.saveSources(declarativeSources)")
+        val singleIndex = toolbar.indexOf("API.saveJsSource(source.mainJs!, source.bookSourceUrl)")
+        assertTrue(splitIndex >= 0)
+        assertTrue(batchIndex > splitIndex)
+        assertTrue(singleIndex > batchIndex)
+        assertTrue(toolbar.contains("store.updateSource(getSourceUniqueKey(source), data.data)"))
+    }
+
+    @Test
+    fun `web debug routes JavaScript sources through the extraction endpoint`() {
+        val debug = readProjectFile("modules/web/src/components/SourceDebug.vue")
+        val jsIndex = debug.indexOf("isJsBookSource(source)")
+        val saveIndex = debug.indexOf("API.saveJsSource(source.mainJs!, source.bookSourceUrl)")
+        val debugApiIndex = debug.indexOf("await API.debug(")
+        assertTrue(jsIndex >= 0)
+        assertTrue(saveIndex > jsIndex)
+        assertTrue(debugApiIndex > saveIndex)
+        assertTrue(debug.contains("store.changeCurrentSource(data.data)"))
     }
 
     private fun readProjectFile(path: String): String {
@@ -246,5 +488,22 @@ class JsSourceWebApiContractTest {
         val file = File(repositoryRoot, path)
         require(file.isFile) { "Project file not found: $file" }
         return file.readText()
+    }
+
+    private fun assertDebugSocketFailureReleasesOwner(source: String) {
+        val heartbeat = source.substringAfter("private fun startHeartbeat()")
+            .substringBefore("override fun onClose")
+        val printLog = source.substringAfter("override fun printLog")
+            .substringBefore("private fun cancelOwnedDebug")
+
+        listOf(heartbeat, printLog).forEach { section ->
+            val failure = section.substringAfter("}.onFailure {")
+            val releaseIndex = failure.indexOf("cancelOwnedDebug()")
+            val cancellationIndex = failure.indexOf("if (it is CancellationException) throw it")
+            val closeIndex = failure.indexOf("CloseCode.InternalServerError")
+            assertTrue(releaseIndex >= 0)
+            assertTrue(cancellationIndex > releaseIndex)
+            assertTrue(closeIndex > cancellationIndex)
+        }
     }
 }

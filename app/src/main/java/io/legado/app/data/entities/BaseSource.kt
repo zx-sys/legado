@@ -7,7 +7,9 @@ import com.script.buildScriptBindings
 import com.script.rhino.RhinoScriptEngine
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.data.entities.rule.RowUi
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.CacheManager
 import io.legado.app.help.ConcurrentRateLimiter.Companion.updateConcurrentRate
 import io.legado.app.help.JsExtensions
@@ -16,10 +18,12 @@ import io.legado.app.help.crypto.SymmetricCryptoAndroid
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.source.getShareScope
+import io.legado.app.help.source.getSharedGlobalStateKey
 import io.legado.app.model.SharedJsScope
 import io.legado.app.model.SharedJsScope.remove
+import io.legado.app.model.jsSource.JsSourceEngine
+import io.legado.app.model.login.LoginUiV2
 import io.legado.app.utils.GSON
-import io.legado.app.utils.GSONStrict
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.has
@@ -45,6 +49,12 @@ internal object LoginInfoMapInitialization {
             }
         }
     }
+}
+
+internal fun BaseSource.getStoredLoginInfoMap(): MutableMap<String, String>? {
+    val json = getLoginInfo() ?: return null
+    return GSON.fromJsonObject<MutableMap<String, String>>(json).getOrNull()
+        ?: mutableMapOf()
 }
 
 /**
@@ -90,14 +100,66 @@ interface BaseSource : JsExtensions {
         return this
     }
 
-    fun getLoginJs(): String? {
-        val loginJs = loginUrl
-        return when {
-            loginJs == null -> null
-            loginJs.startsWith("@js:") -> loginJs.substring(4)
-            loginJs.startsWith("<js>") -> loginJs.substring(4, loginJs.lastIndexOf("<"))
-            else -> loginJs
+    private fun extractInlineJs(rule: String?): String? {
+        val text = rule?.trim().orEmpty()
+        if (text.isBlank()) return null
+        val matcher = JS_PATTERN.matcher(text)
+        if (!matcher.matches()) return null
+        return (matcher.group(1) ?: matcher.group(2))?.trim()
+    }
+
+    fun getLoginUiJs(): String? {
+        return extractInlineJs(loginUi)
+    }
+
+    fun isLoginUiV2(): Boolean {
+        return LoginUiV2.isV2(loginUi)
+    }
+
+    fun evalLoginUiV2(
+        stateJson: String,
+        book: Book? = null,
+        chapter: BookChapter? = null,
+    ): String? {
+        val loginJs = getLoginJs()
+            ?: throw NoStackTraceException("登录UI v2 缺少 loginUi/loginAction 脚本")
+        val result = evalJS(
+            "$loginJs\nloginUi(JSON.parse(String(__loginState)))"
+        ) {
+            put("__loginState", stateJson)
+            put("book", book)
+            put("chapter", chapter)
         }
+        return JsSourceEngine.normalizeJsResult(result)
+    }
+
+    fun evalLoginActionV2(
+        action: String,
+        stateJson: String,
+        formJson: String,
+        book: Book? = null,
+        chapter: BookChapter? = null,
+    ): String? {
+        val loginJs = getLoginJs()
+            ?: throw NoStackTraceException("登录UI v2 缺少 loginUi/loginAction 脚本")
+        val result = evalJS(
+            "$loginJs\n" +
+                "loginAction(String(__loginAction), JSON.parse(String(__loginState)), " +
+                "JSON.parse(String(__loginForm)))"
+        ) {
+            put("__loginAction", action)
+            put("__loginState", stateJson)
+            put("__loginForm", formJson)
+            put("book", book)
+            put("chapter", chapter)
+        }
+        return JsSourceEngine.normalizeJsResult(result)
+    }
+
+    fun getLoginJs(): String? {
+        val loginRule = loginUrl?.trim()
+        if (loginRule.isNullOrBlank()) return null
+        return extractInlineJs(loginRule) ?: loginRule
     }
 
     fun hasLoginForm(): Boolean {
@@ -134,18 +196,10 @@ interface BaseSource : JsExtensions {
     fun getHeaderMap(hasLoginHeader: Boolean = false) = HashMap<String, String>().apply {
         header?.let {
             try {
-                val json = when {
-                    it.startsWith("@js:", true) -> evalJS(it.substring(4)).toString()
-                    it.startsWith("<js>", true) -> evalJS(
-                        it.substring(4, it.lastIndexOf("<"))
-                    ).toString()
-
-                    else -> it
-                }
-                GSONStrict.fromJsonObject<Map<String, String>>(json).getOrNull()?.let { map ->
-                    putAll(map)
-                } ?: GSON.fromJsonObject<Map<String, String>>(json).getOrNull()?.let { map ->
-                    log("请求头规则 JSON 格式不规范，请改为规范格式")
+                val json = extractInlineJs(it)?.let { js ->
+                    JsSourceEngine.normalizeJsResult(evalJS(js)).orEmpty()
+                } ?: it
+                GSON.fromJsonObject<Map<String, String>>(json).getOrNull()?.let { map ->
                     putAll(map)
                 }
             } catch (e: Exception) {
@@ -215,28 +269,24 @@ interface BaseSource : JsExtensions {
     }
 
     fun getLoginInfoMap(): MutableMap<String, String> {
-        getLoginInfo()?.let { json ->
-            return GSON.fromJsonObject<MutableMap<String, String>>(json).getOrNull()
-                ?: mutableMapOf()
-        }
-        val loginUiRule = loginUi?.takeUnless { it.isBlank() } ?: return mutableMapOf()
+        getStoredLoginInfoMap()?.let { return it }
+        if (isLoginUiV2()) return mutableMapOf()
+        val loginUiRule = loginUi?.trim().takeUnless { it.isNullOrBlank() } ?: return mutableMapOf()
         return LoginInfoMapInitialization.run(
             sourceKey = getKey(),
             onReentry = { mutableMapOf<String, String>() },
         ) {
             // Dynamic login UI scripts can read login info while their defaults are being derived.
-            val loginUiJson = when {
-                loginUiRule.startsWith("@js:") -> evalJS(
-                    "${getLoginJs() ?: ""}\n${loginUiRule.substring(4)}",
-                    configureScriptBindings()
-                ).toString()
-
-                loginUiRule.startsWith("<js>") -> evalJS(
-                    "${getLoginJs() ?: ""}\n${loginUiRule.substring(4, loginUiRule.lastIndexOf("<"))}",
-                    configureScriptBindings()
-                ).toString()
-
-                else -> loginUiRule
+            val loginUiJs = extractInlineJs(loginUiRule)
+            val loginUiJson = if (loginUiJs != null) {
+                JsSourceEngine.normalizeJsResult(
+                    evalJS(
+                        "${getLoginJs() ?: ""}\n$loginUiJs",
+                        configureScriptBindings()
+                    )
+                ).orEmpty()
+            } else {
+                loginUiRule
             }
             val loginInfo = GSON.fromJsonArray<RowUi>(loginUiJson).getOrNull()
                 ?.filter { it.type != "button" }
@@ -366,12 +416,13 @@ interface BaseSource : JsExtensions {
             bindings["cache"] = CacheManager
             bindings.apply(bindingsConfig)
         }
+        val sharedGlobalStateKey = getSharedGlobalStateKey()
         val sharedScope = getShareScope() ?: SharedJsScope.getCryptoScope(this, null)
         val scope = if (sharedScope == null) {
             RhinoScriptEngine.getRuntimeScope(bindings)
         } else {
             bindings.apply {
-                chainTo(sharedScope)
+                chainTo(sharedScope, sharedGlobalStateKey)
             }
         }
         return RhinoScriptEngine.eval(jsStr, scope)

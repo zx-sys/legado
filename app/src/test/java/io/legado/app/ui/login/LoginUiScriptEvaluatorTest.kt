@@ -135,8 +135,15 @@ class LoginUiScriptEvaluatorTest {
         assertTrue(loadingView.contains("android:id=\"@+id/rotate_loading\""))
         assertTrue(loadingView.contains("android:visibility=\"gone\""))
         assertTrue(source.contains("viewLifecycleOwner.lifecycleScope.launch"))
-        assertTrue(source.contains("binding.rotateLoading.visible()"))
-        assertTrue(source.contains("binding.rotateLoading.gone()"))
+        val delegate = readProjectFile(
+            "src/main/java/io/legado/app/ui/login/SourceLoginV2Delegate.kt"
+        )
+        assertTrue(delegate.contains("private var firstRender = true"))
+        assertTrue(delegate.contains("val showLoading = firstRender"))
+        assertTrue(delegate.contains("if (showLoading) binding.rotateLoading.visible()"))
+        assertTrue(delegate.contains("if (showLoading) {"))
+        assertTrue(delegate.contains("firstRender = false"))
+        assertTrue(delegate.contains("binding.rotateLoading.gone()"))
         val decision = source.indexOf(
             "val renderDecision = resolveLoginUiRender(rowUis, renderedRowsResult)"
         )
@@ -148,6 +155,16 @@ class LoginUiScriptEvaluatorTest {
         assertTrue(decision >= 0)
         assertTrue(failureGuard > decision)
         assertTrue(rowAssignment > failureGuard)
+    }
+
+    @Test
+    fun `login startup only reads stored form values before showing the dialog`() {
+        val source = readProjectFile(
+            "src/main/java/io/legado/app/ui/login/SourceLoginViewModel.kt"
+        )
+
+        assertTrue(source.contains("source?.getStoredLoginInfoMap() ?: mutableMapOf()"))
+        assertFalse(source.contains("getLoginInfoMap()"))
     }
 
     @Test
@@ -166,6 +183,78 @@ class LoginUiScriptEvaluatorTest {
         assertTrue(menuInflation >= 0)
         assertTrue(actionInstallation > menuInflation)
         assertTrue(source.contains("if (!isRenderingLoginUi && rowUis != null)"))
+    }
+
+    @Test
+    fun `clear login action confirms removal and closes the dialog`() {
+        val source = readProjectFile(
+            "src/main/java/io/legado/app/ui/login/SourceLoginDialog.kt"
+        )
+        val menu = readProjectFile("src/main/res/menu/source_login.xml")
+        val actionStart = source.indexOf("R.id.menu_clear_login_info -> alert(")
+        val actionEnd = source.indexOf("R.id.menu_log", actionStart)
+
+        assertTrue(menu.contains("android:id=\"@+id/menu_clear_login_info\""))
+        assertTrue(actionStart >= 0)
+        assertTrue(actionEnd > actionStart)
+        val action = source.substring(actionStart, actionEnd)
+        val confirmStart = action.indexOf("yesButton {")
+        val clearStart = action.indexOf("source.removeLoginInfo()")
+        val preventSaveStart = action.indexOf("oKToClose = true")
+        val dismissStart = action.indexOf("dismiss()")
+        assertTrue(action.contains("noButton()"))
+        assertTrue(confirmStart >= 0)
+        assertTrue(clearStart > confirmStart)
+        assertTrue(action.contains("source.removeLoginHeader()"))
+        assertTrue(action.contains("viewModel.loginInfo.clear()"))
+        assertFalse(action.contains("handleUpUiData(null)"))
+        assertTrue(preventSaveStart > clearStart)
+        assertTrue(dismissStart > preventSaveStart)
+        assertTrue(source.contains("if (!isLoginUiV2 && !oKToClose && hasChange)"))
+    }
+
+    @Test
+    fun `v2 login rendering follows the view lifecycle and commits state after success`() {
+        val dialog = readProjectFile(
+            "src/main/java/io/legado/app/ui/login/SourceLoginDialog.kt"
+        )
+        val delegate = readProjectFile(
+            "src/main/java/io/legado/app/ui/login/SourceLoginV2Delegate.kt"
+        )
+
+        assertTrue(delegate.contains("fragment.viewLifecycleOwner.lifecycleScope"))
+        assertTrue(delegate.contains("renderJob?.cancel()"))
+        assertTrue(delegate.contains("actionJob?.cancel()"))
+        assertTrue(delegate.contains("countdownTimers.values.forEach(CountDownTimer::cancel)"))
+        assertTrue(delegate.contains("renderJob?.isActive == true"))
+        val renderFailure = delegate.indexOf("if (rows == null)")
+        val stateCommit = delegate.indexOf("stateJson = candidateState", renderFailure)
+        val viewBuild = delegate.indexOf("buildViews(rows", stateCommit)
+        assertTrue(renderFailure >= 0)
+        assertTrue(stateCommit > renderFailure)
+        assertTrue(viewBuild > stateCommit)
+        assertTrue(delegate.contains("if (!saved)"))
+        assertTrue(delegate.indexOf("if (!saved)") < delegate.indexOf("if (command.close)"))
+        val dispatchStart = delegate.indexOf("private fun dispatch")
+        val actionResult = delegate.substring(
+            dispatchStart,
+            delegate.indexOf("private fun setActionEnabled", dispatchStart),
+        )
+        val resultReady = actionResult.indexOf("ensureActive()")
+        val resultError = actionResult.indexOf("val error = result.exceptionOrNull()")
+        val firstRestore = actionResult.indexOf("setActionEnabled(action, true)")
+        assertTrue(resultReady >= 0)
+        assertTrue(resultError > resultReady)
+        assertTrue(firstRestore > resultError)
+        assertTrue(actionResult.contains("render(nextState, errors, action)"))
+        assertTrue(delegate.contains("restoreActionOnFailure?.let { setActionEnabled(it, true) }"))
+        assertTrue(delegate.contains("setOnCheckedChangeListener { _, _ -> dispatch(action, null) }"))
+        assertFalse(delegate.contains("setOnUserCheckedChangeListener"))
+
+        val destroyDelegate = dialog.indexOf("v2Delegate?.destroy()")
+        val destroyView = dialog.indexOf("super.onDestroyView()", destroyDelegate)
+        assertTrue(destroyDelegate >= 0)
+        assertTrue(destroyView > destroyDelegate)
     }
 
     private fun readProjectFile(pathInApp: String): String {

@@ -1,11 +1,15 @@
 package io.legado.app.ui.association
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.viewModels
+import androidx.fragment.app.DialogFragment
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivityTranslucenceBinding
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.ui.autoTask.ImportAutoTaskDialog
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 
@@ -21,6 +25,9 @@ class OnLineImportActivity :
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         viewModel.successLive.observe(this) {
+            if (supportFragmentManager.fragments.any { fragment -> fragment is DialogFragment }) {
+                return@observe
+            }
             when (it.first) {
                 "bookSource" -> showDialogFragment(
                     ImportBookSourceDialog(it.second, true)
@@ -31,6 +38,7 @@ class OnLineImportActivity :
                 "replaceRule" -> showDialogFragment(
                     ImportReplaceRuleDialog(it.second, true)
                 )
+                "highlightRule" -> showImportHighlightRuleDialog(it.second, true)
                 "httpTts" -> showDialogFragment(
                     ImportHttpTtsDialog(it.second, true)
                 )
@@ -43,11 +51,27 @@ class OnLineImportActivity :
                 "dictRule" -> showDialogFragment(
                     ImportDictRuleDialog(it.second, true)
                 )
+                "autoTask" -> showDialogFragment(
+                    ImportAutoTaskDialog(it.second, true)
+                )
+                "bookshelf" -> {
+                    startActivity(Intent(this, FileAssociationActivity::class.java)
+                        .setAction(Intent.ACTION_VIEW).setData(Uri.parse(it.second)))
+                    finish()
+                }
+                "readConfig" -> finallyDialog(getString(R.string.success), it.second)
+            }
+        }
+        viewModel.readConfigLive.observe(this) {
+            if (it != null) {
+                confirmReadConfigImport()
             }
         }
         viewModel.errorLive.observe(this) {
             finallyDialog(getString(R.string.error), it)
         }
+        if (viewModel.intentHandled) return
+        viewModel.intentHandled = true
         intent.data?.let {
             val url = it.getQueryParameter("src")
             if (url.isNullOrEmpty()) {
@@ -78,9 +102,11 @@ class OnLineImportActivity :
                 "/theme" -> showDialogFragment(
                     ImportThemeDialog(url, true)
                 )
-                "/readConfig" -> viewModel.getBytes(url) { bytes ->
-                    viewModel.importReadConfig(bytes, this::finallyDialog)
-                }
+                "/autoTask" -> showDialogFragment(
+                    ImportAutoTaskDialog(url, true)
+                )
+                "/auto" -> viewModel.determineType(url)
+                "/readConfig" -> viewModel.getReadConfig(url)
                 "/addToBookshelf" -> showDialogFragment(
                     AddToBookshelfDialog(url, true)
                 )
@@ -95,10 +121,29 @@ class OnLineImportActivity :
                         ImportReplaceRuleDialog(url, true)
                     )
                     else -> {
-                        viewModel.determineType(url, this::finallyDialog)
+                        viewModel.determineType(url)
                     }
                 }
-                else -> viewModel.determineType(url, this::finallyDialog)
+                else -> viewModel.determineType(url)
+            }
+        }
+    }
+
+    private fun confirmReadConfigImport() {
+        alert(
+            titleResource = R.string.import_str,
+            messageResource = R.string.confirm_read_config_import
+        ) {
+            yesButton {
+                viewModel.importReadConfig()
+            }
+            noButton {
+                viewModel.cancelReadConfigImport()
+                finish()
+            }
+            onCancelled {
+                viewModel.cancelReadConfigImport()
+                finish()
             }
         }
     }

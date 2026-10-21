@@ -1,13 +1,14 @@
 package io.legado.app.ui.rss.source.edit
 
 import android.content.Intent
-import android.graphics.Rect
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.EditText
+import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
@@ -20,22 +21,29 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.RssSource
 import io.legado.app.databinding.ActivityRssSourceEditBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.lib.theme.transparentNavBar
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.code.CodeEditActivity
+import io.legado.app.ui.code.CodeTextTransfer
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.rss.source.debug.RssSourceDebugActivity
+import io.legado.app.ui.widget.bindFieldNavigation
+import io.legado.app.ui.widget.code.CodeView
 import io.legado.app.ui.widget.code.EditSafety
+import io.legado.app.ui.widget.code.resolveSelectionHandleClearance
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
+import io.legado.app.ui.widget.setFieldLabels
 import io.legado.app.ui.widget.text.EditEntity
 import io.legado.app.utils.GSON
 import io.legado.app.utils.imeHeight
@@ -79,6 +87,7 @@ class RssSourceEditActivity :
     private var pendingResultAvailable = false
     private var pendingResultText: String? = null
     private var pendingResultCursor = -1
+    private var pendingEditTextPath: String? = null
     private val selectDoc = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             if (uri.isContentScheme()) {
@@ -109,6 +118,7 @@ class RssSourceEditActivity :
     }
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        onBackPressedDispatcher.addCallback(this) { finish() }
         softKeyboardTool.attachToWindow(window)
         initView()
         viewModel.initData(intent) {
@@ -155,9 +165,14 @@ class RssSourceEditActivity :
     }
 
     private val textEditLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        pendingEditTextPath?.let { CodeTextTransfer.delete(this, it) }
+        pendingEditTextPath = null
         if (result.resultCode == RESULT_OK) {
             pendingResultAvailable = true
             pendingResultText = result.data?.getStringExtra("text")
+                ?: result.data?.getStringExtra("textFile")?.let { path ->
+                    CodeTextTransfer.read(this, path).also { CodeTextTransfer.delete(this, path) }
+                }
             pendingResultCursor = result.data?.getIntExtra("cursorPosition", -1) ?: -1
             applyPendingEditResult()
         } else {
@@ -187,12 +202,22 @@ class RssSourceEditActivity :
     private fun openTextEditor(editEntity: EditEntity, cursorPosition: Int) {
         pendingEditTabPosition = binding.tabLayout.selectedTabPosition
         pendingEditKey = editEntity.key
+        val text = editEntity.value.orEmpty()
+        val textPath = text.takeIf { it.length > EditSafety.MAX_INLINE_TEXT_LENGTH }
+            ?.let { CodeTextTransfer.write(this, it) }
+        pendingEditTextPath = textPath
         val intent = Intent(this, CodeEditActivity::class.java).apply {
-            putExtra("text", editEntity.value.orEmpty())
+            putExtra("useTextFile", true)
+            if (textPath != null) putExtra("textFile", textPath) else putExtra("text", text)
             putExtra("title", editEntity.hint)
             putExtra("cursorPosition", cursorPosition)
         }
-        textEditLauncher.launch(intent)
+        runCatching { textEditLauncher.launch(intent) }
+            .onFailure {
+                CodeTextTransfer.delete(this, textPath)
+                pendingEditTextPath = null
+                throw it
+            }
     }
 
     private fun findEditEntity(tabPosition: Int, key: String): EditEntity? {
@@ -210,7 +235,11 @@ class RssSourceEditActivity :
         if (index < 0) return
 
         adapter.notifyItemChanged(index)
-        if (cursorPosition < 0 || EditSafety.isCombiningHeavy(editEntity.value.orEmpty())) return
+        if (
+            cursorPosition < 0 ||
+            EditSafety.isCombiningHeavy(editEntity.value.orEmpty()) ||
+            EditSafety.isTooLongForInline(editEntity.value.orEmpty())
+        ) return
 
         binding.recyclerView.post {
             val holder = binding.recyclerView.findViewHolderForAdapterPosition(index)
@@ -264,6 +293,7 @@ class RssSourceEditActivity :
     }
 
     private fun initView() {
+        initOptionPanel()
         binding.tabLayout.addTab(binding.tabLayout.newTab().apply {
             setText(R.string.source_tab_base)
         })
@@ -283,28 +313,34 @@ class RssSourceEditActivity :
                 else -> 2 //占2个span（整行）
             }
         }
-        val gridLayoutManager = if (adapter.editEntityMaxLine < 999) {
-            object : GridLayoutManager(this, 2) {
-                init {
-                    spanSizeLookup = createSpanSizeLookup
-                }
-                override fun requestChildRectangleOnScreen(parent: RecyclerView, child: View, rect: Rect, immediate: Boolean, focusedChildVisible: Boolean) = false
-                override fun requestChildRectangleOnScreen(parent: RecyclerView, child: View, rect: Rect, immediate: Boolean) = false
-            }
-        } else {
-            GridLayoutManager(this, 2).apply {
+        val gridLayoutManager = object : GridLayoutManager(this, 2) {
+            init {
                 spanSizeLookup = createSpanSizeLookup
             }
+
+            override fun onRequestChildFocus(
+                parent: RecyclerView,
+                state: RecyclerView.State,
+                child: View,
+                focused: View?
+            ) = focused is CodeView
         }
         binding.recyclerView.layoutManager = gridLayoutManager
         binding.recyclerView.adapter = adapter
-        binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener { _, newFocus ->
-            if (newFocus is EditText) {
-                newFocus.postDelayed({ sendText("") }, 120)
-            }
+        binding.fieldNav.bindFieldNavigation(binding.recyclerView)
+        binding.recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener { oldFocus, newFocus ->
+            (oldFocus as? CodeView)?.keepSelectionVisible = false
+            (newFocus as? CodeView)?.keepSelectionVisible = true
         }
-        binding.tabLayout.setBackgroundColor(backgroundColor)
-        binding.tabLayout.setSelectedTabIndicatorColor(accentColor)
+        binding.recyclerView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            (binding.recyclerView.findFocus() as? CodeView)?.requestSelectionVisible()
+        }
+        val transparentBar = transparentNavBar && !AppConfig.isEInkMode
+        listOf(binding.tabLayout, binding.fieldNav).forEach { tabs ->
+            tabs.setBackgroundColor(if (transparentBar) Color.TRANSPARENT else backgroundColor)
+            if (transparentBar) tabs.elevation = 0f
+            tabs.setSelectedTabIndicatorColor(accentColor)
+        }
         binding.tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabReselected(tab: TabLayout.Tab?) {
 
@@ -318,22 +354,61 @@ class RssSourceEditActivity :
                 setEditEntities(tab?.position)
             }
         })
+        val selectionHandleClearance = resolveSelectionHandleClearance(this)
         binding.recyclerView.setOnApplyWindowInsetsListenerCompat { view, windowInsets ->
             val navigationBarHeight = windowInsets.navigationBarHeight
             val imeHeight = windowInsets.imeHeight
-            view.bottomPadding = if (imeHeight == 0) navigationBarHeight else 0
+            view.bottomPadding = if (imeHeight == 0) navigationBarHeight
+            else selectionHandleClearance
             softKeyboardTool.initialPadding = imeHeight
             windowInsets
         }
     }
 
-    private fun setEditEntities(tabPosition: Int?) {
-        when (tabPosition) {
-            1 -> adapter.editEntities = startEntities
-            2 -> adapter.editEntities = listEntities
-            3 -> adapter.editEntities = webViewEntities
-            else -> adapter.editEntities = sourceEntities
+    private fun initOptionPanel() {
+        binding.optionsHeader.setOnClickListener {
+            updateOptionPanel(binding.optionsContent.visibility != View.VISIBLE)
         }
+        listOf(
+            binding.cbIsEnable,
+            binding.cbSingleUrl,
+            binding.cbIsEnableCookie,
+            binding.cbIsEnablePreload
+        ).forEach { checkBox ->
+            checkBox.setOnCheckedChangeListener { _, _ -> updateOptionPanel() }
+        }
+        updateOptionPanel(false)
+    }
+
+    private fun updateOptionPanel(expanded: Boolean = binding.optionsContent.visibility == View.VISIBLE) {
+        binding.optionsContent.visibility = if (expanded) View.VISIBLE else View.GONE
+        binding.ivOptionsExpand.setImageResource(
+            if (expanded) R.drawable.ic_expand_less else R.drawable.ic_expand_more
+        )
+        val action = getString(
+            if (expanded) R.string.book_intro_collapse else R.string.book_intro_expand
+        )
+        binding.tvOptionsSummary.text = listOf(
+            getString(R.string.is_enable) to binding.cbIsEnable.isChecked,
+            getString(R.string.single_url) to binding.cbSingleUrl.isChecked,
+            getString(R.string.auto_save_cookie) to binding.cbIsEnableCookie.isChecked,
+            getString(R.string.enable_preload) to binding.cbIsEnablePreload.isChecked
+        ).joinToString(" | ") { (label, checked) ->
+            "$label: ${getString(if (checked) R.string.yes else R.string.no)}"
+        }
+        binding.optionsHeader.contentDescription =
+            "${getString(R.string.setting)}, ${binding.tvOptionsSummary.text}, $action"
+    }
+
+    private fun setEditEntities(tabPosition: Int?) {
+        val entities = when (tabPosition) {
+            1 -> startEntities
+            2 -> listEntities
+            3 -> webViewEntities
+            else -> sourceEntities
+        }
+        adapter.editEntities = entities
+        binding.fieldNav.setFieldLabels(entities.map { it.hint })
         binding.recyclerView.scrollToPosition(0)
         window.decorView.rootView.clearFocus()
     }
@@ -345,6 +420,7 @@ class RssSourceEditActivity :
             binding.cbSingleUrl.isChecked = rs.singleUrl
             binding.cbIsEnableCookie.isChecked = rs.enabledCookieJar == true
             binding.cbIsEnablePreload.isChecked = rs.preload
+            updateOptionPanel()
             if (rs.type !in 0..<binding.spType.count) {
                 rs.type = 0
             }
@@ -424,6 +500,7 @@ class RssSourceEditActivity :
                 )
             )
             add(EditEntity("ruleContent", rs.ruleContent, R.string.r_content))
+            add(EditEntity("nextContentUrl", rs.nextContentUrl, R.string.rule_next_content))
             add(EditEntity("style", rs.style, R.string.r_style))
             add(EditEntity("injectJs", rs.injectJs, R.string.r_inject_js))
             add(EditEntity("contentWhitelist", rs.contentWhitelist, R.string.c_whitelist))
@@ -528,6 +605,9 @@ class RssSourceEditActivity :
                 "ruleContent" -> source.ruleContent =
                     viewModel.ruleComplete(it.value, source.ruleArticles)
 
+                "nextContentUrl" -> source.nextContentUrl =
+                    viewModel.ruleComplete(it.value, type = 2)
+
                 "style" -> source.style = it.value
                 "injectJs" -> source.injectJs = it.value
                 "contentWhitelist" -> source.contentWhitelist = it.value
@@ -601,31 +681,6 @@ class RssSourceEditActivity :
                     edit.append(text)
                 } else {
                     edit.replace(start, end, text)//光标所在位置插入文字
-                }
-            }
-            if (adapter.editEntityMaxLine >= 999) {
-                view.post {
-                    val editTextLocation = IntArray(2)
-                    view.getLocationOnScreen(editTextLocation)
-                    val recyclerViewLocation = IntArray(2)
-                    binding.recyclerView.getLocationOnScreen(recyclerViewLocation)
-                    val layout = view.layout
-                    if (layout != null) {
-                        val line = layout.getLineForOffset(end)
-                        val cursorYInEditText = layout.getLineTop(line)
-                        // 光标相对于屏幕的位置
-                        val cursorYOnScreen = editTextLocation[1] + cursorYInEditText
-                        // 光标相对于RecyclerView的位置
-                        val cursorYInRecyclerView = cursorYOnScreen - recyclerViewLocation[1]
-                        val recyclerViewBottom = binding.recyclerView.height - 120 //考虑键盘的经验值
-                        // 如果光标不在可见范围内，则滚动到光标位置
-                        if (cursorYInRecyclerView !in 0..recyclerViewBottom) {
-                            val scrollDistance = cursorYInRecyclerView - recyclerViewBottom / 3
-                            if (scrollDistance > 0 && binding.recyclerView.canScrollVertically(1) || scrollDistance < 0 && binding.recyclerView.canScrollVertically(-1)) {
-                                binding.recyclerView.smoothScrollBy(0, scrollDistance)
-                            }
-                        }
-                    }
                 }
             }
         }

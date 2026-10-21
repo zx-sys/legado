@@ -16,6 +16,7 @@ import com.script.rhino.ReadOnlyJavaObject
 import com.script.rhino.RhinoScriptEngine
 import com.script.rhino.RhinoWrapFactory
 import io.legado.app.base.AppContextWrapper
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppConst.channelIdDownload
 import io.legado.app.constant.AppConst.channelIdReadAloud
 import io.legado.app.constant.AppConst.channelIdWeb
@@ -38,6 +39,7 @@ import io.legado.app.help.DispatchersMonitor
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.ResourceThemeGeneration
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
@@ -49,7 +51,10 @@ import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.rhino.NativeBaseSource
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.storage.Backup
+import io.legado.app.lib.theme.WallpaperTheme
 import io.legado.app.model.BookCover
+import io.legado.app.model.AutoTask
+import io.legado.app.service.AutoTaskScheduler
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.defaultSharedPreferences
@@ -74,6 +79,11 @@ class App : Application() {
             ThreadUtils.hasSubtleSideEffectsSetThreadAssertsDisabledForTesting(true)
         }
         oldConfig = Configuration(resources.configuration)
+        ResourceThemeGeneration.observeSystemNight(
+            oldConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES,
+            AppConfig.themeMode !in listOf("1", "2", "3"),
+        )
+        WallpaperTheme.syncWithPreferences(this)
         applyDayNightInit(this)
         registerActivityLifecycleCallbacks(LifecycleHelp)
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
@@ -84,7 +94,8 @@ class App : Application() {
             LogUtils.logDeviceInfo()
             //预下载Cronet so
             if (AppConfig.isCronet) {
-                Cronet.preDownload()
+                runCatching { Cronet.preDownload() }
+                    .onFailure { AppLog.put("预下载Cronet失败", it) }
             }
             createNotificationChannels()
             LiveEventBus.config()
@@ -122,6 +133,8 @@ class App : Application() {
             }
             //调整排序序号
             SourceHelp.adjustSortNumber()
+            AutoTask.all()
+            AutoTaskScheduler.refresh(this@App)
             //同步阅读记录
             if (AppConfig.syncBookProgress) {
                 AppWebDav.downloadAllBookProgress()
@@ -137,6 +150,10 @@ class App : Application() {
         super.onConfigurationChanged(newConfig)
         val diff = newConfig.diff(oldConfig)
         if ((diff and ActivityInfo.CONFIG_UI_MODE) != 0) {
+            ResourceThemeGeneration.observeSystemNight(
+                newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES,
+                AppConfig.themeMode !in listOf("1", "2", "3"),
+            )
             applyDayNight(this)
         }
         oldConfig = Configuration(newConfig)

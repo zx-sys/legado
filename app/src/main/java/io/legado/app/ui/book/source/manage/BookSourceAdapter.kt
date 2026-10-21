@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
-import android.widget.PopupMenu
 import androidx.core.view.doOnLayout
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
@@ -14,10 +13,12 @@ import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.entities.BookSourcePart
+import io.legado.app.data.entities.BookSourceCheckState
 import io.legado.app.databinding.ItemBookSourceBinding
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.model.Debug
 import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.widget.popupActionMenu
 import io.legado.app.ui.widget.recycler.DragSelectTouchHelper
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.utils.ColorUtils
@@ -37,9 +38,30 @@ class BookSourceAdapter(
     ItemTouchCallback.Callback {
 
     private val selected = linkedSetOf<BookSourcePart>()
-    private val finalMessageRegex = Regex("成功|失败")
+    private val finalMessageRegex = Regex("成功|失败|无法校验")
     private val handler = buildMainHandler()
     var showSourceHost = false
+    var showCheckStatus = false
+    var showBookshelfCount = false
+        set(value) {
+            if (field == value) return
+            field = value
+            notifyItemRangeChanged(0, itemCount, Bundle().apply {
+                putBoolean("bookshelfCountVisibility", true)
+            })
+        }
+    private var bookshelfCounts = emptyMap<String, Int>()
+
+    fun updateBookshelfCounts(counts: Map<String, Int>) {
+        val previous = bookshelfCounts
+        bookshelfCounts = counts
+        if (!showBookshelfCount) return
+        getItems().forEachIndexed { index, source ->
+            if (previous[source.bookSourceUrl] != counts[source.bookSourceUrl]) {
+                notifyItemChanged(index, Bundle().apply { putBoolean("bookshelfCount", true) })
+            }
+        }
+    }
 
     val selection: List<BookSourcePart>
         get() {
@@ -61,6 +83,8 @@ class BookSourceAdapter(
                     && oldItem.enabledExplore == newItem.enabledExplore
                     && oldItem.hasExploreUrl == newItem.hasExploreUrl
                     && oldItem.hasJs == newItem.hasJs
+                    && oldItem.checkStatus == newItem.checkStatus
+                    && oldItem.checkDetail == newItem.checkDetail
         }
 
         override fun getChangePayload(oldItem: BookSourcePart, newItem: BookSourcePart): Any? {
@@ -80,6 +104,9 @@ class BookSourceAdapter(
             }
             if (oldItem.hasJs != newItem.hasJs) {
                 payload.putBoolean("upJs", true)
+            }
+            if (oldItem.checkStatus != newItem.checkStatus || oldItem.checkDetail != newItem.checkDetail) {
+                payload.putString("checkSourceMessage", null)
             }
             if (payload.isEmpty) {
                 return null
@@ -105,6 +132,7 @@ class BookSourceAdapter(
                 cbBookSource.text = item.getDisPlayNameGroup()
                 swtEnabled.isChecked = item.enabled
                 cbBookSource.isChecked = selected.contains(item)
+                upBookshelfCount(binding, item)
                 upCheckSourceMessage(binding, item)
                 upShowExplore(ivExplore, item)
                 tvJsBadge.gone(!item.hasJs)
@@ -118,6 +146,8 @@ class BookSourceAdapter(
                             "upName" -> cbBookSource.text = item.getDisPlayNameGroup()
                             "upExplore" -> upShowExplore(ivExplore, item)
                             "upJs" -> tvJsBadge.gone(!item.hasJs)
+                            "bookshelfCount" -> upBookshelfCount(binding, item)
+                            "bookshelfCountVisibility" -> upBookshelfCount(binding, item)
                             "selected" -> cbBookSource.isChecked = selected.contains(item)
                             "checkSourceMessage" -> upCheckSourceMessage(binding, item)
                             "upSourceHost" -> upSourceHost(binding, holder.layoutPosition)
@@ -170,46 +200,41 @@ class BookSourceAdapter(
 
     private fun showMenu(view: View, position: Int) {
         val source = getItem(position) ?: return
-        val popupMenu = PopupMenu(context, view)
-        popupMenu.inflate(R.menu.book_source_item)
-        popupMenu.menu.findItem(R.id.menu_top).isVisible = callBack.sort == BookSourceSort.Default
-        popupMenu.menu.findItem(R.id.menu_bottom).isVisible =
-            callBack.sort == BookSourceSort.Default
-        val qyMenu = popupMenu.menu.findItem(R.id.menu_enable_explore)
-        if (!source.hasExploreUrl) {
-            qyMenu.isVisible = false
-        } else {
-            if (source.enabledExplore) {
-                qyMenu.setTitle(R.string.disable_explore)
-            } else {
-                qyMenu.setTitle(R.string.enable_explore)
-            }
-        }
-        val loginMenu = popupMenu.menu.findItem(R.id.menu_login)
-        loginMenu.isVisible = source.hasLoginUrl
-        popupMenu.setOnMenuItemClickListener { menuItem ->
-            when (menuItem.itemId) {
-                R.id.menu_top -> callBack.toTop(source)
-                R.id.menu_bottom -> callBack.toBottom(source)
-                R.id.menu_login -> context.startActivity<SourceLoginActivity> {
+        popupActionMenu(context) {
+            val defaultOrder = callBack.sort == BookSourceSort.Default
+            item(context.getString(R.string.to_top), "top", defaultOrder)
+            item(context.getString(R.string.to_bottom), "bottom", defaultOrder)
+            item(context.getString(R.string.login), "login", source.hasLoginUrl)
+            item(context.getString(R.string.search), "search")
+            item(context.getString(R.string.debug), "debug")
+            item(context.getString(R.string.delete), "delete")
+            item(
+                context.getString(
+                    if (source.enabledExplore) R.string.disable_explore else R.string.enable_explore
+                ),
+                "toggleExplore",
+                source.hasExploreUrl
+            )
+            danger("delete")
+        }.show(view) { action ->
+            when (action) {
+                "top" -> callBack.toTop(source)
+                "bottom" -> callBack.toBottom(source)
+                "login" -> context.startActivity<SourceLoginActivity> {
                     putExtra("type", "bookSource")
                     putExtra("key", source.bookSourceUrl)
                 }
 
-                R.id.menu_search -> callBack.searchBook(source)
-                R.id.menu_debug_source -> callBack.debug(source)
-                R.id.menu_del -> {
+                "search" -> callBack.searchBook(source)
+                "debug" -> callBack.debug(source)
+                "delete" -> {
                     callBack.del(source)
                     selected.remove(source)
                 }
 
-                R.id.menu_enable_explore -> {
-                    callBack.enableExplore(!source.enabledExplore, source)
-                }
+                "toggleExplore" -> callBack.enableExplore(!source.enabledExplore, source)
             }
-            true
         }
-        popupMenu.show()
     }
 
     private fun upShowExplore(iv: ImageView, source: BookSourcePart) {
@@ -232,23 +257,37 @@ class BookSourceAdapter(
         }
     }
 
+    private fun upBookshelfCount(binding: ItemBookSourceBinding, item: BookSourcePart) {
+        binding.tvBookshelfCount.gone(!showBookshelfCount)
+        if (showBookshelfCount) {
+            binding.tvBookshelfCount.text = context.getString(
+                R.string.source_bookshelf_count, bookshelfCounts[item.bookSourceUrl] ?: 0
+            )
+        }
+    }
+
     private fun upCheckSourceMessage(
         binding: ItemBookSourceBinding,
         item: BookSourcePart
     ) = binding.run {
-        val msg = Debug.debugMessageMap[item.bookSourceUrl] ?: ""
-        ivDebugText.text = msg
-        val isEmpty = msg.isEmpty()
-        var isFinalMessage = msg.contains(finalMessageRegex)
-        if (!Debug.isChecking && !isFinalMessage) {
-            Debug.updateFinalMessage(item.bookSourceUrl, "校验失败")
-            ivDebugText.text = Debug.debugMessageMap[item.bookSourceUrl] ?: ""
-            isFinalMessage = true
+        val msg = if (Debug.isChecking) Debug.debugMessageMap[item.bookSourceUrl].orEmpty() else ""
+        if (!showCheckStatus && msg.isEmpty()) {
+            ivDebugText.gone()
+            ivProgressBar.gone()
+            return@run
         }
-        ivDebugText.visibility =
-            if (!isEmpty) View.VISIBLE else View.GONE
+        val status = context.getString(when (item.checkStatus) {
+            BookSourceCheckState.PASSED -> R.string.source_check_passed
+            BookSourceCheckState.FAILED -> R.string.source_check_failed
+            BookSourceCheckState.UNCHECKABLE -> R.string.source_check_uncheckable
+            else -> R.string.source_check_needed
+        })
+        ivDebugText.text = msg.ifEmpty {
+            if (item.checkDetail.isEmpty()) status else "$status：${item.checkDetail}"
+        }
+        ivDebugText.visibility = View.VISIBLE
         ivProgressBar.visibility =
-            if (isFinalMessage || isEmpty || !Debug.isChecking) View.GONE else View.VISIBLE
+            if (msg.isEmpty() || msg.contains(finalMessageRegex)) View.GONE else View.VISIBLE
     }
 
     private fun upSourceHost(binding: ItemBookSourceBinding, position: Int) = binding.run {
@@ -291,6 +330,7 @@ class BookSourceAdapter(
                 selectedPosition.add(index)
             }
         }
+        if (selectedPosition.isEmpty()) return
         val minPosition = Collections.min(selectedPosition)
         val maxPosition = Collections.max(selectedPosition)
         val itemCount = maxPosition - minPosition + 1
@@ -317,38 +357,56 @@ class BookSourceAdapter(
         return lastHost != curHost
     }
 
+    private var dragStartPosition = RecyclerView.NO_POSITION
+    private var draggedKey: String? = null
+    private var draggedHolder: RecyclerView.ViewHolder? = null
+
+    override fun canStartDrag() = !listUpdatesPaused
+
+    override fun onDragStarted(viewHolder: RecyclerView.ViewHolder) {
+        if (listUpdatesPaused) return
+        val position = viewHolder.bindingAdapterPosition
+        val source = getItem(position) ?: return
+        pauseListUpdates()
+        dragStartPosition = position
+        draggedKey = source.bookSourceUrl
+        draggedHolder = viewHolder
+    }
+
     override fun swap(srcPosition: Int, targetPosition: Int): Boolean {
-        val srcItem = getItem(srcPosition)
-        val targetItem = getItem(targetPosition)
-        if (srcItem != null && targetItem != null) {
-            val srcOrder = srcItem.customOrder
-            srcItem.customOrder = targetItem.customOrder
-            targetItem.customOrder = srcOrder
-            movedItems.add(srcItem)
-            movedItems.add(targetItem)
+        val source = getItem(srcPosition) ?: return false
+        if (getItem(targetPosition) == null) return false
+        if (draggedHolder == null || source.bookSourceUrl != draggedKey) {
+            return false
         }
         swapItem(srcPosition, targetPosition)
         return true
     }
 
-    private val movedItems = hashSetOf<BookSourcePart>()
-
     override fun onClearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
-        if (movedItems.isNotEmpty()) {
-            val sortNumberSet = hashSetOf<Int>()
-            movedItems.forEach {
-                sortNumberSet.add(it.customOrder)
-            }
-            if (movedItems.size > sortNumberSet.size) {
-                callBack.upOrder(getItems().mapIndexed { index, bookSourcePart ->
-                    bookSourcePart.customOrder = if (callBack.sortAscending) index else -index
-                    bookSourcePart
-                })
-            } else {
-                callBack.upOrder(movedItems.toList())
-            }
-            movedItems.clear()
+        if (viewHolder !== draggedHolder) return
+        val start = dragStartPosition
+        val key = draggedKey
+        dragStartPosition = RecyclerView.NO_POSITION
+        draggedKey = null
+        draggedHolder = null
+        fun finish() {
+            resumeListUpdates()
+            callBack.reload()
         }
+        val end = viewHolder.bindingAdapterPosition
+        val moved = getItem(end)?.takeIf { it.bookSourceUrl == key }
+        if (start == RecyclerView.NO_POSITION || end == RecyclerView.NO_POSITION || start == end || moved == null) {
+            finish()
+            return
+        }
+        val after = end > start
+        val target = getItem(if (after) end - 1 else end + 1)
+        if (target == null) {
+            finish()
+            return
+        }
+        callBack.move(moved.bookSourceUrl, target.bookSourceUrl, after, ::finish)
     }
 
     val dragSelectCallback: DragSelectTouchHelper.Callback =
@@ -380,14 +438,14 @@ class BookSourceAdapter(
 
     interface CallBack {
         val sort: BookSourceSort
-        val sortAscending: Boolean
         fun del(bookSource: BookSourcePart)
         fun edit(bookSource: BookSourcePart)
         fun toTop(bookSource: BookSourcePart)
         fun toBottom(bookSource: BookSourcePart)
         fun searchBook(bookSource: BookSourcePart)
         fun debug(bookSource: BookSourcePart)
-        fun upOrder(items: List<BookSourcePart>)
+        fun move(sourceUrl: String, targetUrl: String, after: Boolean, onFinally: () -> Unit)
+        fun reload()
         fun enable(enable: Boolean, bookSource: BookSourcePart)
         fun enableExplore(enable: Boolean, bookSource: BookSourcePart)
         fun upCountView()

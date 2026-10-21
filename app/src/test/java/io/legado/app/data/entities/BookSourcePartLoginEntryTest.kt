@@ -17,14 +17,21 @@ class BookSourcePartLoginEntryTest {
         assertTrue(
             normalizedPartSource.contains(
                 "or (mainJs is not null and trim(mainJs) <> '' " +
-                    "and loginUi is not null and trim(loginUi) <> '' " +
-                    "and replace(trim(loginUi), ' ', '') <> '[]')) hasLoginUrl"
+                    "and loginUi is not null " +
+                    "and replace(replace(replace(replace(loginUi, ' ', ''), char(9), ''), char(10), ''), char(13), '') " +
+                    "not in ('', '[]'))) hasLoginUrl"
             )
         )
     }
 
     @Test
     fun `database view change has migration`() {
-        assertTrue(databaseSource.contains("AutoMigration(from = 91, to = 92)"))
+        val databaseVersion = Regex("""version = (\d+)""")
+            .find(databaseSource)
+            ?.groupValues
+            ?.get(1)
+            ?.toInt()
+        assertTrue(requireNotNull(databaseVersion) >= 95)
+        assertTrue(databaseSource.contains("AutoMigration(from = 94, to = 95)"))
     }
 }

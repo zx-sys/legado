@@ -28,6 +28,8 @@ import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
 import io.legado.app.databinding.ActivityBookSearchBinding
+import io.legado.app.databinding.DialogEditTextBinding
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.Selector
 import io.legado.app.lib.theme.accentColor
@@ -42,9 +44,11 @@ import io.legado.app.utils.applyNavigationBarMargin
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.getPrefBoolean
+import io.legado.app.utils.getPrefString
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
 import io.legado.app.utils.putPrefBoolean
+import io.legado.app.utils.putPrefString
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
@@ -90,6 +94,7 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     private var historyFlowJob: Job? = null
     private var booksFlowJob: Job? = null
     private var precisionSearchMenuItem: MenuItem? = null
+    private var showReadRecordMenuItem: MenuItem? = null
     private var isManualStopSearch = false
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -106,11 +111,19 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         receiptIntent(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        showReadRecordMenuItem?.isChecked = AppConfig.showSearchReadRecord
+        viewModel.upAdapterLiveData.postValue("hasReadRecord")
+    }
+
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.book_search, menu)
         this.menu = menu
         precisionSearchMenuItem = menu.findItem(R.id.menu_precision_search)
         precisionSearchMenuItem?.isChecked = getPrefBoolean(PreferKey.precisionSearch)
+        showReadRecordMenuItem = menu.findItem(R.id.menu_show_read_record)
+        showReadRecordMenuItem?.isChecked = AppConfig.showSearchReadRecord
         return super.onCompatCreateOptionsMenu(menu)
     }
 
@@ -167,6 +180,13 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
                 }
             }
 
+            R.id.menu_show_read_record -> {
+                AppConfig.showSearchReadRecord = !AppConfig.showSearchReadRecord
+                showReadRecordMenuItem?.isChecked = AppConfig.showSearchReadRecord
+                viewModel.upAdapterLiveData.postValue("hasReadRecord")
+            }
+
+            R.id.menu_search_result_filter -> showSearchResultFilterDialog()
             R.id.menu_search_scope -> alertSearchScope()
             R.id.menu_source_manage -> startActivity<BookSourceActivity>()
             R.id.menu_log -> showDialogFragment(AppLogDialog())
@@ -305,7 +325,12 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             }
         }
         viewModel.searchBookLiveData.observe(this) {
-            adapter.setItems(it)
+            adapter.setItems(
+                filterSearchResults(
+                    it,
+                    getPrefString(PreferKey.searchResultFilter).orEmpty()
+                )
+            )
         }
         viewModel.searchProgressLiveData.observe(this) { (searched, total) ->
             binding.refreshProgressBar.maxProgress = total
@@ -487,6 +512,13 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
     }
 
     /**
+     * 是否有阅读记录
+     */
+    override fun hasReadRecord(book: SearchBook): Boolean {
+        return viewModel.hasReadRecord(book)
+    }
+
+    /**
      * 显示书籍详情
      */
     override fun showBookInfo(book: Book) {
@@ -530,6 +562,31 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
         showDialogFragment<SearchScopeDialog>()
     }
 
+    private fun showSearchResultFilterDialog() {
+        val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+            editView.hint = getString(R.string.search_result_filter_hint)
+            editView.setSingleLine(false)
+            editView.minLines = 4
+            editView.maxLines = 8
+            editView.setText(getPrefString(PreferKey.searchResultFilter).orEmpty())
+            editView.setSelection(editView.text?.length ?: 0)
+        }
+        alert(R.string.search_result_filter) {
+            customView { alertBinding.root }
+            okButton {
+                val filter = alertBinding.editView.text?.toString().orEmpty().trim()
+                putPrefString(PreferKey.searchResultFilter, filter)
+                adapter.setItems(
+                    filterSearchResults(
+                        viewModel.searchBookLiveData.value.orEmpty(),
+                        filter
+                    )
+                )
+            }
+            cancelButton()
+        }
+    }
+
     private fun alertClearHistory() {
         alert(R.string.draw) {
             setMessage(R.string.sure_clear_search_history)
@@ -538,14 +595,6 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             }
             noButton()
         }
-    }
-
-    override fun finish() {
-        if (searchView.hasFocus()) {
-            searchView.clearFocus()
-            return
-        }
-        super.finish()
     }
 
     companion object {
@@ -571,5 +620,24 @@ class SearchActivity : VMBaseActivity<ActivityBookSearchBinding, SearchViewModel
             }
         }
 
+    }
+}
+
+internal fun filterSearchResults(
+    books: List<SearchBook>,
+    rawWords: String,
+): List<SearchBook> {
+    if (rawWords.isBlank()) return books
+    val words = rawWords.lineSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .distinct()
+        .toList()
+    return books.filterNot { book ->
+        words.any { word ->
+            book.name.contains(word, ignoreCase = true) ||
+                    book.author.contains(word, ignoreCase = true) ||
+                    book.kind?.contains(word, ignoreCase = true) == true
+        }
     }
 }

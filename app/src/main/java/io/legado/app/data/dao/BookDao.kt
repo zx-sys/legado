@@ -1,5 +1,6 @@
 package io.legado.app.data.dao
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
@@ -7,13 +8,19 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
+import com.google.gson.JsonPrimitive
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookCacheCleanupSnapshot
 import io.legado.app.data.entities.BookCacheInfo
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BookshelfBook
 import io.legado.app.help.book.isNotShelf
+import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -48,6 +55,20 @@ interface BookDao {
 
     @Query("SELECT * FROM books order by durChapterTime desc")
     fun flowAll(): Flow<List<Book>>
+
+    @Query(
+        """
+        SELECT bookUrl, origin, name, author, coverUrl, customCoverUrl, type, `group`,
+        ((SELECT coalesce(sum(groupId), 0) FROM book_groups WHERE groupId > 0) & `group`) != 0
+            AS hasUserGroup,
+        latestChapterTime, durChapterTime, `order`, persistedCoverUrl
+        FROM books WHERE type & ${BookType.notShelf} = 0
+        """
+    )
+    fun flowBookshelfBooks(): Flow<List<BookshelfBook>>
+
+    @Query("SELECT origin FROM books WHERE type & ${BookType.notShelf} = 0 AND type & ${BookType.local} = 0")
+    fun flowBookshelfSourceOrigins(): Flow<List<String>>
 
     @Query("SELECT * FROM books WHERE type & ${BookType.audio} > 0")
     fun flowAudio(): Flow<List<Book>>
@@ -92,6 +113,15 @@ interface BookDao {
     @Query("select * from books where originName = :fileName")
     fun getBookByFileName(fileName: String): Book?
 
+    @get:Query("SELECT originName FROM books WHERE type & ${BookType.local} > 0")
+    val localBookFileNames: List<String>
+
+    @get:Query(
+        "SELECT origin FROM books WHERE type & ${BookType.local} > 0 " +
+            "AND origin != '${BookType.localTag}'"
+    )
+    val localBookAlternateOrigins: List<String>
+
     @Query("SELECT * FROM books WHERE bookUrl = :bookUrl")
     fun getBook(bookUrl: String): Book?
 
@@ -118,6 +148,11 @@ interface BookDao {
     @get:Query("SELECT * FROM books")
     val all: List<Book>
 
+    @get:Query(
+        "SELECT * FROM books WHERE type & ${BookType.notShelf} = 0 ORDER BY `order`"
+    )
+    val allShelfByOrder: List<Book>
+
     @Query("SELECT bookUrl, name, origin, originName, type FROM books")
     fun getCacheCleanupBooks(): List<BookCacheInfo>
 
@@ -138,6 +173,13 @@ interface BookDao {
     @get:Query("SELECT * FROM books where type & ${BookType.text} > 0 ORDER BY durChapterTime DESC limit 1")
     val lastReadBook: Book?
 
+    @get:Query(
+        "SELECT * FROM books where type & ${BookType.notShelf} = 0 " +
+            "ORDER BY (durChapterIndex > 0 OR durChapterPos > 0) DESC, " +
+            "durChapterTime DESC limit 1"
+    )
+    val lastReadBookOnShelf: Book?
+
     @get:Query("SELECT bookUrl FROM books")
     val allBookUrls: List<String>
 
@@ -146,6 +188,16 @@ interface BookDao {
 
     @get:Query("SELECT COUNT(*) FROM books")
     val allBookCount: Int
+
+    @Query("SELECT COUNT(*) FROM books where type & ${BookType.notShelf} = 0")
+    fun flowShelfBookCount(): Flow<Int>
+
+    @get:Query(
+        "SELECT count(*) FROM books where " +
+            "(durChapterIndex > 0 OR durChapterPos > 0) " +
+            "and type & ${BookType.notShelf} = 0"
+    )
+    val readingCount: Int
 
     @get:Query("select min(`order`) from books")
     val minOrder: Int
@@ -166,7 +218,24 @@ interface BookDao {
     fun hasFile(fileName: String): Boolean
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insert(vararg book: Book)
+    fun insertRows(vararg book: Book)
+
+    @Query("""select books.bookUrl from books inner join book_memos using (bookUrl)
+        where books.name = :name and books.author = :author and books.bookUrl != :newBookUrl""")
+    fun getReplacedMemoBookUrl(name: String, author: String, newBookUrl: String): String?
+
+    @Transaction
+    fun insert(vararg book: Book) {
+        book.forEach { item ->
+            // The existing name/author unique index can replace a different URL on import.
+            val previousMemoOwner = getReplacedMemoBookUrl(item.name, item.author, item.bookUrl)
+            insertRows(item)
+            if (previousMemoOwner != null) {
+                copyNewerMemo(previousMemoOwner, item.bookUrl)
+                deleteMemo(previousMemoOwner)
+            }
+        }
+    }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     fun insertIgnore(book: Book): Long
@@ -174,13 +243,163 @@ interface BookDao {
     @Update
     fun update(vararg book: Book)
 
+    @Query("UPDATE books SET `order` = :order WHERE bookUrl = :bookUrl")
+    fun updateOrder(bookUrl: String, order: Int)
+
+    @Transaction
+    fun updateOrder(books: List<Book>) {
+        books.forEach { updateOrder(it.bookUrl, it.order) }
+    }
+
+    @Query("select customCoverUrl from books where bookUrl = :bookUrl")
+    fun getCustomCoverUrl(bookUrl: String): String?
+
+    @Query("select persistedCoverUrl from books where bookUrl = :bookUrl")
+    fun getPersistedCoverUrl(bookUrl: String): String?
+
+    @Transaction
+    fun updatePreservingCustomCoverUrl(vararg books: Book) {
+        books.forEach { book ->
+            update(
+                book.copy(
+                    customCoverUrl = getCustomCoverUrl(book.bookUrl),
+                    persistedCoverUrl = getPersistedCoverUrl(book.bookUrl),
+                )
+            )
+        }
+    }
+
+    @Transaction
+    fun upsertPreservingVariable(book: Book) {
+        val existingByUrl = getBook(book.bookUrl)
+        (existingByUrl ?: getBook(book.name, book.author))?.let { existing ->
+            book.variable = existing.variable
+        }
+        if (existingByUrl != null) {
+            try {
+                update(book)
+            } catch (_: SQLiteConstraintException) {
+                insert(book)
+            }
+        } else {
+            insert(book)
+        }
+    }
+
+    @Query(
+        """update books set persistedCoverUrl = :persistedCoverUrl
+        where bookUrl = :bookUrl
+        and origin = :expectedOrigin
+        and coverUrl is :expectedCoverUrl
+        and customCoverUrl is :expectedCustomCoverUrl
+        and persistedCoverUrl is :expectedPersistedCoverUrl"""
+    )
+    fun updatePersistedCoverUrlIfUnchanged(
+        bookUrl: String,
+        expectedOrigin: String,
+        expectedCoverUrl: String?,
+        expectedCustomCoverUrl: String?,
+        expectedPersistedCoverUrl: String?,
+        persistedCoverUrl: String?,
+    ): Int
+
+    @Query(
+        """update books set persistedCoverUrl = null
+        where bookUrl = :bookUrl and persistedCoverUrl is :expectedPersistedCoverUrl"""
+    )
+    fun clearPersistedCoverUrlIfUnchanged(
+        bookUrl: String,
+        expectedPersistedCoverUrl: String?,
+    ): Int
+
+    @Query(
+        """update books set customCoverUrl = null, persistedCoverUrl = null
+        where bookUrl = :bookUrl
+        and customCoverUrl is :expectedCustomCoverUrl
+        and persistedCoverUrl is :expectedPersistedCoverUrl"""
+    )
+    fun clearCoverOverridesIfUnchanged(
+        bookUrl: String,
+        expectedCustomCoverUrl: String?,
+        expectedPersistedCoverUrl: String?,
+    ): Int
+
+    @Query("select readConfig from books where bookUrl = :bookUrl")
+    fun getReadConfigJson(bookUrl: String): String?
+
+    @Query("update books set readConfig = :readConfig where bookUrl = :bookUrl")
+    fun updateReadConfigJson(bookUrl: String, readConfig: String?)
+
+    @Transaction
+    fun updatePreservingReadConfig(book: Book) {
+        val readConfig = getReadConfigJson(book.bookUrl)
+        updatePreservingCustomCoverUrl(book)
+        updateReadConfigJson(book.bookUrl, readConfig)
+    }
+
+    @Transaction
+    fun updateAudioPlayMode(bookUrl: String, playMode: Int) {
+        updateReadConfigJson(bookUrl, getReadConfigJson(bookUrl).withAudioPlayMode(playMode))
+    }
+
+    @Transaction
+    fun updateAudioPlaySpeed(bookUrl: String, playSpeed: Float) {
+        updateReadConfigJson(bookUrl, getReadConfigJson(bookUrl).withAudioPlaySpeed(playSpeed))
+    }
+
+    @Transaction
+    fun updateTocExpanded(bookUrl: String, expanded: Boolean) {
+        updateReadConfigJson(bookUrl, getReadConfigJson(bookUrl).withTocExpanded(expanded))
+    }
+
+    @Transaction
+    fun updateReverseToc(bookUrl: String, reversed: Boolean) {
+        updateReadConfigJson(bookUrl, getReadConfigJson(bookUrl).withReadConfigProperty("reverseToc", JsonPrimitive(reversed)))
+    }
+
+    @Transaction
+    fun updateReverseTocDisplay(bookUrl: String, reversed: Boolean) {
+        updateReadConfigJson(bookUrl, getReadConfigJson(bookUrl).withReadConfigProperty("reverseTocDisplay", JsonPrimitive(reversed)))
+    }
+
     @Delete
-    fun delete(vararg book: Book)
+    fun deleteRows(vararg book: Book)
+
+    @Query("delete from book_memos where bookUrl = :bookUrl")
+    fun deleteMemo(bookUrl: String)
+
+    @Query("""insert or replace into book_memos (bookUrl, content, updatedAt)
+        select :newBookUrl, content, updatedAt from book_memos
+        where bookUrl = :oldBookUrl and updatedAt > coalesce(
+            (select updatedAt from book_memos where bookUrl = :newBookUrl), -1)
+    """)
+    fun copyNewerMemo(oldBookUrl: String, newBookUrl: String)
+
+    @Transaction
+    fun delete(vararg book: Book) {
+        book.forEach { deleteMemo(it.bookUrl) }
+        deleteRows(*book)
+    }
 
     @Transaction
     fun replace(oldBook: Book, newBook: Book) {
-        delete(oldBook)
-        insert(newBook)
+        val storedBookUrl = if (has(newBook.bookUrl)) newBook.bookUrl else oldBook.bookUrl
+        val customCoverUrl = getCustomCoverUrl(storedBookUrl)
+        val persistedCoverUrl = getPersistedCoverUrl(storedBookUrl)
+        val readConfig = oldBook.readConfig
+            ?: GSON.fromJsonObject<Book.ReadConfig>(getReadConfigJson(oldBook.bookUrl)).getOrNull()
+        deleteRows(oldBook)
+        insert(
+            newBook.copy(
+                customCoverUrl = customCoverUrl,
+                persistedCoverUrl = persistedCoverUrl,
+                readConfig = readConfig,
+            )
+        )
+        if (oldBook.bookUrl != newBook.bookUrl) {
+            copyNewerMemo(oldBook.bookUrl, newBook.bookUrl)
+            deleteMemo(oldBook.bookUrl)
+        }
     }
 
     @Query("update books set durChapterPos = :pos where bookUrl = :bookUrl")
@@ -192,9 +411,49 @@ interface BookDao {
     @Query("update books set `group` = :newGroupId where `group` = :oldGroupId")
     fun upGroup(oldGroupId: Long, newGroupId: Long)
 
+    @Query("update books set `group` = `group` | :groupId where bookUrl in (:bookUrls)")
+    fun addGroup(bookUrls: List<String>, groupId: Long)
+
     @Query("update books set `group` = `group` - :group where `group` & :group > 0")
     fun removeGroup(group: Long)
 
     @Query("delete from books where type & ${BookType.notShelf} > 0")
-    fun deleteNotShelfBook()
+    fun deleteNotShelfRows()
+
+    @Query("""delete from book_memos where bookUrl in
+        (select bookUrl from books where type & ${BookType.notShelf} > 0)""")
+    fun deleteNotShelfMemos()
+
+    @Transaction
+    fun deleteNotShelfBook() {
+        deleteNotShelfMemos()
+        deleteNotShelfRows()
+    }
+
+    @Query("select * from books where type & ${BookType.notShelf} > 0")
+    fun getNotShelfBooks(): List<Book>
+}
+
+internal fun String?.withAudioPlayMode(playMode: Int): String {
+    return withAudioPlayPreference("playMode", playMode)
+}
+
+internal fun String?.withAudioPlaySpeed(playSpeed: Float): String {
+    return withAudioPlayPreference("playSpeed", playSpeed)
+}
+
+internal fun String?.withTocExpanded(expanded: Boolean): String {
+    return withReadConfigProperty("tocExpanded", JsonPrimitive(expanded))
+}
+
+private fun String?.withAudioPlayPreference(key: String, value: Number): String {
+    return withReadConfigProperty(key, JsonPrimitive(value))
+}
+
+private fun String?.withReadConfigProperty(key: String, value: JsonElement): String {
+    val readConfig = GSON.fromJsonObject<JsonObject>(this).getOrNull() ?: JsonObject().apply {
+        addProperty("useGlobalAudioSkip", true)
+    }
+    readConfig.add(key, value)
+    return GSON.toJson(readConfig)
 }

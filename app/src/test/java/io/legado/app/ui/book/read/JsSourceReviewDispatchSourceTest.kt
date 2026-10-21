@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -19,6 +20,18 @@ class JsSourceReviewDispatchSourceTest {
             .substringBefore("private fun clearReviewSummaryProviders(")
 
         assertTrue(clickBlock.indexOf("if (source.isJsSource())") < clickBlock.indexOf("source.ruleReview"))
+        assertTrue(!clickBlock.contains("ReadBook.durChapterIndex"))
+        assertEquals(
+            2,
+            Regex("""chapterIndex\s*=\s*chapterIndex""").findAll(clickBlock).count()
+        )
+        assertEquals(
+            2,
+            Regex(
+                """paragraphData\s*=\s*ChapterProvider\.getReviewKeyById\(""" +
+                    """paragraphNum,\s*chapterIndex\)"""
+            ).findAll(clickBlock).count()
+        )
         assertTrue(summaryBlock.indexOf("if (source.isJsSource())") < summaryBlock.indexOf("source.ruleReview"))
         assertTrue(clickBlock.contains("ruleHash = source.mainJs.hashCode()"))
         assertTrue(jsSummaryBlock.contains("val sourceHash = source.mainJs.hashCode()"))
@@ -39,6 +52,7 @@ class JsSourceReviewDispatchSourceTest {
         assertTrue(loadBlock.contains("getChapter(book.bookUrl, chapterIndex)"))
         assertTrue(loadBlock.contains("paragraphData = paragraphData"))
         assertTrue(loadBlock.contains("hasNextPageRule = true"))
+        assertTrue(loadBlock.contains("hasReplyUrl = JsSourceReview.hasReviewRepliesCapability(source)"))
         val jsBlock = loadBlock.substringAfter("if (source.isJsSource())")
             .substringBefore("val rule = source.ruleReview")
         assertTrue(!jsBlock.contains("ReadBook.durChapterIndex"))
@@ -47,6 +61,49 @@ class JsSourceReviewDispatchSourceTest {
                 "if (nextUrlFromRule.isNullOrBlank()) {\n                    hasMore = false"
             )
         )
+    }
+
+    @Test
+    fun `JavaScript replies use captured context and incremented page`() {
+        val dialog = projectFile(
+            "src/main/java/io/legado/app/ui/book/read/ReviewDetailDialog.kt"
+        ).readText().normalizeLines()
+        val replyBlock = dialog.substringAfter("private fun loadReplies(parentKey: String)")
+            .substringBefore("private fun buildDetailItemKey(")
+        val jsBlock = replyBlock.substringAfter("if (source.isJsSource())")
+            .substringBefore("val rule = source.ruleReview")
+
+        assertTrue(jsBlock.contains("if (source.mainJs.hashCode() != ruleHash)"))
+        assertTrue(jsBlock.contains("JsSourceReview.getReviewRepliesAwait("))
+        assertTrue(jsBlock.contains("paragraphIndex = paragraphNum"))
+        assertTrue(jsBlock.contains("paragraphData = paragraphData"))
+        assertTrue(jsBlock.contains("reviewId = reviewId"))
+        assertTrue(jsBlock.contains("page = page"))
+        assertTrue(replyBlock.contains("replies.size == current.replies.size"))
+    }
+
+    @Test
+    fun `review summary refresh preserves read aloud position on the main thread`() {
+        val activity = projectFile(
+            "src/main/java/io/legado/app/ui/book/read/ReadBookActivity.kt"
+        ).readText().normalizeLines()
+        val applyBlock = activity.substringAfter("private fun applyReviewSummary(")
+            .substringBefore("private fun prefetchAdjacentReviewSummary(")
+        val contentLoadFinishBlock = activity.substringAfter("override fun contentLoadFinish()")
+            .substringBefore("override fun upContent(")
+
+        assertTrue(
+            applyBlock.contains(
+                "binding.readView.upContent(relativePosition = 0, resetPageOffset = false)"
+            )
+        )
+        assertTrue(
+            applyBlock.indexOf("ChapterProvider.setReviewProviders(") <
+                    applyBlock.indexOf("binding.readView.upContent(")
+        )
+        assertTrue(!applyBlock.contains("ReadBook.loadContent("))
+        assertTrue(applyBlock.contains("chapterIndex = chapterIndex"))
+        assertTrue(contentLoadFinishBlock.contains("lifecycleScope.launch(Main.immediate)"))
     }
 
     private fun String.normalizeLines(): String = replace("\r\n", "\n")
