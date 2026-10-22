@@ -8,6 +8,8 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.help.book.ResourceThemeGeneration
+import io.legado.app.help.tts.NeuralTtsModel
+import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.utils.GSON
 import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
 import io.legado.app.utils.defaultSharedPreferences
@@ -553,8 +555,12 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.changeSourceCheckAuthor, value)
         }
 
+    private val defaultTtsEngine: String by lazy {
+        GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID))
+    }
+
     var ttsEngine: String?
-        get() = appCtx.getPrefString(PreferKey.ttsEngine)
+        get() = appCtx.getPrefString(PreferKey.ttsEngine) ?: defaultTtsEngine
         set(value) {
             appCtx.putPrefString(PreferKey.ttsEngine, value)
         }

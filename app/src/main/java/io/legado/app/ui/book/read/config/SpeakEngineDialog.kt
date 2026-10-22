@@ -2,6 +2,8 @@ package io.legado.app.ui.book.read.config
 
 import android.app.ProgressDialog
 import android.content.Context
+import android.content.DialogInterface
+import android.net.Uri
 import android.os.Bundle
 import android.view.MenuItem
 import android.view.View
@@ -53,6 +55,7 @@ import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import io.legado.app.utils.visible
 import kotlinx.coroutines.Dispatchers.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
@@ -80,8 +83,12 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
     private var ttsEngine: String? = ReadAloud.ttsEngine
     private val sysTtsViews = arrayListOf<RadioButton>()
     private var localModelRadio: RadioButton? = null
+    private var modelDownloadJob: Job? = null
     private val callBack: CallBack? get() = parentFragment as? CallBack
     private var currentSelect = -1
+    private val localModelImportResult = registerForActivityResult(HandleFileContract()) {
+        it.uri?.let { uri -> importLocalModel(uri) }
+    }
     private val importDocResult = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             showDialogFragment(ImportHttpTtsDialog(uri.toString()))
@@ -158,9 +165,15 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
                 cbName.setOnClickListener {
                     if (NeuralTtsModel.isInstalled()) {
                         upTts(GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID)))
+                    } else if (NeuralTtsModel.isBundledAvailable) {
+                        installBundledModel()
                     } else {
                         downloadLocalModel()
                     }
+                }
+                cbName.setOnLongClickListener {
+                    showLocalModelActions()
+                    true
                 }
             }
         }
@@ -311,35 +324,136 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
     }
 
     private fun localModelSummary(): String {
-        return if (NeuralTtsModel.isInstalled()) {
-            "${NeuralTtsModel.DISPLAY_NAME}（已安装）"
-        } else {
-            "${NeuralTtsModel.DISPLAY_NAME}（需下载约 ${NeuralTtsModel.DOWNLOAD_SIZE / 1024 / 1024}MB）"
+        return when {
+            NeuralTtsModel.isInstalled() ->
+                "${NeuralTtsModel.DISPLAY_NAME}（已安装 · 1 个女声）"
+            NeuralTtsModel.isBundledAvailable ->
+                "${NeuralTtsModel.DISPLAY_NAME}（内置模型，首次使用自动安装）"
+            else ->
+                "${NeuralTtsModel.DISPLAY_NAME}（需下载约 ${NeuralTtsModel.DOWNLOAD_SIZE / 1024 / 1024}MB，长按可导入）"
+        }
+    }
+
+    private fun showLocalModelActions() {
+        val installed = NeuralTtsModel.isInstalled()
+        val bundled = NeuralTtsModel.isBundledAvailable
+        val actions = buildList {
+            add(
+                when {
+                    bundled && installed -> "重新安装内置模型"
+                    bundled -> "安装内置模型"
+                    installed -> "重新下载模型（自动切换线路）"
+                    else -> "在线下载模型（自动切换线路）"
+                }
+            )
+            add("导入本地模型压缩包")
+            if (installed) add("删除本地模型")
+        }
+        alert(NeuralTtsModel.DISPLAY_NAME) {
+            items(actions) { _, index ->
+                when (index) {
+                    0 -> if (bundled) installBundledModel() else downloadLocalModel()
+                    1 -> localModelImportResult.launch {
+                        mode = HandleFileContract.FILE
+                        title = "选择 vits-melo-tts-zh_en.tar.bz2"
+                        allowExtensions = arrayOf("bz2", "tar", "tbz2", "gz", "tgz")
+                    }
+                    else -> confirmDeleteLocalModel()
+                }
+            }
+        }
+    }
+
+    private fun installBundledModel() {
+        val dialog = ProgressDialog(requireContext()).apply {
+            setTitle(NeuralTtsModel.DISPLAY_NAME)
+            setMessage("正在安装内置模型…")
+            setCancelable(false)
+            show()
+        }
+        lifecycleScope.launch {
+            val installed = NeuralTtsModel.ensureBundledInstalled()
+            if (isAdded) dialog.dismiss()
+            localModelRadio?.text = localModelSummary()
+            if (installed) {
+                toastOnUi("内置语音模型安装完成")
+                upTts(GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID)))
+            } else {
+                toastOnUi("安装失败，可长按选择在线下载或导入本地模型")
+            }
+        }
+    }
+
+    private fun confirmDeleteLocalModel() {
+        alert(R.string.sure_del) {
+            setMessage(NeuralTtsModel.DISPLAY_NAME)
+            noButton()
+            yesButton {
+                execute {
+                    val deleted = NeuralTtsModel.delete()
+                    toastOnUi(if (deleted) "本地模型已删除" else "删除失败")
+                    localModelRadio?.text = localModelSummary()
+                }
+            }
+        }
+    }
+
+    private fun importLocalModel(uri: Uri) {
+        val dialog = ProgressDialog(requireContext()).apply {
+            setTitle(NeuralTtsModel.DISPLAY_NAME)
+            setMessage("正在导入本地模型…")
+            setCancelable(false)
+            show()
+        }
+        lifecycleScope.launch {
+            val result = NeuralTtsModel.importArchive(uri)
+            if (isAdded) dialog.dismiss()
+            result.onSuccess {
+                toastOnUi("本地模型导入完成")
+                localModelRadio?.text = localModelSummary()
+                upTts(GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID)))
+            }.onFailure {
+                AppLog.put("导入本地语音模型失败\n${it.localizedMessage}", it, true)
+                toastOnUi("导入失败：${it.localizedMessage}")
+            }
         }
     }
 
     private fun downloadLocalModel() {
+        var sourceLabel = ""
         val dialog = ProgressDialog(requireContext()).apply {
             setTitle(NeuralTtsModel.DISPLAY_NAME)
             setMessage("准备下载…")
             setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
             max = 100
-            setCancelable(false)
+            setCancelable(true)
+            setButton(DialogInterface.BUTTON_NEGATIVE, getString(R.string.cancel)) { _, _ ->
+                modelDownloadJob?.cancel()
+                dismiss()
+            }
+            setOnCancelListener { modelDownloadJob?.cancel() }
             show()
         }
-        lifecycleScope.launch {
+        modelDownloadJob = lifecycleScope.launch {
             val progressCallback: (Long, Long) -> Unit = { downloaded, total ->
                 if (isAdded) {
                     val progress = if (total > 0) (downloaded * 100 / total).toInt() else 0
                     requireActivity().runOnUiThread {
                         dialog.progress = progress
                         dialog.setMessage(
-                            "已下载 ${downloaded / 1024 / 1024}MB / ${total / 1024 / 1024}MB"
+                            "$sourceLabel\n已下载 ${downloaded / 1024 / 1024}MB / ${total / 1024 / 1024}MB"
                         )
                     }
                 }
             }
-            val result = NeuralTtsModel.download(progressCallback)
+            val result = NeuralTtsModel.download(progressCallback) { index, _ ->
+                sourceLabel = "线路 ${index + 1}/${NeuralTtsModel.DOWNLOAD_URLS.size}"
+                if (isAdded) {
+                    requireActivity().runOnUiThread {
+                        dialog.setMessage("$sourceLabel · 连接中…")
+                    }
+                }
+            }
             if (isAdded) dialog.dismiss()
             result.onSuccess {
                 toastOnUi("中英双语模型下载完成")

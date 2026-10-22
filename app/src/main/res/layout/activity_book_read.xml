@@ -37,6 +37,17 @@
         android:src="@drawable/ic_cursor_right"
         android:visibility="invisible" />
 
+    <View
+        android:id="@+id/navigation_bar"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/background_menu"
+        android:layout_gravity="bottom" />
+
+    <include
+        android:id="@+id/read_aloud_float_bar_container"
+        layout="@layout/view_read_aloud_float_bar" />
+
     <io.legado.app.ui.book.read.ReadMenu
         android:id="@+id/read_menu"
         android:layout_width="match_parent"
@@ -48,16 +59,5 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone" />
-
-    <View
-        android:id="@+id/navigation_bar"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:background="@color/background_menu"
-        android:layout_gravity="bottom" />
-
-    <include
-        android:id="@+id/read_aloud_float_bar_container"
-        layout="@layout/view_read_aloud_float_bar" />
 
 </FrameLayout>

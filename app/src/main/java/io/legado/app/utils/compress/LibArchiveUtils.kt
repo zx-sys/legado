@@ -216,6 +216,15 @@ object LibArchiveUtils {
         return unArchive(openArchive(pfd), destDir, filter)
     }
 
+    @Throws(NullPointerException::class, SecurityException::class)
+    fun unArchive(
+        inputStream: InputStream,
+        destDir: File,
+        filter: ((String) -> Boolean)? = null
+    ): List<File> {
+        return inputStream.use { unArchive(openArchive(it), destDir, filter) }
+    }
+
     /**
      * 解压
      */

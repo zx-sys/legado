@@ -31,6 +31,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
     SleepTimerDialog.CallBack {
     private val callBack: CallBack? get() = activity as? CallBack
     private val binding by viewBinding(DialogReadAloudBinding::bind)
+    private var changingFollowSys = false
 
     override fun onStart() {
         super.onStart()
@@ -96,7 +97,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
         upEngineName()
         upStopText()
         cbTtsFollowSys.isChecked = requireContext().getPrefBoolean("ttsFollowSys", true)
-        upTtsSpeechRateEnabled(!cbTtsFollowSys.isChecked)
+        upTtsSpeechRateEnabled(true)
         upSeekTimer()
     }
 
@@ -136,15 +137,17 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
         llToBackstage.setOnClickListener { callBack?.finish() }
         cbTtsFollowSys.setOnCheckedChangeListener { _, isChecked ->
             AppConfig.ttsFlowSys = isChecked
-            upTtsSpeechRateEnabled(!isChecked)
-            upTtsSpeechRate()
+            upTtsSpeechRateEnabled(true)
+            if (!changingFollowSys) upTtsSpeechRate()
         }
         ivTtsSpeechReduce.setOnClickListener {
+            useManualSpeechRate()
             seekTtsSpeechRate.progress = AppConfig.ttsSpeechRate - 1
             AppConfig.ttsSpeechRate -= 1
             upTtsSpeechRate()
         }
         ivTtsSpeechAdd.setOnClickListener {
+            useManualSpeechRate()
             seekTtsSpeechRate.progress = AppConfig.ttsSpeechRate + 1
             AppConfig.ttsSpeechRate += 1
             upTtsSpeechRate()
@@ -171,6 +174,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
             }
 
             override fun onStopTrackingTouch(seekBar: SeekBar) {
+                useManualSpeechRate()
                 AppConfig.ttsSpeechRate = seekBar.progress
                 upTtsSpeechRate()
             }
@@ -184,6 +188,15 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
                 ReadAloud.setTimer(requireContext(), seekTimer.progress)
             }
         })
+    }
+
+    private fun useManualSpeechRate() {
+        if (AppConfig.ttsFlowSys) {
+            AppConfig.ttsFlowSys = false
+            changingFollowSys = true
+            binding.cbTtsFollowSys.isChecked = false
+            changingFollowSys = false
+        }
     }
 
     private fun upTtsSpeechRateEnabled(enabled: Boolean) {
