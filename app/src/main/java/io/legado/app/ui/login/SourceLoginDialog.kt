@@ -17,6 +17,7 @@ import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.AppLog
 import io.legado.app.data.entities.BaseSource
+import io.legado.app.data.entities.repairLegacyHttpTtsLoginUi
 import io.legado.app.data.entities.rule.RowUi
 import io.legado.app.databinding.DialogLoginBinding
 import io.legado.app.databinding.ItemFilletTextBinding
@@ -707,6 +708,7 @@ class SourceLoginDialog : BaseDialogFragment(R.layout.dialog_login, true),
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         val source = viewModel.source ?: return
+        source.loginUi = repairLegacyHttpTtsLoginUi(source.loginUi)
         loginUrl = source.getLoginJs()
         val loginUiStr = source.loginUi ?: return
         isLoginUiV2 = source.isLoginUiV2()

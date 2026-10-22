@@ -133,7 +133,7 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        (activity as ReadBookActivity).bottomDialog++
+        (activity as? ReadBookActivity)?.let { it.bottomDialog++ }
         initView()
         initData()
         initEvent()
@@ -142,7 +142,7 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
         ReadBookConfig.save()
-        (activity as ReadBookActivity).bottomDialog--
+        (activity as? ReadBookActivity)?.let { it.bottomDialog-- }
     }
 
     private fun initView() = binding.run {

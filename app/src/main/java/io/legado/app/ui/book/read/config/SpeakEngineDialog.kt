@@ -1,5 +1,6 @@
 package io.legado.app.ui.book.read.config
 
+import android.app.ProgressDialog
 import android.content.Context
 import android.os.Bundle
 import android.view.MenuItem
@@ -24,6 +25,7 @@ import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.SourceSharePassphrase
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.source.clearSharedGlobalState
+import io.legado.app.help.tts.NeuralTtsModel
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.sourceSharePassphraseButton
@@ -77,6 +79,7 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
     private val adapter by lazy { Adapter(requireContext()) }
     private var ttsEngine: String? = ReadAloud.ttsEngine
     private val sysTtsViews = arrayListOf<RadioButton>()
+    private var localModelRadio: RadioButton? = null
     private val callBack: CallBack? get() = parentFragment as? CallBack
     private var currentSelect = -1
     private val importDocResult = registerForActivityResult(HandleFileContract()) {
@@ -138,6 +141,26 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
                     .getOrNull()?.value.isNullOrEmpty()
                 cbName.setOnClickListener {
                     upTts(GSON.toJson(SelectItem("系统默认", "")))
+                }
+            }
+        }
+        adapter.addHeaderView {
+            ItemHttpTtsBinding.inflate(layoutInflater, recyclerView, false).apply {
+                sysTtsViews.add(cbName)
+                ivEdit.gone()
+                ivMenuDelete.gone()
+                labelSys.gone()
+                localModelRadio = cbName
+                cbName.text = localModelSummary()
+                cbName.tag = NeuralTtsModel.ENGINE_ID
+                cbName.isChecked = GSON.fromJsonObject<SelectItem<String>>(ttsEngine)
+                    .getOrNull()?.value == cbName.tag
+                cbName.setOnClickListener {
+                    if (NeuralTtsModel.isInstalled()) {
+                        upTts(GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID)))
+                    } else {
+                        downloadLocalModel()
+                    }
                 }
             }
         }
@@ -285,6 +308,48 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
             it.isChecked = isChecked
         }
         adapter.notifyItemRangeChanged(adapter.getHeaderCount(), adapter.itemCount)
+    }
+
+    private fun localModelSummary(): String {
+        return if (NeuralTtsModel.isInstalled()) {
+            "${NeuralTtsModel.DISPLAY_NAME}（已安装）"
+        } else {
+            "${NeuralTtsModel.DISPLAY_NAME}（需下载约 ${NeuralTtsModel.DOWNLOAD_SIZE / 1024 / 1024}MB）"
+        }
+    }
+
+    private fun downloadLocalModel() {
+        val dialog = ProgressDialog(requireContext()).apply {
+            setTitle(NeuralTtsModel.DISPLAY_NAME)
+            setMessage("准备下载…")
+            setProgressStyle(ProgressDialog.STYLE_HORIZONTAL)
+            max = 100
+            setCancelable(false)
+            show()
+        }
+        lifecycleScope.launch {
+            val progressCallback: (Long, Long) -> Unit = { downloaded, total ->
+                if (isAdded) {
+                    val progress = if (total > 0) (downloaded * 100 / total).toInt() else 0
+                    requireActivity().runOnUiThread {
+                        dialog.progress = progress
+                        dialog.setMessage(
+                            "已下载 ${downloaded / 1024 / 1024}MB / ${total / 1024 / 1024}MB"
+                        )
+                    }
+                }
+            }
+            val result = NeuralTtsModel.download(progressCallback)
+            if (isAdded) dialog.dismiss()
+            result.onSuccess {
+                toastOnUi("中英双语模型下载完成")
+                localModelRadio?.text = localModelSummary()
+                upTts(GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID)))
+            }.onFailure {
+                AppLog.put("下载本地语音模型失败\n${it.localizedMessage}", it, true)
+                toastOnUi("下载失败：${it.localizedMessage}")
+            }
+        }
     }
 
     inner class Adapter(context: Context) :

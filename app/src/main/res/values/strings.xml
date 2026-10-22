@@ -82,6 +82,8 @@
     <string name="exit">Exit</string>
     <string name="exit_no_save">It has not been saved. Do you want to continue editing?</string>
     <string name="read_style">Book styles</string>
+    <string name="read_settings">Reading settings</string>
+    <string name="interface_settings">Interface settings</string>
     <string name="version">Version</string>
     <string name="local">Local</string>
     <string name="search">Search</string>

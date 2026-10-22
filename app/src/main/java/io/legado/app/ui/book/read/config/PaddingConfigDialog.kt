@@ -78,7 +78,7 @@ class PaddingConfigDialog : BaseDialogFragment(R.layout.dialog_read_padding) {
     }
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
-        (activity as ReadBookActivity).bottomDialog++
+        (activity as? ReadBookActivity)?.let { it.bottomDialog++ }
         initView()
         bindRegion(Region.BODY)
     }
@@ -95,7 +95,7 @@ class PaddingConfigDialog : BaseDialogFragment(R.layout.dialog_read_padding) {
     override fun onDismiss(dialog: DialogInterface) {
         finishPendingBodyEdit()
         ReadBookConfig.save()
-        (activity as ReadBookActivity).bottomDialog--
+        (activity as? ReadBookActivity)?.let { it.bottomDialog-- }
         super.onDismiss(dialog)
     }
 

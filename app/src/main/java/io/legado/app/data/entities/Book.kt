@@ -254,12 +254,12 @@ data class Book(
     }
 
     fun getPageAnim(): Int {
-        var pageAnim = config.pageAnim
-            ?: if (isImage) PageAnim.scrollPageAnim else ReadBookConfig.pageAnim
-        if (pageAnim < 0) {
-            pageAnim = ReadBookConfig.pageAnim
+        if (isImage) {
+            val imageAnim = config.pageAnim ?: PageAnim.scrollPageAnim
+            return if (imageAnim < 0) ReadBookConfig.pageAnim else imageAnim
         }
-        return pageAnim
+        // 文本阅读的翻页动画是全局阅读习惯，不再按书保存。
+        return ReadBookConfig.pageAnim
     }
 
     fun setImageStyle(imageStyle: String?) {

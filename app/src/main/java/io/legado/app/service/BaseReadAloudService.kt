@@ -209,6 +209,8 @@ abstract class BaseReadAloudService : BaseService(),
     private val chapterStopTimer = ChapterStopTimer()
     private var dsJob: Job? = null
     private var readAloudJob: Coroutine<*>? = null
+    private var chapterTransitionJob: Job? = null
+    private var chapterLoadRetryJob: Job? = null
     private val readAloudGeneration = AtomicLong()
     private var upNotificationJob: Coroutine<*>? = null
     private var cover: Bitmap =
@@ -295,6 +297,8 @@ abstract class BaseReadAloudService : BaseService(),
     override fun onDestroy() {
         readAloudGeneration.incrementAndGet()
         readAloudJob?.cancel()
+        chapterTransitionJob?.cancel()
+        chapterLoadRetryJob?.cancel()
         super.onDestroy()
         restoreReadAloudFollow()
         updateReadAloudChapterIndex(-1)
@@ -867,17 +871,39 @@ abstract class BaseReadAloudService : BaseService(),
         }
         AppLog.putDebug("${ReadBook.curTextChapter?.chapter?.title} 朗读结束跳转下一章并朗读")
         resumeReadAloudInternal()
-        val hasNextChapter = speechChapterIndex() < ReadBook.simulatedChapterSize - 1
+        val nextSpeechIndex = speechChapterIndex() + 1
+        val hasNextChapter = nextSpeechIndex < ReadBook.simulatedChapterSize
         val visibleSyncMoved = ReadBook.moveToNextChapter(true, syncReadAloudFollow = true)
         when (nextChapterDecision(
             hasNextSpeechChapter = hasNextChapter,
             visibleSyncMoved = visibleSyncMoved
         )) {
-            SpeechFollowState.NextChapterDecision.ContinueWithVisibleSync -> Unit
-            SpeechFollowState.NextChapterDecision.ContinueSpeechOnly -> {
-                loadSpeechChapterOnly(speechChapterIndex() + 1)
+            SpeechFollowState.NextChapterDecision.ContinueWithVisibleSync -> {
+                ensureSpeechChapterContinues(ReadBook.durChapterIndex)
             }
+
+            SpeechFollowState.NextChapterDecision.ContinueSpeechOnly -> {
+                loadSpeechChapterOnly(nextSpeechIndex)
+            }
+
             SpeechFollowState.NextChapterDecision.Stop -> stopSelf()
+        }
+    }
+
+    /**
+     * 章节切换依赖阅读页面刷新, App 在后台时页面可能不会启动新的朗读会话。
+     * 等待一小段时间仍未切到下一章时, 由朗读服务自行接管, 避免在章末停住。
+     */
+    private fun ensureSpeechChapterContinues(expectedIndex: Int) {
+        chapterTransitionJob?.cancel()
+        chapterTransitionJob = lifecycleScope.launch {
+            delay(2_000L)
+            if (!isRun || pause) return@launch
+            if (textChapter?.chapter?.index == expectedIndex) {
+                if (contentList.isEmpty()) play()
+                return@launch
+            }
+            loadSpeechChapterOnly(expectedIndex)
         }
     }
 
@@ -885,7 +911,7 @@ abstract class BaseReadAloudService : BaseService(),
         return textChapter?.chapter?.index ?: ReadBook.durChapterIndex
     }
 
-    private fun loadSpeechChapterOnly(chapterIndex: Int) {
+    private fun loadSpeechChapterOnly(chapterIndex: Int, attempt: Int = 0) {
         if (chapterIndex !in 0..<ReadBook.simulatedChapterSize) return
         execute(executeContext = IO) {
             val book = ReadBook.book ?: return@execute false
@@ -925,6 +951,7 @@ abstract class BaseReadAloudService : BaseService(),
                 .filter { it.isNotEmpty() }
             contentList.isNotEmpty()
         }.onSuccess(Main) { canContinue ->
+            chapterLoadRetryJob?.cancel()
             if (canContinue) {
                 upTtsProgress(0)
                 play()
@@ -932,8 +959,27 @@ abstract class BaseReadAloudService : BaseService(),
                 stopSelf()
             }
         }.onError(Main) {
-            AppLog.put("加载朗读下一章出错\n${it.localizedMessage}", it, true)
-            stopSelf()
+            AppLog.put("加载朗读下一章出错(第${attempt + 1}次)\n${it.localizedMessage}", it, true)
+            if (isRun && !pause && attempt < 12) {
+                scheduleChapterLoadRetry(chapterIndex, attempt + 1)
+            } else if (isRun && !pause) {
+                toastOnUi("加载下一章失败，朗读已暂停")
+                pauseReadAloud()
+            }
+        }
+    }
+
+    private fun scheduleChapterLoadRetry(chapterIndex: Int, nextAttempt: Int) {
+        chapterLoadRetryJob?.cancel()
+        chapterLoadRetryJob = lifecycleScope.launch {
+            val delayMs = minOf(
+                2_000L shl (nextAttempt - 1).coerceIn(0, 4),
+                30_000L
+            )
+            delay(delayMs)
+            if (isRun && !pause) {
+                loadSpeechChapterOnly(chapterIndex, nextAttempt)
+            }
         }
     }
 

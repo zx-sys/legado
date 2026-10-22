@@ -183,3 +183,7 @@ cn.hutool.core.util.**{*;}
     public <init>(android.content.Context, android.util.AttributeSet);
     public <init>(android.content.Context, android.util.AttributeSet, int);
 }
+
+# sherpa-onnx JNI
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-keep class io.legado.app.service.NeuralTtsReadAloudService$FloatCallback { *; }

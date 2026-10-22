@@ -69,6 +69,27 @@ val okHttpClient: OkHttpClient by lazy {
         .followSslRedirects(true)
         .addInterceptor(OkHttpExceptionInterceptor)
         .addInterceptor { chain ->
+            // Edge TTS 的兼容接口需要 api_key 查询参数；登录页填写优先，其次用构建时的 token。
+            val request = chain.request()
+            val url = request.url
+            val path = url.encodedPath
+            if ((path.contains("/tts") || path.contains("/v1/audio/speech")) &&
+                url.queryParameter("api_key").isNullOrEmpty()
+            ) {
+                val storedKey = runCatching {
+                    io.legado.app.model.ReadAloud.httpTTS
+                        ?.getLoginInfoMap()
+                        ?.get("api_key")
+                }.getOrNull()?.takeIf { it.isNotBlank() }
+                val token = storedKey ?: io.legado.app.BuildConfig.EdgeTtsToken
+                if (token.isNotEmpty()) {
+                    val newUrl = url.newBuilder().setQueryParameter("api_key", token).build()
+                    return@addInterceptor chain.proceed(request.newBuilder().url(newUrl).build())
+                }
+            }
+            chain.proceed(request)
+        }
+        .addInterceptor { chain ->
             val request = chain.request()
             val builder = request.newBuilder()
             if (request.header(AppConst.UA_NAME) == null) {

@@ -2,6 +2,9 @@ package io.legado.app.service
 
 import android.annotation.SuppressLint
 import android.app.PendingIntent
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
@@ -61,8 +64,6 @@ import org.htmlunit.corejs.javascript.WrappedException
 import splitties.init.appCtx
 import java.io.File
 import java.io.InputStream
-import java.net.ConnectException
-import java.net.SocketTimeoutException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicLong
@@ -79,6 +80,11 @@ internal fun normalizeHttpTtsPauseDuration(durationMs: Int): Int {
 
 internal fun shouldInsertHttpTtsPause(index: Int, lastIndex: Int, durationMs: Int): Boolean {
     return index < lastIndex && normalizeHttpTtsPauseDuration(durationMs) > 0
+}
+
+internal fun httpTtsRetryDelayMs(attempt: Int): Long {
+    if (attempt <= 0) return 0L
+    return minOf(1_000L shl (attempt - 1).coerceAtMost(4), 15_000L)
 }
 
 internal fun hasHttpTtsQueueCapacity(mediaItemCount: Int, newItemCount: Int): Boolean {
@@ -268,6 +274,7 @@ class HttpReadAloudService : BaseReadAloudService(),
                             }
                         }.onFailure {
                             if (it !is CancellationException && isSessionActive(sessionId)) {
+                                toastOnUi("朗读失败：${it.localizedMessage}")
                                 pauseReadAloud()
                             }
                             return@execute
@@ -301,7 +308,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     }
 
     private suspend fun preDownloadAudios(httpTts: HttpTTS, sessionId: Long) {
-        val textChapter = ReadBook.nextTextChapter ?: return
+        val textChapter = awaitNextTextChapter() ?: return
         val contentList = textChapter.getNeedReadAloud(0, readAloudByPage, 0, 1)
             .splitToSequence("\n")
             .filter { it.isNotEmpty() }
@@ -320,6 +327,10 @@ class HttpReadAloudService : BaseReadAloudService(),
                         createSpeakFile(fileName, inputStream)
                     } else {
                         createSilentSound(fileName)
+                    }
+                }.onFailure {
+                    if (it !is CancellationException) {
+                        AppLog.put("预加载下一章语音失败\n${it.localizedMessage}", it)
                     }
                 }
             }
@@ -340,6 +351,10 @@ class HttpReadAloudService : BaseReadAloudService(),
                         activeDownloader.set(downloader)
                         try {
                             runInterruptible { downloader.download(null) }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            AppLog.put("流式语音下载失败\n${e.localizedMessage}", e)
                         } finally {
                             activeDownloader.compareAndSet(downloader, null)
                         }
@@ -404,7 +419,7 @@ class HttpReadAloudService : BaseReadAloudService(),
         downloaderChannel: Channel<Downloader>,
         sessionId: Long
     ) {
-        val textChapter = ReadBook.nextTextChapter ?: return
+        val textChapter = awaitNextTextChapter() ?: return
         val contentList = textChapter.getNeedReadAloud(0, readAloudByPage, 0, 1)
             .splitToSequence("\n")
             .filter { it.isNotEmpty() }
@@ -420,6 +435,21 @@ class HttpReadAloudService : BaseReadAloudService(),
         }
     }
 
+    /**
+     * 预加载不依赖阅读页面是否已经在后台排版下一章; 必要时主动触发下一章正文加载。
+     */
+    private suspend fun awaitNextTextChapter(): TextChapter? {
+        ReadBook.nextTextChapter?.takeIf { it.isCompleted }?.let { return it }
+        val nextIndex = ReadBook.durChapterIndex + 1
+        if (nextIndex >= ReadBook.simulatedChapterSize) return null
+        ReadBook.loadContent(nextIndex, upContent = false)
+        repeat(20) {
+            delay(500L)
+            ReadBook.nextTextChapter?.takeIf { it.isCompleted }?.let { return it }
+        }
+        return ReadBook.nextTextChapter?.takeIf { it.isCompleted }
+    }
+
     private fun createDataSourceFactory(
         httpTts: HttpTTS,
         speakText: String,
@@ -427,7 +457,7 @@ class HttpReadAloudService : BaseReadAloudService(),
     ): CacheDataSource.Factory {
         val upstreamFactory = DataSource.Factory {
             InputStreamDataSource {
-                if (speakText.isEmpty()) {
+                if (speakText.isEmpty() || !isSessionActive(sessionId)) {
                     null
                 } else {
                     kotlin.runCatching {
@@ -439,7 +469,10 @@ class HttpReadAloudService : BaseReadAloudService(),
                             is InterruptedException,
                             is CancellationException -> Unit
 
-                            else -> if (isSessionActive(sessionId)) pauseReadAloud()
+                            else -> AppLog.put(
+                                "tts流式加载失败\n${it.localizedMessage}",
+                                it
+                            )
                         }
                     }.getOrThrow()
                 } ?: resources.openRawResource(R.raw.silent_sound)
@@ -490,8 +523,18 @@ class HttpReadAloudService : BaseReadAloudService(),
         speakText: String,
         sessionId: Long
     ): InputStream? {
+        var networkWaitLogged = false
         while (true) {
             ensureSessionActive(sessionId)
+            if (!hasNetwork()) {
+                if (!networkWaitLogged) {
+                    networkWaitLogged = true
+                    AppLog.put("网络不可用，等待网络恢复后继续朗读")
+                }
+                delay(2_000L)
+                continue
+            }
+            networkWaitLogged = false
             try {
                 val analyzeUrl = AnalyzeUrl(
                     httpTts.url,
@@ -560,33 +603,44 @@ class HttpReadAloudService : BaseReadAloudService(),
                         throw e
                     }
 
-                    is SocketTimeoutException, is ConnectException -> {
+                    is NoStackTraceException -> {
                         downloadErrorNo++
                         if (downloadErrorNo > 5) {
-                            val msg = "tts超时或连接错误超过5次\n${e.localizedMessage}"
-                            AppLog.put(msg, e, true)
+                            AppLog.put("TTS服务器连续返回错误，已停止重试\n${e.localizedMessage}", e, true)
                             throw e
                         }
+                        val delayMs = httpTtsRetryDelayMs(downloadErrorNo)
+                        AppLog.put("TTS服务器返回错误，${delayMs}ms后重试\n${e.localizedMessage}", e)
+                        delay(delayMs)
                     }
 
                     else -> {
                         downloadErrorNo++
-                        val msg = "tts下载错误\n${e.localizedMessage}"
-                        AppLog.put(msg, e)
+                        val delayMs = httpTtsRetryDelayMs(downloadErrorNo)
+                        AppLog.put(
+                            "tts下载异常，${delayMs}ms后重试(第${downloadErrorNo}次)\n" +
+                                "${e.localizedMessage}",
+                            e
+                        )
                         e.printOnDebug()
-                        if (downloadErrorNo > 5) {
-                            val msg1 = "TTS服务器连续5次错误，已暂停阅读。"
-                            AppLog.put(msg1, e, true)
-                            throw e
+                        if (downloadErrorNo > 8) {
+                            downloadErrorNo = 0
+                            delay(15_000L)
                         } else {
-                            AppLog.put("TTS下载音频出错，使用无声音频代替。\n朗读文本：$speakText")
-                            break
+                            delay(delayMs)
                         }
                     }
                 }
             }
         }
-        return null
+    }
+
+    private fun hasNetwork(): Boolean {
+        val manager = appCtx.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager ?: return true
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     private fun md5SpeakFileName(content: String, textChapter: TextChapter? = this.textChapter): String {
@@ -907,9 +961,12 @@ class HttpReadAloudService : BaseReadAloudService(),
         return httpTtsMediaSessionId(mediaItem.mediaId)?.let(::isSessionActive) == true
     }
 
-    class CustomLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(0) {
+    class CustomLoadErrorHandlingPolicy : DefaultLoadErrorHandlingPolicy(5) {
         override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorHandlingPolicy.LoadErrorInfo): Long {
-            return C.TIME_UNSET
+            return minOf(
+                1_000L shl (loadErrorInfo.errorCount - 1).coerceIn(0, 4),
+                15_000L
+            )
         }
     }
 

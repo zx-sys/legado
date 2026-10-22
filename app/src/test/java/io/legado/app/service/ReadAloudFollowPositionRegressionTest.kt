@@ -49,7 +49,8 @@ class ReadAloudFollowPositionRegressionTest {
 
         assertTrue(serviceKt.contains("if (shouldSyncSpeechNavigation())"))
         assertTrue(serviceKt.contains("loadSpeechChapterOnly(speechChapterIndex() - 1)"))
-        assertTrue(serviceKt.contains("loadSpeechChapterOnly(speechChapterIndex() + 1)"))
+        assertTrue(serviceKt.contains("val nextSpeechIndex = speechChapterIndex() + 1"))
+        assertTrue(serviceKt.contains("loadSpeechChapterOnly(nextSpeechIndex)"))
     }
 
     @Test

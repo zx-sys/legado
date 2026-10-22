@@ -11,9 +11,11 @@ import io.legado.app.constant.IntentAction
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.tts.NeuralTtsModel
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.HttpReadAloudService
+import io.legado.app.service.NeuralTtsReadAloudService
 import io.legado.app.service.TTSReadAloudService
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
@@ -29,6 +31,9 @@ internal fun resolveReadAloudEngineName(
     httpTtsName: (Long) -> String?,
 ): String {
     val engine = ttsEngine?.takeIf { it.isNotBlank() } ?: return systemTtsName
+    if (engine == NeuralTtsModel.ENGINE_ID) {
+        return NeuralTtsModel.DISPLAY_NAME
+    }
     engine.toLongOrNull()?.let { id ->
         return httpTtsName(id)?.takeIf { it.isNotBlank() } ?: systemTtsName
     }
@@ -68,13 +73,21 @@ object ReadAloud {
         ttsEngine.toLongOrNull()?.let { id ->
             httpTTS = appDb.httpTTSDao.get(id)
             if (httpTTS != null) {
-                // 从 local.properties 注入 Edge TTS token
-                val token = BuildConfig.EdgeTtsToken
+                // 优先使用登录页里填写的 API Key，留空时回退到 local.properties
+                val storedKey = runCatching {
+                    httpTTS?.getLoginInfoMap()?.get("api_key")
+                }.getOrNull()?.takeIf { it.isNotBlank() }
+                val token = storedKey ?: BuildConfig.EdgeTtsToken
                 if (token.isNotEmpty()) {
                     httpTTS?.header = "{\"Authorization\":\"Bearer $token\"}"
                 }
                 return HttpReadAloudService::class.java
             }
+        }
+        val engineValue = GSON.fromJsonObject<SelectItem<String>>(ttsEngine)
+            .getOrNull()?.value
+        if (engineValue == NeuralTtsModel.ENGINE_ID) {
+            return NeuralTtsReadAloudService::class.java
         }
         return TTSReadAloudService::class.java
     }

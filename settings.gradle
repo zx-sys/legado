@@ -2,9 +2,7 @@ pluginManagement {
     buildscript {
         repositories {
             mavenCentral()
-            maven {
-                url = uri("file:///D:/Project/legado/local-r8-repo")
-            }
+            google()
             maven {
                 url = uri("https://storage.googleapis.com/r8-releases/raw")
             }
@@ -41,7 +39,7 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         maven {
-            url = 'file:///D:/apache-maven-3.9.9/repository'
+            url = 'file:///D:/apache-maven-3.9.12/repository'
             content {
                 includeModule("org.htmlunit", "htmlunit-core-js")
             }

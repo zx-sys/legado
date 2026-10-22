@@ -257,6 +257,7 @@ object ReadBookConfig {
             configList.clear()
             configList.addAll(it)
         }
+        normalizeGlobalLayout()
         if (previous.isNotEmpty() && previous != configList) ResourceThemeGeneration.changed()
     }
 
@@ -276,6 +277,7 @@ object ReadBookConfig {
             }
         }
         shareConfig = c ?: configList.getOrNull(5) ?: Config()
+        normalizeGlobalLayout()
         if (previous != null && previous != shareConfig) ResourceThemeGeneration.changed()
         if (normalizeUnderline) normalizeUnderlineConfig()
     }
@@ -312,6 +314,7 @@ object ReadBookConfig {
 
     @Synchronized
     internal fun saveNow() {
+        normalizeGlobalLayout()
         normalizeUnderlineConfig()
         GSON.toJson(configList).let {
             FileUtils.delete(configFilePath)
@@ -393,6 +396,7 @@ object ReadBookConfig {
     var styleSelect: Int
         get() = if (isComic) comicStyleSelect else readStyleSelect
         set(value) {
+            normalizeGlobalLayout()
             if (isComic) {
                 comicStyleSelect = value
             } else {
@@ -419,6 +423,9 @@ object ReadBookConfig {
         }
     var shareLayout = appCtx.getPrefBoolean(PreferKey.shareLayout)
         set(value) {
+            if (field != value) {
+                normalizeGlobalLayout()
+            }
             field = value
             if (appCtx.getPrefBoolean(PreferKey.shareLayout) != value) {
                 appCtx.putPrefBoolean(PreferKey.shareLayout, value)
@@ -454,6 +461,32 @@ object ReadBookConfig {
 
     val config get() = if (shareLayout) shareConfig else durConfig
 
+    private fun globalLayoutSource(): Config? {
+        if (configList.isEmpty()) return null
+        if (shareLayout && ::shareConfig.isInitialized) return shareConfig
+        return configList.getOrNull(styleSelect) ?: configList.firstOrNull()
+    }
+
+    /**
+     * 背景样式只保留背景差异；字号/边距/颜色等排版统一同步到所有样式。
+     */
+    internal fun normalizeGlobalLayout() {
+        val source = globalLayoutSource() ?: return
+        configList.forEach { config ->
+            if (config !== source) config.copyGlobalLayoutFrom(source)
+        }
+        if (::shareConfig.isInitialized && shareConfig !== source) {
+            shareConfig.copyGlobalLayoutFrom(source)
+        }
+    }
+
+    fun newConfig(): Config {
+        val source = globalLayoutSource()
+        return Config().also { config ->
+            source?.let { config.copyGlobalLayoutFrom(it) }
+        }
+    }
+
     var bgAlpha: Int
         get() = config.bgAlpha
         set(value) {
@@ -461,10 +494,16 @@ object ReadBookConfig {
         }
 
     var pageAnim: Int
-        get() = config.curPageAnim()
-        set(@PageAnim.Anim value) {
+        get() = appCtx.getPrefInt(PreferKey.readPageAnim, config.curPageAnim())
+        set(value) {
             config.setCurPageAnim(value)
+            appCtx.putPrefInt(PreferKey.readPageAnim, value)
         }
+
+    /** 翻页动画是全局阅读习惯, 恢复默认时同步清掉独立偏好。 */
+    fun resetPageAnim() {
+        appCtx.putPrefInt(PreferKey.readPageAnim, 0)
+    }
 
     var textFont: String
         get() = config.textFont
@@ -988,6 +1027,90 @@ object ReadBookConfig {
         var headerMode: Int = 0,
         var footerMode: Int = 0
     ) {
+
+        /**
+         * 字号、间距、边距、文字颜色等属于全局阅读习惯；
+         * 背景图片/颜色仍由各样式自己保存。
+         */
+        fun copyGlobalLayoutFrom(other: Config) {
+            textFont = other.textFont
+            titleFont = other.titleFont
+            titleBold = other.titleBold
+            textBold = other.textBold
+            textSize = other.textSize
+            letterSpacing = other.letterSpacing
+            lineSpacingExtra = other.lineSpacingExtra
+            titleLineSpacingExtra = other.titleLineSpacingExtra
+            paragraphSpacing = other.paragraphSpacing
+            paragraphIndent = other.paragraphIndent
+            titleMode = other.titleMode
+            titleSize = other.titleSize
+            titleColor = other.titleColor
+            splitChapterTitle = other.splitChapterTitle
+            titleNumberSize = other.titleNumberSize
+            titleNumberColor = other.titleNumberColor
+            titleNumberSpacing = other.titleNumberSpacing
+            titleTopSpacing = other.titleTopSpacing
+            titleBottomSpacing = other.titleBottomSpacing
+            underlineMode = other.underlineMode
+            underlineColor = other.underlineColor
+            underlineColorSet = other.underlineColorSet
+            underlineWidth = other.underlineWidth
+            underlineDistance = other.underlineDistance
+            underlineBodyEnabled = other.underlineBodyEnabled
+            underlineTitleEnabled = other.underlineTitleEnabled
+            underlineConfigVersion = other.underlineConfigVersion
+            reviewIconColor = other.reviewIconColor
+            reviewIconSvg = other.reviewIconSvg
+            reviewIconSvgTemplates = other.reviewIconSvgTemplates
+            reviewIconScale = other.reviewIconScale
+            paddingBottom = other.paddingBottom
+            paddingLeft = other.paddingLeft
+            paddingRight = other.paddingRight
+            paddingTop = other.paddingTop
+            paddingTopBottomLinked = other.paddingTopBottomLinked
+            headerPaddingBottom = other.headerPaddingBottom
+            headerPaddingLeft = other.headerPaddingLeft
+            headerPaddingRight = other.headerPaddingRight
+            headerPaddingTop = other.headerPaddingTop
+            footerPaddingBottom = other.footerPaddingBottom
+            footerPaddingLeft = other.footerPaddingLeft
+            footerPaddingRight = other.footerPaddingRight
+            footerPaddingTop = other.footerPaddingTop
+            showHeaderLine = other.showHeaderLine
+            showFooterLine = other.showFooterLine
+            tipHeaderLeft = other.tipHeaderLeft
+            tipHeaderMiddle = other.tipHeaderMiddle
+            tipHeaderRight = other.tipHeaderRight
+            tipFooterLeft = other.tipFooterLeft
+            tipFooterMiddle = other.tipFooterMiddle
+            tipFooterRight = other.tipFooterRight
+            tipHeaderLeftTemplate = other.tipHeaderLeftTemplate
+            tipHeaderMiddleTemplate = other.tipHeaderMiddleTemplate
+            tipHeaderRightTemplate = other.tipHeaderRightTemplate
+            tipFooterLeftTemplate = other.tipFooterLeftTemplate
+            tipFooterMiddleTemplate = other.tipFooterMiddleTemplate
+            tipFooterRightTemplate = other.tipFooterRightTemplate
+            tipTextSize = other.tipTextSize
+            tipColor = other.tipColor
+            tipDividerColor = other.tipDividerColor
+            headerMode = other.headerMode
+            footerMode = other.footerMode
+            textColor = other.textColor
+            textColorNight = other.textColorNight
+            textColorEInk = other.textColorEInk
+            textAccentColor = other.textAccentColor
+            textAccentColorNight = other.textAccentColorNight
+            textAccentColorEInk = other.textAccentColorEInk
+            initColorInt = false
+            initAccentColorInt = false
+            textColorInt = -1
+            textColorIntNight = -1
+            textColorIntEInk = -1
+            textAccentColorInt = -1
+            textAccentColorIntNight = -1
+            textAccentColorIntEInk = -1
+        }
 
         @Transient
         private var textColorIntEInk = -1

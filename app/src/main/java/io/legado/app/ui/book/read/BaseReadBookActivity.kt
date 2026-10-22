@@ -28,6 +28,7 @@ import io.legado.app.help.book.cacheLocalUri
 import io.legado.app.help.book.savePreservingCustomCoverUrl
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.book.isImage
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
@@ -376,14 +377,17 @@ abstract class BaseReadBookActivity :
 
     fun showPageAnimConfig(success: () -> Unit) {
         val items = arrayListOf<String>()
-        items.add(getString(R.string.btn_default_s))
         items.add(getString(R.string.page_anim_cover))
         items.add(getString(R.string.page_anim_slide))
         items.add(getString(R.string.page_anim_simulation))
         items.add(getString(R.string.page_anim_scroll))
         items.add(getString(R.string.page_anim_none))
         selector(R.string.page_anim, items) { _, i ->
-            ReadBook.book?.setPageAnim(i - 1)
+            if (ReadBook.book?.isImage == true) {
+                ReadBook.book?.setPageAnim(i)
+            } else {
+                ReadBookConfig.pageAnim = i
+            }
             success()
         }
     }

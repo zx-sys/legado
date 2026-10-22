@@ -11,6 +11,7 @@ import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.getStoredLoginInfoMap
+import io.legado.app.data.entities.repairLegacyHttpTtsLoginUi
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.model.AudioPlay
 import io.legado.app.model.AutoTask
@@ -70,6 +71,7 @@ class SourceLoginViewModel(application: Application) : BaseViewModel(application
             headerMap = runScriptWithContext {
                 source?.getHeaderMap(true) ?: emptyMap()
             }
+            source?.loginUi = repairLegacyHttpTtsLoginUi(source?.loginUi)
             loginInfo = source?.getStoredLoginInfoMap() ?: mutableMapOf()
             source
         }.onSuccess {

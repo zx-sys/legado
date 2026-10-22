@@ -28,8 +28,11 @@ import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getIndexById
+import io.legado.app.utils.gone
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.toastOnUi
+import io.legado.app.utils.visible
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import splitties.views.onLongClick
 
@@ -65,7 +68,7 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
     override fun onDismiss(dialog: DialogInterface) {
         super.onDismiss(dialog)
         ReadBookConfig.save()
-        (activity as ReadBookActivity).bottomDialog--
+        (activity as? ReadBookActivity)?.bottomDialog--
     }
 
     private fun initView() = binding.run {
@@ -94,10 +97,27 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
                 ivStyle.borderColor = textColor
                 ivStyle.setImageResource(R.drawable.ic_add)
                 root.setOnClickListener {
-                    ReadBookConfig.configList.add(ReadBookConfig.Config())
+                    ReadBookConfig.configList.add(ReadBookConfig.newConfig())
                     showBgTextConfig(ReadBookConfig.configList.lastIndex)
                 }
             }
+        }
+        llGlobalActions.visible()
+        tvPadding.gone()
+        tvTip.gone()
+        tvShareLayout.gone()
+        cbShareLayout.gone()
+        tvRestoreDefault.setTextColor(textColor)
+        tvReadSettings.setTextColor(textColor)
+        tvInterfaceSettings.setTextColor(textColor)
+        tvRestoreDefault.setOnClickListener { restoreDefault() }
+        tvInterfaceSettings.setOnClickListener {
+            dismissAllowingStateLoss()
+            callBack?.showPaddingConfig()
+        }
+        tvReadSettings.setOnClickListener {
+            dismissAllowingStateLoss()
+            callBack?.showMoreSetting()
         }
     }
 
@@ -136,7 +156,6 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
         }
         rgPageAnim.setOnCheckedChangeListener { _, checkedId ->
             if (updatingPageAnim) return@setOnCheckedChangeListener
-            ReadBook.book?.setPageAnim(-1)
             ReadBookConfig.pageAnim = binding.rgPageAnim.getIndexById(checkedId)
             callBack?.upPageAnim()
             ReadBook.loadContent(false)
@@ -187,6 +206,19 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
         changeBgTextConfig(index)
         callBack?.showBgTextConfig()
         return true
+    }
+
+    private fun restoreDefault() {
+        ReadBookConfig.styleSelect = 0
+        ReadBookConfig.durConfig = ReadBookConfig.Config()
+        ReadBookConfig.resetPageAnim()
+        ReadBookConfig.save()
+        styleAdapter.setItems(ReadBookConfig.configList)
+        upView()
+        callBack?.upPageAnim()
+        ReadBook.loadContent(false)
+        postEvent(EventBus.UP_CONFIG, arrayListOf(0, 1, 2, 5))
+        toastOnUi(R.string.restore_default)
     }
 
     private fun upView() = binding.run {

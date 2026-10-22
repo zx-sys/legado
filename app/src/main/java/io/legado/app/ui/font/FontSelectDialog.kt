@@ -90,7 +90,14 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
         binding.recyclerView.layoutManager = LinearLayoutManager(context)
         binding.recyclerView.adapter = adapter
 
-        loadFonts()
+        execute {
+            BundledFonts.ensureInstalled(requireContext())
+        }.onSuccess {
+            loadFonts()
+        }.onError {
+            AppLog.put("安装内置字体失败\n${it.localizedMessage}", it)
+            loadFonts()
+        }
     }
 
     private fun loadFonts() {

@@ -39,7 +39,14 @@ try {
     // Keep source archives buildable when Git is unavailable.
 }
 def armOnly = project.findProperty("armOnly")?.toBoolean() ?: false
-def edgeTtsToken = project.findProperty("edge.tts.token") ?: ""
+// 个人构建: 从 gitignored 的 local.properties 读取 Edge TTS key，编译进 BuildConfig。
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { localProperties.load(it) }
+}
+def edgeTtsToken = project.findProperty("edge.tts.token")
+        ?: localProperties.getProperty("edge.tts.token", "")
 
 android {
     compileSdk = compile_sdk_version
@@ -211,7 +218,7 @@ android {
 
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     kotlinOptions {
-        jvmTarget = "17"
+        jvmTarget = "21"
     }
 }
 
@@ -220,6 +227,8 @@ dependencies {
     //noinspection GradleDependency,GradlePackageUpdate
     //coreLibraryDesugaring('com.android.tools:desugar_jdk_libs_nio:2.0.4')
     coreLibraryDesugaring(libs.desugar)
+    // 本地中英双语神经 TTS (sherpa-onnx + vits-melo-tts-zh_en)
+    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
     testImplementation(libs.junit)
     androidTestImplementation(libs.bundles.androidTest)
     //kotlin
