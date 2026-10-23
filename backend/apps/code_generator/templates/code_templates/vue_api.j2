@@ -1,0 +1,22 @@
+import {ajaxGet,ajaxPost,ajaxDelete,ajaxPut,ajaxPatch,uploadImg,ajaxGetDetailByID,ajaxDownloadExcel,uploadFileParams,getDownloadFile,downloadFile} from '@/api/request.js';
+
+const api = {}
+
+// {{ table.table_comment or table.class_name }}管理
+api.list = params => ajaxGet({url: `/api/{{ module_name or 'system' }}/{{ business_name }}/`,params})
+// {{ table.table_comment or table.class_name }}管理 -- 新增
+api.add = params => ajaxPost({url: `/api/{{ module_name or 'system' }}/{{ business_name }}/`,params})
+// {{ table.table_comment or table.class_name }}管理 -- 编辑
+api.edit = params => ajaxPut({url: `/api/{{ module_name or 'system' }}/{{ business_name }}/`,params})
+// {{ table.table_comment or table.class_name }}管理 -- 删除
+api.del = params => ajaxDelete({url: `/api/{{ module_name or 'system' }}/{{ business_name }}/`,params})
+// {{ table.table_comment or table.class_name }}管理 -- 导出
+api.export = (queryParams,params) => ajaxDownloadExcel({url: `/api/{{ module_name or 'system' }}/{{ business_name }}/export_data/`,queryParams:queryParams,params})
+// {{ table.table_comment or table.class_name }}管理 -- 导入
+api.import = params => uploadFileParams({url: `/api/{{ module_name or 'system' }}/{{ business_name }}/import_data/`,params})
+// {{ table.table_comment or table.class_name }}管理 -- 下载导入模板
+api.downloadTemplate = params => downloadFile({url: `/api/{{ module_name or 'system' }}/{{ business_name }}/download_template/`,params})
+// {{ table.table_comment or table.class_name }}管理 -- 禁用启用
+api.setStatus = params => ajaxPost({url: `/api/{{ module_name or 'system' }}/{{ business_name }}/set_status/`,params})
+
+export default api

@@ -1,0 +1,258 @@
+<!-- {{ table.table_comment or table.class_name }} - 管理页面 -->
+<!-- 生成时间：{{ datetime }} -->
+
+<template>
+    <div :class="{'ly-is-full':isFull}" class="lycontainer">
+        <el-card class="tableSelect" ref="tableSelect" shadow="hover" v-if="crudOptions.searchBar.showSearchBar">
+            <lySearchBar :model="formInline" @search="search" @reset="handleEdit('','reset')">
+                <!-- 自定义默认搜索项 -->
+                <template #default>
+                    {% for col in columns %}
+                    {% if col.is_query %}
+                    <el-form-item label="{{ col.column_comment }}">
+                        {% if col.show_type in ['select', 'radio'] and col.dict_json %}
+                        <el-select v-model.trim="formInline.{{ col.column_name }}" clearable placeholder="请选择{{ col.column_comment }}" style="width:160px">
+                            <el-option
+                                v-for="item in dictStore.dictTypes['{{ col.dict_json }}']"
+                                :key="item.value"
+                                :label="item.label"
+                                :value="item.value"
+                            />
+                        </el-select>
+                        {% elif col.show_type == 'datetime' %}
+                        <el-date-picker
+                            v-model="dateRange.{{ col.column_name }}"
+                            type="daterange"
+                            range-separator="至"
+                            start-placeholder="开始日期"
+                            end-placeholder="结束日期"
+                            value-format="YYYY-MM-DD HH:mm:ss"
+                            style="width:240px"
+                        />
+                        {% else %}
+                        <el-input v-model.trim="formInline.{{ col.column_name }}" maxlength="60" clearable style="width:160px" placeholder="{{ col.column_comment }}"></el-input>
+                        {% endif %}
+                    </el-form-item>
+                    {% endif %}
+                    {% endfor %}
+                </template>
+            </lySearchBar>
+        </el-card>
+        <el-card class="lytable" shadow="hover">
+            <ly-table v-bind="tableBindProps" ref="tableref" @selection-change="selectionChange">
+                <template v-slot:topbar>
+                    <el-button type="primary" icon="plus" @click="handleAddClick" v-auth="'Create'">新增</el-button>
+                    <el-button type="danger" plain icon="delete" :disabled="selection.length==0" title="批量删除" @click="batch_del" v-auth="'Delete'"></el-button>
+                </template>
+                {% for col in columns %}
+                {% if col.is_list %}
+                <template #{{ col.column_name }}="scope">
+                    {% if col.show_type in ['select', 'radio'] and col.dict_json %}
+                    <span>{{ '{{' }} getDictLabel('{{ col.dict_json }}', scope.row.{{ col.column_name }}) {{ '}}' }}</span>
+                    {% elif col.show_type == 'datetime' %}
+                    <span>{{ '{{' }} scope.row.{{ col.column_name }} || '-' {{ '}}' }}</span>
+                    {% elif col.django_field_type == 'BooleanField' %}
+                    <el-tag :type="scope.row.{{ col.column_name }} ? 'success' : 'info'" size="small">
+                        {{ '{{' }} scope.row.{{ col.column_name }} ? '是' : '否' {{ '}}' }}
+                    </el-tag>
+                    {% else %}
+                    <span>{{ '{{' }} scope.row.{{ col.column_name }} || '-' {{ '}}' }}</span>
+                    {% endif %}
+                </template>
+                {% endif %}
+                {% endfor %}
+                <template #status="scope" v-if="hasStatusField">
+                    <el-switch v-model="scope.row.status" active-color="#13ce66" inactive-color="#ff4949" @change="changeStatus(scope.row)" :disabled="!hasBtnPermission('SetStatus')"></el-switch>
+                </template>
+                <el-table-column label="操作" :fixed="crudOptions.rowHandle.fixed" :width="crudOptions.rowHandle.width">
+                    <template #header>
+                        <div style="display: flex;justify-content: space-between;align-items: center;">
+                            <div>操作</div>
+                            <div @click="setFull">
+                                <el-tooltip content="全屏" placement="bottom">
+                                    <el-icon style="cursor: pointer;"><full-screen /></el-icon>
+                                </el-tooltip>
+                            </div>
+                        </div>
+                    </template>
+                    <template #default="scope">
+                        <span class="table-operate-btn" @click="handleEdit(scope.row,'edit')" v-auth="'Update'">编辑</span>
+                        <span class="table-operate-btn delete" @click="handleEdit(scope.row,'delete')" v-auth="'Delete'">删除</span>
+                    </template>
+                </el-table-column>
+            </ly-table>
+        </el-card>
+        <saveDialog ref="saveDialogRef" @refreshData="getData" v-if="isDialogVisible" @closed="isDialogVisible = false"></saveDialog>
+    </div>
+</template>
+
+<script setup name="{{ table.class_name }}Manage">
+    import { ref, onMounted, onUnmounted, nextTick,computed } from 'vue'
+    import { ElMessage, ElMessageBox } from 'element-plus'
+    import saveDialog from "./components/{{ business_name }}Save.vue"
+    import lySearchBar from '@/components/lySearchBar.vue'
+    import { createCrudConfig } from './crud.js'
+    import { useUserState } from '@/store/userState' 
+    import { useRoute } from 'vue-router'
+    import { useDictStore } from '@/store/dict'
+
+    const route = useRoute()
+    const userState = useUserState()
+    const dictStore = useDictStore()
+
+    let crudOptions = ref(createCrudConfig().crudOptions)
+    
+    const hasBtnPermission = (btnCode) => {
+        return userState.hasButtonPermission(route.name, btnCode)
+    }
+
+    // 状态管理
+    const isFull = ref(false)
+    const isDialogVisible = ref(false)
+    const formInline = ref({})
+    const tableSelect = ref(null)
+    const tableref = ref(null)
+    const saveDialogRef = ref(null)
+    let selection = ref([])
+    const dateRange = ref({})
+    const hasStatusField = ref(false)
+
+    function selectionChange(selections){
+        selection.value = selections;
+    }
+
+    let tableBindProps= computed(() => (
+        {
+            ...crudOptions.value.table,
+            ...crudOptions.value.pagination,
+            apiObj:crudOptions.value.request.list,
+            apiImportObj:crudOptions.value.request.import,
+            apiExportObj:crudOptions.value.request.export,
+            apiTemplateObj:crudOptions.value.request.dltemplate,
+            params:formInline.value,
+            column:crudOptions.value.columns,
+            hideExport:!hasBtnPermission('Export'),
+            hideImport:!hasBtnPermission('Import'),
+        }
+    ))
+
+    // 方法
+    const setFull = () => {
+        isFull.value = !isFull.value
+        window.dispatchEvent(new Event('resize'))
+    }
+
+    const handleAddClick = () => {
+        isDialogVisible.value = true
+        nextTick(() => {
+            saveDialogRef.value.handleOpen(null, "add")
+        })
+    }
+
+    function batch_del(){
+        ElMessageBox.confirm(`确定删除选中的 ${selection.value.length} 项吗？`, '提示', {
+            confirmButtonText: "确定",
+            cancelButtonText: "取消",
+            type: 'warning'
+        }).then(() => {
+            let ids = selection.value.map(item => item.id);
+            crudOptions.value.request.del({id:ids}).then(res=>{
+                if(res.code == 2000) {
+                    search()
+                    ElMessage.success("操作成功")
+                } else {
+                    ElMessage.warning(res.msg)
+                }
+            })
+        }).catch(() => {})
+    }
+
+    const handleEdit = (row, flag) => {
+        switch (flag) {
+            case 'edit':
+                isDialogVisible.value = true
+                nextTick(() => {
+                    saveDialogRef.value.handleOpen(row, "edit")
+                })
+                break
+            case 'delete':
+                ElMessageBox.confirm('您确定要删除选中的数据吗？', "警告", {
+                    closeOnClickModal: false,
+                    type: "warning",
+                }).then(() => {
+                    crudOptions.value.request.del({ id: row.id }).then(res => {
+                    if (res.code == 2000) {
+                        ElMessage.success(res.msg)
+                        search()
+                    } else {
+                        ElMessage.warning(res.msg)
+                    }
+                    })
+                }).catch(() => {})
+                break
+            case 'reset':
+                formInline.value = {}
+                search()
+                break
+        }
+    }
+
+    const changeStatus = (row) => {
+        let originalStatus = row.status
+        row.status = !row.status
+        
+        ElMessageBox.confirm('确定修改状态吗？', '提醒', {
+            closeOnClickModal: false,
+            type: "warning"
+        }).then(() => {
+            crudOptions.value.request.setStatus({ id: row.id }).then(res => {
+                if (res.code == 2000) {
+                    originalStatus ? row.status = true : row.status = false
+                    ElMessage.success(res.msg)
+                    getData()
+                } else {
+                    ElMessage.warning(res.msg)
+                }
+            })
+        })
+    }
+
+    const search = () => {
+        tableref.value.reload(formInline.value)
+    }
+
+    const getData = () => {
+        tableref.value.getData()
+    }
+
+    const getDictLabel = (dictType, value) => {
+        const dict = dictStore.dictTypes[dictType]
+        if (!dict) return value
+        const item = dict.find(d => d.value === value || d.value === String(value))
+        return item ? item.label : value
+    }
+
+    onMounted(() => {
+        dictStore.initDict()
+    })
+
+    onUnmounted(() => {
+    })
+</script>
+
+<style scoped lang="scss">
+.lycontainer {
+    height: 100%;
+    padding: 16px;
+    background-color: var(--el-bg-color-page);
+}
+
+.tableSelect {
+    margin-bottom: 16px;
+}
+
+.lytable {
+    flex: 1;
+    overflow: hidden;
+}
+</style>

@@ -1,0 +1,38 @@
+# -*- coding: utf-8 -*-
+"""
+@Remark: {{ table.table_comment or table.class_name }} - 序列化器
+"""
+from rest_framework import serializers
+from {{ module_name or 'apps' }}.{{ business_name }}.models import {{ table.class_name }}
+
+
+class {{ table.class_name }}Serializer(serializers.ModelSerializer):
+    """
+    {{ table.table_comment or table.class_name }} - 序列化器
+    """
+    create_datetime = serializers.DateTimeField(read_only=True, format="%Y-%m-%d %H:%M:%S")
+    update_datetime = serializers.DateTimeField(read_only=True, format="%Y-%m-%d %H:%M:%S")
+
+    class Meta:
+        model = {{ table.class_name }}
+        fields = "__all__"
+        read_only_fields = ["id", "create_datetime", "update_datetime"]
+
+
+class {{ table.class_name }}CreateSerializer(serializers.ModelSerializer):
+    """
+    {{ table.table_comment or table.class_name }} - 创建序列化器
+    """
+    class Meta:
+        model = {{ table.class_name }}
+        exclude = ["create_datetime", "update_datetime"]
+
+
+class {{ table.class_name }}UpdateSerializer(serializers.ModelSerializer):
+    """
+    {{ table.table_comment or table.class_name }} - 更新序列化器
+    """
+    class Meta:
+        model = {{ table.class_name }}
+        exclude = ["create_datetime", "update_datetime"]
+        read_only_fields = ["id"]

@@ -1,0 +1,50 @@
+# -*- coding: utf-8 -*-
+"""
+@Remark: {{ table.table_comment or table.class_name }} - 视图
+"""
+from rest_framework import serializers
+from {{ module_name or 'apps' }}.{{ business_name }}.models import {{ table.class_name }}
+from {{ module_name or 'apps' }}.{{ business_name }}.serializers import (
+    {{ table.class_name }}Serializer,
+    {{ table.class_name }}CreateSerializer,
+    {{ table.class_name }}UpdateSerializer
+)
+from utils.viewset import CustomModelViewSet
+from utils.serializers import CustomModelSerializer
+
+
+class {{ table.class_name }}FilterSerializer(CustomModelSerializer):
+    """
+    {{ table.table_comment or table.class_name }} - 过滤序列化器
+    """
+    class Meta:
+        model = {{ table.class_name }}
+        fields = "__all__"
+
+
+class {{ table.class_name }}ViewSet(CustomModelViewSet):
+    """
+    {{ table.table_comment or table.class_name }} 接口
+    list: 查询所有{{ table.table_comment or table.class_name }}
+    create: 新增{{ table.table_comment or table.class_name }}
+    update: 修改{{ table.table_comment or table.class_name }}
+    retrieve: {{ table.table_comment or table.class_name }}详情
+    destroy: 删除{{ table.table_comment or table.class_name }}
+    """
+    queryset = {{ table.class_name }}.objects.all().order_by('-create_datetime')
+    serializer_class = {{ table.class_name }}Serializer
+    filterset_class = {{ table.class_name }}FilterSerializer
+
+    def get_queryset(self):
+        # 可根据需要添加过滤逻辑
+        return {{ table.class_name }}.objects.all()
+
+    def get_serializer_class(self):
+        """根据动作返回不同的序列化器"""
+        if self.action == 'list':
+            return {{ table.class_name }}Serializer
+        elif self.action == 'create':
+            return {{ table.class_name }}CreateSerializer
+        elif self.action in ['update', 'partial_update']:
+            return {{ table.class_name }}UpdateSerializer
+        return super().get_serializer_class()

@@ -1,0 +1,92 @@
+import api from "./api.js"
+
+/**
+ * 创建 CRUD 配置，支持覆盖配置
+ * @param {Object} options - 自定义配置选项
+ * @returns {Object} CRUD 配置对象
+ */
+export function createCrudConfig(options = {}){
+    // 命名规则（文件名 +Table）
+    let tableName = "{{ business_name }}ManageTable"
+    
+    //crud 请求方法配置
+    const request = {
+        add:api.add,
+        del:api.del,
+        edit:api.edit,
+        list:api.list,
+        export:api.export,
+        detail:null,
+        import:api.import,
+        dltemplate:api.downloadTemplate,
+        setStatus:api.setStatus,
+        ...(options.request || {}) // 允许覆盖请求方法
+    }
+    
+    //table 列配置
+    const defaultColumns = [
+        {% for col in columns %}
+        {% if col.is_list %}
+        {
+            label: "{{ col.column_comment }}",
+            prop: "{{ col.column_name }}",
+            {% if col.column_type|upper in ['VARCHAR', 'TEXT', 'CHAR'] %}
+            minWidth: "130"
+            {% elif col.column_type|upper in ['INT', 'BIGINT', 'DOUBLE', 'DECIMAL'] %}
+            width: "100"
+            {% elif col.column_type|upper in ['DATE', 'DATETIME', 'TIMESTAMP'] %}
+            minWidth: "180"
+            {% else %}
+            minWidth: "120"
+            {% endif %}
+        },
+        {% endif %}
+        {% endfor %}
+        {
+            label: "状态",
+            prop: "status",
+            slot: "status",
+            width: "100"
+        }
+    ]
+
+    return {
+        crudOptions:{
+            //接口配置
+            request: request,
+            //搜索栏目配置
+            searchBar:{
+                showSearchBar:true,//显示搜索栏目
+                ...(options.searchBar || {})
+            },
+            //分页
+            pagination:{
+                hidePagination:false,
+                ...(options.pagination || {})
+            },
+            //crud 按钮配置
+            rowHandle:{
+                width: 150,//操作列宽度，0 表示不显示表格操作列
+                fixed:"right",//固定操作列在右侧
+                ...(options.rowHandle || {})
+            },
+            //table 属性
+            table: {
+                tableName:tableName,
+                pageSize:20,
+				rowKey: 'id',
+				lazy: false,
+                isTree:false,
+				treeProps: { children: 'children', hasChildren: 'hasChildren' },
+                border:true,
+                defaultExpandAll:false,
+                showSelectable:true,//表格显示复选项框
+                hideImport:true,
+                hideExport:false,
+                ...(options.table || {})
+			},
+            //table 列字段
+            columns:options.columns || defaultColumns
+        }
+    }
+}

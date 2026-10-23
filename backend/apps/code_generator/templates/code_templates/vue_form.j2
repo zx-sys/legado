@@ -1,0 +1,198 @@
+<!-- {{ table.table_comment or table.class_name }} - 表单组件 -->
+<!-- 生成时间：{{ datetime }} -->
+
+<template>
+    <el-dialog
+        :title="dialogTitle"
+        v-model="dialogVisible"
+        :close-on-click-modal="false"
+        width="600px"
+        @closed="handleClosed"
+    >
+        <el-form
+            ref="formRef"
+            :model="formData"
+            :rules="formRules"
+            label-width="100px"
+            size="default"
+        >
+            {% for col in columns %}
+            {% if col.is_insert or col.is_edit %}
+            {% if col.column_name not in ['id', 'create_datetime', 'update_datetime', 'creator', 'dept_belong_id'] %}
+            <el-form-item
+                label="{{ col.column_comment }}"
+                prop="{{ col.column_name }}"
+                {% if col.is_edit %}v-if="!isEdit"{% endif %}
+            >
+                {% if col.show_type == 'textarea' %}
+                <el-input
+                    v-model="formData.{{ col.column_name }}"
+                    type="textarea"
+                    :rows="3"
+                    placeholder="请输入{{ col.column_comment }}"
+                    maxlength="500"
+                    show-word-limit
+                />
+                {% elif col.show_type in ['select', 'radio'] and col.dict_json %}
+                <el-select
+                    v-model="formData.{{ col.column_name }}"
+                    placeholder="请选择{{ col.column_comment }}"
+                    style="width: 100%"
+                    clearable
+                >
+                    <el-option
+                        v-for="item in dictStore.dictTypes['{{ col.dict_json }}']"
+                        :key="item.value"
+                        :label="item.label"
+                        :value="item.value"
+                    />
+                </el-select>
+                {% elif col.show_type == 'datetime' %}
+                <el-date-picker
+                    v-model="formData.{{ col.column_name }}"
+                    type="datetime"
+                    placeholder="选择{{ col.column_comment }}"
+                    value-format="YYYY-MM-DD HH:mm:ss"
+                    style="width: 100%"
+                />
+                {% elif col.django_field_type == 'BooleanField' %}
+                <el-switch
+                    v-model="formData.{{ col.column_name }}"
+                    active-text="是"
+                    inactive-text="否"
+                />
+                {% elif col.column_type|upper in ['INT', 'BIGINT', 'DOUBLE', 'DECIMAL'] %}
+                <el-input-number
+                    v-model="formData.{{ col.column_name }}"
+                    placeholder="请输入{{ col.column_comment }}"
+                    style="width: 100%"
+                    :min="0"
+                />
+                {% else %}
+                <el-input
+                    v-model="formData.{{ col.column_name }}"
+                    placeholder="请输入{{ col.column_comment }}"
+                    clearable
+                    maxlength="255"
+                />
+                {% endif %}
+            </el-form-item>
+            {% endif %}
+            {% endif %}
+            {% endfor %}
+        </el-form>
+        <template #footer>
+            <el-button @click="dialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="handleSubmit" :loading="submitting">确定</el-button>
+        </template>
+    </el-dialog>
+</template>
+
+<script setup name="{{ table.class_name }}Save">
+    import { ref, reactive, onMounted, nextTick } from 'vue'
+    import { ElMessage } from 'element-plus'
+    import { createCrudConfig } from './crud.js'
+    import { useDictStore } from '@/store/dict'
+
+    const dictStore = useDictStore()
+    const crudOptions = ref(createCrudConfig().crudOptions)
+
+    // 状态
+    const dialogVisible = ref(false)
+    const dialogTitle = ref('')
+    const isEdit = ref(false)
+    const submitting = ref(false)
+    const formRef = ref(null)
+
+    // 表单数据
+    const formData = reactive({
+        {% for col in columns %}
+        {% if col.is_insert or col.is_edit %}
+        {% if col.column_name not in ['id', 'create_datetime', 'update_datetime', 'creator', 'dept_belong_id'] %}
+        {{ col.column_name }}: undefined,
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+    })
+
+    // 表单验证规则
+    const formRules = reactive({
+        {% for col in columns %}
+        {% if col.is_required and (col.is_insert or col.is_edit) %}
+        {% if col.column_name not in ['id', 'create_datetime', 'update_datetime', 'creator', 'dept_belong_id'] %}
+        {{ col.column_name }}: [
+            { required: true, message: '请输入{{ col.column_comment }}', trigger: 'blur' }
+        ],
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+    })
+
+    // 打开弹窗
+    const handleOpen = (row, type) => {
+        isEdit.value = type === 'edit'
+        dialogTitle.value = type === 'edit' ? '编辑{{ table.table_comment or table.class_name }}' : '新增{{ table.table_comment or table.class_name }}'
+        dialogVisible.value = true
+        
+        if (row) {
+            nextTick(() => {
+                Object.assign(formData, row)
+            })
+        }
+    }
+
+    // 提交表单
+    const handleSubmit = async () => {
+        try {
+            const valid = await formRef.value.validate()
+            if (!valid) return
+
+            submitting.value = true
+            const apiMethod = isEdit.value ? crudOptions.value.request.edit : crudOptions.value.request.add
+
+            const res = await apiMethod(formData)
+            if (res.code === 2000) {
+                ElMessage.success(isEdit.value ? '更新成功' : '创建成功')
+                dialogVisible.value = false
+                emit('refreshData')
+            } else {
+                ElMessage.error(res.msg || (isEdit.value ? '更新失败' : '创建失败'))
+            }
+        } catch (error) {
+            if (error !== 'cancel') {
+                console.error('提交失败:', error)
+                ElMessage.error('提交失败')
+            }
+        } finally {
+            submitting.value = false
+        }
+    }
+
+    // 重置表单
+    const resetForm = () => {
+        Object.keys(formData).forEach(key => {
+            formData[key] = undefined
+        })
+        formRef.value?.clearValidate()
+    }
+
+    // 弹窗关闭
+    const handleClosed = () => {
+        resetForm()
+    }
+
+    // 暴露方法给父组件
+    defineExpose({
+        handleOpen
+    })
+
+    const emit = defineEmits(['refreshData'])
+
+    onMounted(() => {
+        dictStore.initDict()
+    })
+</script>
+
+<style scoped lang="scss">
+// 可在此添加表单组件的自定义样式
+</style>

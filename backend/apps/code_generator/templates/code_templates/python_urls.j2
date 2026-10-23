@@ -1,0 +1,12 @@
+# -*- coding: utf-8 -*-
+"""
+@Remark: {{ table.table_comment or table.class_name }} - URL 路由配置
+"""
+from rest_framework.routers import DefaultRouter
+from {{ module_name or 'apps' }}.{{ business_name }}.views import {{ table.class_name }}ViewSet
+
+# 自动注册路由
+router = DefaultRouter(trailing_slash=True)
+router.register(r'', {{ table.class_name }}ViewSet, basename='{{ business_name }}')
+
+urlpatterns = router.urls

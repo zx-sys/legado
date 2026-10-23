@@ -1,0 +1,198 @@
+-- {{ table.table_comment or table.class_name }} - 菜单配置 SQL
+-- 生成时间：{{ datetime }}
+-- 使用说明：复制以下 SQL 到数据库执行，完成菜单和按钮权限的注册
+
+-- ============================================
+-- 1. 插入主菜单项
+-- ============================================
+INSERT INTO cc_menu (
+    id,
+    name,
+    parent_id,
+    path,
+    component,
+    redirect,
+    icon,
+    sort,
+    is_hidden,
+    is_link,
+    menu_type,
+    create_datetime,
+    update_datetime
+) VALUES (
+    UUID(),
+    '{{ table.table_comment or table.class_name }}管理',
+    UUID(),  -- 请替换为实际的父级菜单 ID，例如系统管理的菜单 ID
+    '/{{ module_name or 'system' }}/{{ business_name }}',
+    '{{ module_name or 'system' }}/{{ business_name }}/index',
+    NULL,
+    'document',  -- 可根据需要修改图标
+    1,
+    0,
+    0,
+    1,
+    NOW(),
+    NOW()
+);
+
+-- ============================================
+-- 2. 插入子按钮项（查询、新增、修改、删除、导出、导入）
+-- ============================================
+-- 注意：需要将上面的菜单 ID 替换为实际生成的 ID
+
+-- 查询按钮
+INSERT INTO cc_menu_button (
+    id,
+    menu_id,
+    name,
+    button_key,
+    permission_code,
+    sort,
+    create_datetime,
+    update_datetime
+) VALUES (
+    UUID(),
+    (SELECT id FROM cc_menu WHERE path = '/{{ module_name or 'system' }}/{{ business_name }}' LIMIT 1),
+    '查询',
+    'Query',
+    '{{ module_name or 'system' }}:{{ business_name }}:Query',
+    1,
+    NOW(),
+    NOW()
+);
+
+-- 新增按钮
+INSERT INTO cc_menu_button (
+    id,
+    menu_id,
+    name,
+    button_key,
+    permission_code,
+    sort,
+    create_datetime,
+    update_datetime
+) VALUES (
+    UUID(),
+    (SELECT id FROM cc_menu WHERE path = '/{{ module_name or 'system' }}/{{ business_name }}' LIMIT 1),
+    '新增',
+    'Create',
+    '{{ module_name or 'system' }}:{{ business_name }}:Create',
+    2,
+    NOW(),
+    NOW()
+);
+
+-- 修改按钮
+INSERT INTO cc_menu_button (
+    id,
+    menu_id,
+    name,
+    button_key,
+    permission_code,
+    sort,
+    create_datetime,
+    update_datetime
+) VALUES (
+    UUID(),
+    (SELECT id FROM cc_menu WHERE path = '/{{ module_name or 'system' }}/{{ business_name }}' LIMIT 1),
+    '修改',
+    'Update',
+    '{{ module_name or 'system' }}:{{ business_name }}:Update',
+    3,
+    NOW(),
+    NOW()
+);
+
+-- 删除按钮
+INSERT INTO cc_menu_button (
+    id,
+    menu_id,
+    name,
+    button_key,
+    permission_code,
+    sort,
+    create_datetime,
+    update_datetime
+) VALUES (
+    UUID(),
+    (SELECT id FROM cc_menu WHERE path = '/{{ module_name or 'system' }}/{{ business_name }}' LIMIT 1),
+    '删除',
+    'Delete',
+    '{{ module_name or 'system' }}:{{ business_name }}:Delete',
+    4,
+    NOW(),
+    NOW()
+);
+
+-- 导出按钮
+INSERT INTO cc_menu_button (
+    id,
+    menu_id,
+    name,
+    button_key,
+    permission_code,
+    sort,
+    create_datetime,
+    update_datetime
+) VALUES (
+    UUID(),
+    (SELECT id FROM cc_menu WHERE path = '/{{ module_name or 'system' }}/{{ business_name }}' LIMIT 1),
+    '导出',
+    'Export',
+    '{{ module_name or 'system' }}:{{ business_name }}:Export',
+    5,
+    NOW(),
+    NOW()
+);
+
+-- 导入按钮
+INSERT INTO cc_menu_button (
+    id,
+    menu_id,
+    name,
+    button_key,
+    permission_code,
+    sort,
+    create_datetime,
+    update_datetime
+) VALUES (
+    UUID(),
+    (SELECT id FROM cc_menu WHERE path = '/{{ module_name or 'system' }}/{{ business_name }}' LIMIT 1),
+    '导入',
+    'Import',
+    '{{ module_name or 'system' }}:{{ business_name }}:Import',
+    6,
+    NOW(),
+    NOW()
+);
+
+-- 状态按钮（如果有 status 字段）
+{% set has_status = columns | selectattr('column_name', 'equalto', 'status') | list | length > 0 %}
+{% if has_status %}
+INSERT INTO cc_menu_button (
+    id,
+    menu_id,
+    name,
+    button_key,
+    permission_code,
+    sort,
+    create_datetime,
+    update_datetime
+) VALUES (
+    UUID(),
+    (SELECT id FROM cc_menu WHERE path = '/{{ module_name or 'system' }}/{{ business_name }}' LIMIT 1),
+    '状态',
+    'SetStatus',
+    '{{ module_name or 'system' }}:{{ business_name }}:SetStatus',
+    7,
+    NOW(),
+    NOW()
+);
+{% endif %}
+
+-- ============================================
+-- 使用说明：
+-- 1. 执行前请将 parent_id 替换为实际的父级菜单 ID
+-- 2. 执行后可在角色管理中为新菜单分配权限
+-- 3. 如需修改菜单图标，可修改 icon 字段（参考 Element Plus 图标库）
+-- ============================================

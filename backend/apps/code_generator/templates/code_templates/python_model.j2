@@ -1,0 +1,102 @@
+# -*- coding: utf-8 -*-
+"""
+@Remark: {{ table.table_comment or table.class_name }} - 业务模型
+"""
+from django.db import models
+from utils.models import CoreModel, table_prefix
+
+
+class {{ table.class_name }}(CoreModel):
+    """
+    {{ table.table_comment or table.class_name }} - 业务模型
+    """
+{% set choice_fields = [] %}
+{% for col in columns %}
+{% if col.dict_json and col.show_type in ['select', 'radio'] %}
+{% set _ = choice_fields.append(col) %}
+    {{ col.column_name|upper }}_CHOICES = (
+        # 需要根据实际字典 {{ col.dict_json }} 填充选项
+        # 示例：('1', '选项 1'), ('2', '选项 2'),
+    )
+{% endif %}
+{% endfor %}
+{% for col in columns %}
+    {% if col.column_name not in ['id', 'create_datetime', 'update_datetime', 'creator', 'dept_belong_id', 'status'] %}
+    {% if col.django_field_type == 'CharField' %}
+    {{ col.column_name }} = models.CharField(
+        max_length=255,
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        {% if col.is_required %}blank=False, null=False{% else %}blank=True, null=True{% endif %}
+        {% if col.dict_json and col.show_type in ['select', 'radio'] %},
+        choices={{ col.column_name|upper }}_CHOICES,
+        default=''{% endif %}
+    )
+    {% elif col.django_field_type == 'IntegerField' %}
+    {{ col.column_name }} = models.IntegerField(
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        {% if not col.is_required %}blank=True, null=True{% endif %}
+        {% if col.dict_json and col.show_type in ['select', 'radio'] %},
+        choices={{ col.column_name|upper }}_CHOICES,
+        default=0{% endif %}
+    )
+    {% elif col.django_field_type == 'BigIntegerField' %}
+    {{ col.column_name }} = models.BigIntegerField(
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        {% if not col.is_required %}blank=True, null=True{% endif %}
+    )
+    {% elif col.django_field_type == 'FloatField' %}
+    {{ col.column_name }} = models.FloatField(
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        {% if not col.is_required %}blank=True, null=True{% endif %}
+    )
+    {% elif col.django_field_type == 'DecimalField' %}
+    {{ col.column_name }} = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        {% if not col.is_required %}blank=True, null=True{% endif %}
+    )
+    {% elif col.django_field_type == 'DateTimeField' %}
+    {{ col.column_name }} = models.DateTimeField(
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        {% if not col.is_required %}blank=True, null=True{% else %}, auto_now_add=True{% endif %}
+    )
+    {% elif col.django_field_type == 'BooleanField' %}
+    {{ col.column_name }} = models.BooleanField(
+        default=True,
+        verbose_name="{{ col.column_comment or col.column_name }}"
+    )
+    {% elif col.django_field_type == 'TextField' %}
+    {{ col.column_name }} = models.TextField(
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        {% if not col.is_required %}blank=True, null=True{% endif %}
+    )
+    {% elif col.django_field_type == 'JSONField' %}
+    {{ col.column_name }} = models.JSONField(
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        {% if not col.is_required %}blank=True, null=True{% endif %}
+    )
+    {% else %}
+    {{ col.column_name }} = models.CharField(
+        max_length=255,
+        verbose_name="{{ col.column_comment or col.column_name }}",
+        blank=True,
+        null=True
+    )
+    {% endif %}
+    {% endif %}
+{% endfor %}
+
+    class Meta:
+        db_table = table_prefix + "{{ table.table_name }}"
+        verbose_name = "{{ table.table_comment or table.class_name }}"
+        verbose_name_plural = verbose_name
+        ordering = ['-create_datetime']
+
+    def __str__(self):
+        {% for col in columns %}
+        {% if col.is_pk %}
+        return f"[{self.{{ col.column_name }}}] {{ table.table_comment or table.class_name }}"
+        {% endif %}
+        {% endfor %}
+        return f"[{self.id}] {{ table.table_comment or table.class_name }}"

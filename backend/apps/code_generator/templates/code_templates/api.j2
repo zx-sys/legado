@@ -1,0 +1,29 @@
+{# apps/code_generator/templates/code_templates/api.j2 #}
+{# Generated API functions for {{ table.table_name }} #}
+
+// {{ table.function_name|default(table.business_name) }} - API 接口
+// 生成时间：{{ datetime }}
+
+import {ajaxGet, ajaxPost, ajaxDelete, ajaxPut, ajaxDownloadExcel} from './request'
+
+const {{ table.class_name }}Api = {}
+
+// {{ table.function_name|default(table.business_name) }}管理 - 列表
+{{ table.class_name }}Api.{{ table.business_name }}List = params => ajaxGet({url: `/api/{{ table.module_name|default('api') }}/{{ table.business_name }}/`, params})
+
+// {{ table.function_name|default(table.business_name) }}管理 - 详情
+{{ table.class_name }}Api.{{ table.business_name }}Detail = (id) => ajaxGet({url: `/api/{{ table.module_name|default('api') }}/{{ table.business_name }}/` + id + '/', params: {}})
+
+// {{ table.function_name|default(table.business_name) }}管理 - 新增
+{{ table.class_name }}Api.{{ table.business_name }}Add = params => ajaxPost({url: `/api/{{ table.module_name|default('api') }}/{{ table.business_name }}/`, params})
+
+// {{ table.function_name|default(table.business_name) }}管理 - 编辑
+{{ table.class_name }}Api.{{ table.business_name }}Edit = params => ajaxPut({url: `/api/{{ table.module_name|default('api') }}/{{ table.business_name }}/`, params})
+
+// {{ table.function_name|default(table.business_name) }}管理 - 删除
+{{ table.class_name }}Api.{{ table.business_name }}Delete = params => ajaxDelete({url: `/api/{{ table.module_name|default('api') }}/{{ table.business_name }}/`, params})
+
+// {{ table.function_name|default(table.business_name) }}管理 - 导出
+{{ table.class_name }}Api.{{ table.business_name }}Export = (queryParams, params) => ajaxDownloadExcel({url: `/api/{{ table.module_name|default('api') }}/{{ table.business_name }}/export_data/`, queryParams: queryParams, params})
+
+export default {{ table.class_name }}Api
