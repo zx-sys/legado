@@ -38,7 +38,6 @@ import io.legado.app.help.DefaultData
 import io.legado.app.help.DispatchersMonitor
 import io.legado.app.help.LifecycleHelp
 import io.legado.app.help.RuleBigDataHelp
-import io.legado.app.help.tts.NeuralTtsModel
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ResourceThemeGeneration
 import io.legado.app.help.config.AppConfig
@@ -106,9 +105,7 @@ class App : Application() {
                 .setLogger(EventLogger())
             DefaultData.upVersion()
             DefaultData.importDefaultHttpTTS()
-            if (!NeuralTtsModel.isInstalled()) {
-                NeuralTtsModel.ensureBundledInstalled()
-            }
+            DefaultData.removeUnusableBookSourcesIfNeeded()
             AppFreezeMonitor.init(this@App)
             DispatchersMonitor.init()
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))

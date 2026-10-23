@@ -16,34 +16,32 @@ import okhttp3.Request
 import splitties.init.appCtx
 import java.io.File
 import java.io.IOException
-import java.io.InputStream
 import java.util.concurrent.TimeUnit
 
 /**
- * vits-melo-tts-zh_en: 中英混读，1 个女声，首次使用需下载约 163MB。
- * 国内直连 GitHub 经常失败，按顺序尝试多个镜像；也可从本地压缩包导入。
+ * vits-melo-tts-zh_en: 中英混读，1 个女声，首次使用需从 OSS 下载约 159MB。
+ * OSS 失败时按顺序尝试 GitHub 镜像；也可从本地压缩包导入。
  */
 object NeuralTtsModel {
 
     const val ENGINE_ID = "local-neural-tts"
     const val DISPLAY_NAME = "本地中英双语 TTS"
-    const val DOWNLOAD_SIZE = 163L * 1024 * 1024
+    const val DOWNLOAD_SIZE = 159L * 1024 * 1024
 
     private const val GITHUB_URL =
         "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-melo-tts-zh_en.tar.bz2"
 
+    private const val OSS_URL =
+        "https://hgcc-test.oss-cn-hangzhou.aliyuncs.com/CourseStandards/legado/tts/vits-melo-tts-zh_en.tar.bz2"
+
     val DOWNLOAD_URLS = listOf(
+        OSS_URL,
         "https://gh-proxy.com/$GITHUB_URL",
         "https://ghproxy.net/$GITHUB_URL",
         GITHUB_URL,
-        "https://ghfast.top/$GITHUB_URL",
     )
 
-    @Deprecated("使用 DOWNLOAD_URLS")
-    val DOWNLOAD_URL = DOWNLOAD_URLS.first()
-
     private const val MODEL_DIR_NAME = "vits-melo-tts-zh_en"
-    private const val BUNDLED_ASSET = "tts/$MODEL_DIR_NAME.tar.bz2"
     private val requiredFiles = listOf(
         "model.onnx",
         "lexicon.txt",
@@ -60,35 +58,11 @@ object NeuralTtsModel {
     val modelDir: File
         get() = File(parentDir, MODEL_DIR_NAME)
 
-    val isBundledAvailable: Boolean by lazy {
-        runCatching { appCtx.assets.open(BUNDLED_ASSET).close() }.isSuccess
-    }
-
     fun isInstalled(): Boolean {
         return modelDir.isDirectory && requiredFiles.all { File(modelDir, it).isFile }
     }
 
     fun modelFile(name: String): String = File(modelDir, name).absolutePath
-
-    /**
-     * 内置模型首次启动时解压到外部文件目录，之后直接使用，无需联网。
-     */
-    suspend fun ensureBundledInstalled(): Boolean {
-        if (isInstalled()) return true
-        if (!isBundledAvailable) return false
-        return downloadMutex.withLock {
-            if (isInstalled()) return@withLock true
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    appCtx.assets.open(BUNDLED_ASSET).use { input ->
-                        installFromArchive(input)
-                    }
-                }.onFailure {
-                    AppLog.put("安装内置语音模型失败\n${it.localizedMessage}", it)
-                }.isSuccess
-            }
-        }
-    }
 
     suspend fun download(
         onProgress: (downloaded: Long, total: Long) -> Unit,
@@ -191,12 +165,6 @@ object NeuralTtsModel {
     private fun installFromArchive(pfd: ParcelFileDescriptor) {
         installFrom { staging ->
             LibArchiveUtils.unArchive(pfd, staging, ::isModelEntry)
-        }
-    }
-
-    private fun installFromArchive(input: InputStream) {
-        installFrom { staging ->
-            LibArchiveUtils.unArchive(input, staging, ::isModelEntry)
         }
     }
 

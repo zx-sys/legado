@@ -27,6 +27,7 @@ import io.legado.app.service.BaseReadAloudService
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.dpToPx
+import io.legado.app.utils.toastOnUi
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -64,6 +65,7 @@ class ReadAloudControls(
             .forEach { it.setOnTouchListener(::onTouch) }
         binding.ivPauseAloud.setOnLongClickListener {
             ReadAloud.stop(context)
+            context.toastOnUi("已停止朗读")
             true
         }
     }

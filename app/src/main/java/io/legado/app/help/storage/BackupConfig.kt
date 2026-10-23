@@ -113,7 +113,9 @@ object BackupConfig {
         PreferKey.bitmapCacheSize,
         PreferKey.webServiceWakeLock,
         PreferKey.readAloudWakeLock,
-        PreferKey.audioPlayWakeLock
+        PreferKey.audioPlayWakeLock,
+        PreferKey.backupPhone,
+        PreferKey.backupServerUrl
     )
 
     //阅读配置

@@ -45,6 +45,10 @@ internal fun resolveReadAloudEngineName(
 object ReadAloud {
     var httpTTS: HttpTTS? = null
     val ttsEngine get() = ReadBook.book?.getTtsEngine() ?: AppConfig.ttsEngine
+
+    val isNeuralTtsSelected: Boolean
+        get() = GSON.fromJsonObject<SelectItem<String>>(ttsEngine)
+            .getOrNull()?.value == NeuralTtsModel.ENGINE_ID
     private var aloudClass: Class<*> = getReadAloudClass()
 
     val followReadAloudPosition: Boolean

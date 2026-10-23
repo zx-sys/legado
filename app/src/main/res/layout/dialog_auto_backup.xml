@@ -29,7 +29,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="48dp"
-            android:text="@string/backup_local_webdav" />
+            android:text="@string/backup_local_server" />
     </RadioGroup>
 
     <io.legado.app.ui.widget.text.TextInputLayout

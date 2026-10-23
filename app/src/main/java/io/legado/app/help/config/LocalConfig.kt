@@ -74,6 +74,10 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
     val needUpBookSources: Boolean
         get() = !isLastVersion(1, "bookSourceVersion")
 
+    var unusableBookSourcesRemoved: Boolean
+        get() = getBoolean("unusableBookSourcesRemoved")
+        set(value) = putBoolean("unusableBookSourcesRemoved", value)
+
     var versionCode
         get() = getLong(versionCodeKey, 0)
         set(value) {

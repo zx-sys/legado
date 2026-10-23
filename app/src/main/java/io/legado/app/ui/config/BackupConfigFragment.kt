@@ -19,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
+import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
@@ -26,11 +27,12 @@ import io.legado.app.databinding.DialogAutoBackupBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.databinding.DialogLanBackupSendBinding
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.storage.BackupServer
+import io.legado.app.help.storage.ServerBackup
 import io.legado.app.help.storage.BackupConfig
 import io.legado.app.help.storage.ImportOldData
 import io.legado.app.help.storage.LanBackupSession
@@ -76,7 +78,7 @@ class BackupConfigFragment : PreferenceFragment(),
     private val viewModel by activityViewModels<ConfigViewModel>()
     private val waitDialog by lazy { WaitDialog(requireContext()) }
     private var backupJob: Job? = null
-    private var manualBackupUploadWebDav = true
+    private var manualBackupUploadServer = true
     private var restoreJob: Job? = null
     private var lanBackupJob: Job? = null
     private var lanBackupSession: LanBackupSession? = null
@@ -95,11 +97,11 @@ class BackupConfigFragment : PreferenceFragment(),
         result.uri?.let { uri ->
             if (uri.isContentScheme()) {
                 AppConfig.backupPath = uri.toString()
-                backup(uri.toString(), manualBackupUploadWebDav)
+                backup(uri.toString(), manualBackupUploadServer)
             } else {
                 uri.path?.let { path ->
                     AppConfig.backupPath = path
-                    backup(path, manualBackupUploadWebDav)
+                    backup(path, manualBackupUploadServer)
                 }
             }
         }
@@ -128,7 +130,7 @@ class BackupConfigFragment : PreferenceFragment(),
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
-        manualBackupUploadWebDav = savedInstanceState?.getBoolean("manualBackupUploadWebDav", true) ?: true
+        manualBackupUploadServer = savedInstanceState?.getBoolean("manualBackupUploadServer", true) ?: true
         addPreferencesFromResource(R.xml.pref_config_backup)
         findPreference<EditTextPreference>(PreferKey.webDavPassword)?.let {
             it.setOnBindEditTextListener { editText ->
@@ -154,6 +156,17 @@ class BackupConfigFragment : PreferenceFragment(),
         upPreferenceSummary(PreferKey.webDavPassword, getPrefString(PreferKey.webDavPassword))
         upPreferenceSummary(PreferKey.webDavDir, AppConfig.webDavDir)
         upPreferenceSummary(PreferKey.webDavDeviceName, AppConfig.webDavDeviceName)
+        findPreference<EditTextPreference>(PreferKey.backupPhone)?.let {
+            it.setOnBindEditTextListener { editText ->
+                editText.inputType = InputType.TYPE_CLASS_PHONE
+                editText.setSelection(editText.text.length)
+            }
+        }
+        upPreferenceSummary(PreferKey.backupPhone, getPrefString(PreferKey.backupPhone))
+        upPreferenceSummary(
+            PreferKey.backupServerUrl,
+            getPrefString(PreferKey.backupServerUrl)
+        )
         upPreferenceSummary(PreferKey.backupPath, getPrefString(PreferKey.backupPath))
         updateAutoBackupSummary()
         findPreference<io.legado.app.lib.prefs.Preference>("web_dav_restore")
@@ -165,7 +178,7 @@ class BackupConfigFragment : PreferenceFragment(),
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putBoolean("manualBackupUploadWebDav", manualBackupUploadWebDav)
+        outState.putBoolean("manualBackupUploadServer", manualBackupUploadServer)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -174,9 +187,6 @@ class BackupConfigFragment : PreferenceFragment(),
         preferenceManager.sharedPreferences?.registerOnSharedPreferenceChangeListener(this)
         listView.setEdgeEffectColor(primaryColor)
         activity?.addMenuProvider(this, viewLifecycleOwner)
-        if (!LocalConfig.backupHelpVersionIsLast) {
-            showHelp("webDavHelp")
-        }
     }
 
     override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
@@ -219,6 +229,9 @@ class BackupConfigFragment : PreferenceFragment(),
             }
 
             PreferKey.webDavDeviceName -> upPreferenceSummary(key, getPrefString(key))
+
+            PreferKey.backupPhone,
+            PreferKey.backupServerUrl -> upPreferenceSummary(key, getPrefString(key))
         }
     }
 
@@ -254,6 +267,14 @@ class BackupConfigFragment : PreferenceFragment(),
                 else -> value
             }
 
+            PreferKey.backupPhone -> preference.summary =
+                value?.takeIf { it.isNotBlank() } ?: getString(R.string.backup_phone_s)
+
+            PreferKey.backupServerUrl -> preference.summary =
+                value?.takeIf { it.isNotBlank() }
+                    ?: BuildConfig.BackupServerUrl.takeIf { it.isNotBlank() }
+                    ?: getString(R.string.backup_server_url_s)
+
             else -> {
                 if (preference is ListPreference) {
                     val index = preference.findIndexOfValue(value)
@@ -286,7 +307,7 @@ class BackupConfigFragment : PreferenceFragment(),
     private fun updateAutoBackupSummary() {
         findPreference<Preference>(PreferKey.autoBackup)?.summary = if (AppConfig.autoBackup) {
             getString(R.string.auto_backup_destination_summary,
-                getString(if (AppConfig.autoBackupWebDav) R.string.backup_local_webdav else R.string.backup_local_only),
+                getString(if (AppConfig.autoBackupWebDav) R.string.backup_local_server else R.string.backup_local_only),
                 AppConfig.autoBackupIntervalDays)
         } else getString(R.string.auto_backup_disabled)
     }
@@ -528,17 +549,17 @@ class BackupConfigFragment : PreferenceFragment(),
 
     fun backup() {
         requireContext().selector(R.string.backup, listOf(
-            getString(R.string.backup_local_only), getString(R.string.backup_local_webdav),
+            getString(R.string.backup_local_only), getString(R.string.backup_local_server),
         )) { _, index ->
-            manualBackupUploadWebDav = index == 1
-            startBackup(manualBackupUploadWebDav)
+            manualBackupUploadServer = index == 1
+            startBackup(manualBackupUploadServer)
         }
     }
 
-    private fun startBackup(uploadWebDav: Boolean) {
+    private fun startBackup(uploadServer: Boolean) {
         val backupPath = AppConfig.backupPath
         if (backupPath.isNullOrEmpty()) {
-            backup(null, uploadWebDav)
+            backup(null, uploadServer)
         } else {
             if (backupPath.isContentScheme()) {
                 lifecycleScope.launch {
@@ -546,18 +567,18 @@ class BackupConfigFragment : PreferenceFragment(),
                         FileDoc.fromDir(backupPath).checkWrite()
                     }
                     if (canWrite) {
-                        backup(backupPath, uploadWebDav)
+                        backup(backupPath, uploadServer)
                     } else {
                         backupDir.launch()
                     }
                 }
             } else {
-                backupUsePermission(backupPath, uploadWebDav)
+                backupUsePermission(backupPath, uploadServer)
             }
         }
     }
 
-    private fun backup(backupPath: String?, uploadWebDav: Boolean) {
+    private fun backup(backupPath: String?, uploadServer: Boolean) {
         waitDialog.setText("备份中…")
         waitDialog.setOnCancelListener {
             backupJob?.cancel()
@@ -566,7 +587,12 @@ class BackupConfigFragment : PreferenceFragment(),
         backupJob?.cancel()
         backupJob = lifecycleScope.launch {
             try {
-                Backup.backupLocked(requireContext(), backupPath, uploadWebDav)
+                Backup.backupLocked(
+                    requireContext(),
+                    backupPath,
+                    uploadServer,
+                    trigger = "manual",
+                )
                 appCtx.toastOnUi(R.string.backup_success)
             } catch (e: Throwable) {
                 ensureActive()
@@ -584,12 +610,12 @@ class BackupConfigFragment : PreferenceFragment(),
         }
     }
 
-    private fun backupUsePermission(path: String, uploadWebDav: Boolean) {
+    private fun backupUsePermission(path: String, uploadServer: Boolean) {
         PermissionsCompat.Builder()
             .addPermissions(*Permissions.Group.STORAGE)
             .rationale(R.string.tip_perm_request_storage)
             .onGranted {
-                backup(path, uploadWebDav)
+                backup(path, uploadServer)
             }
             .request()
     }
@@ -604,13 +630,13 @@ class BackupConfigFragment : PreferenceFragment(),
             restoreJob = coroutineContext[Job]
             showRestoreDialog(requireContext())
         }.onError {
-            AppLog.put("恢复备份出错WebDavError\n${it.localizedMessage}", it)
+            AppLog.put("服务器恢复出错\n${it.localizedMessage}", it)
             if (context == null) {
                 return@onError
             }
             alert {
                 setTitle(R.string.restore)
-                setMessage("WebDavError\n${it.localizedMessage}\n将从本地备份恢复。")
+                setMessage("${it.localizedMessage}\n将从本地备份恢复。")
                 okButton {
                     restoreFromLocal()
                 }
@@ -622,37 +648,36 @@ class BackupConfigFragment : PreferenceFragment(),
     }
 
     private suspend fun showRestoreDialog(context: Context) {
-        val names = withContext(IO) { AppWebDav.getBackupNames() }
-        if (AppWebDav.isJianGuoYun && names.size > 700) {
-            context.toastOnUi("由于坚果云限制列出文件数量，部分备份可能未显示，请及时清理旧备份")
+        if (!BackupServer.isConfigured) {
+            throw NoStackTraceException(getString(R.string.backup_server_not_configured))
         }
-        if (names.isNotEmpty()) {
-            currentCoroutineContext().ensureActive()
-            withContext(Main) {
-                context.selector(
-                    title = context.getString(R.string.select_restore_file),
-                    items = names
-                ) { _, index ->
-                    if (index in 0 until names.size) {
-                        listView.post {
-                            restoreWebDav(names[index])
-                        }
+        val backups = withContext(IO) { BackupServer.list() }
+        if (backups.isEmpty()) {
+            throw NoStackTraceException(getString(R.string.backup_server_empty))
+        }
+        currentCoroutineContext().ensureActive()
+        withContext(Main) {
+            context.selector(
+                title = context.getString(R.string.select_restore_file),
+                items = backups.map { it.displayName }
+            ) { _, index ->
+                if (index in 0 until backups.size) {
+                    listView.post {
+                        restoreServer(backups[index])
                     }
                 }
             }
-        } else {
-            throw NoStackTraceException("Web dav no back up file")
         }
     }
 
-    private fun restoreWebDav(name: String) {
+    private fun restoreServer(backup: ServerBackup) {
         waitDialog.setText("恢复中…")
         waitDialog.show()
         val task = Coroutine.async {
-            AppWebDav.restoreWebDav(name)
+            BackupServer.restore(backup)
         }.onError {
-            AppLog.put("WebDav恢复出错\n${it.localizedMessage}", it)
-            appCtx.toastOnUi("WebDav恢复出错\n${it.localizedMessage}")
+            AppLog.put("服务器恢复出错\n${it.localizedMessage}", it)
+            appCtx.toastOnUi("服务器恢复出错\n${it.localizedMessage}")
         }.onFinally {
             waitDialog.dismiss()
         }

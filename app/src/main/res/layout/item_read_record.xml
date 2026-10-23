@@ -4,7 +4,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="?attr/selectableItemBackground"
     android:paddingLeft="10dp"
     android:paddingRight="10dp">
 
@@ -13,7 +12,10 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:padding="6dp"
+        android:ellipsize="end"
         android:textColor="@color/primaryText"
+        android:textSize="16sp"
+        android:textStyle="bold"
         android:singleLine="true"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -50,6 +52,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:padding="6dp"
+        android:ellipsize="end"
         android:singleLine="true"
         android:textColor="@color/secondaryText"
         app:layout_constraintLeft_toRightOf="@+id/tv_reading_time_tag"
@@ -80,6 +83,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:padding="6dp"
+        android:ellipsize="end"
         android:singleLine="true"
         android:textColor="@color/secondaryText"
         app:layout_constraintLeft_toRightOf="@+id/tv_last_read_time_tag"
@@ -94,8 +98,7 @@
         android:padding="6dp"
         android:text="@string/clear"
         android:textColor="@color/primaryText"
-        android:background="?attr/selectableItemBackground"
-        app:layout_constraintRight_toRightOf="parent"
+            app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 

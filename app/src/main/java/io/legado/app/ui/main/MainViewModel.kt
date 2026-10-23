@@ -15,6 +15,8 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.saveReadRecordSnapshot
 import io.legado.app.help.AppWebDav
+import io.legado.app.help.storage.BackupServer
+import io.legado.app.help.storage.ServerBackup
 import io.legado.app.help.DefaultData
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.addType
@@ -350,6 +352,17 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
                 }
             }
         }
+    }
+
+    fun restoreServer(backup: ServerBackup, restoredLastBackup: Long) {
+        executeLazy {
+            BackupServer.restore(backup)
+        }.onSuccess {
+            LocalConfig.lastBackup = maxOf(LocalConfig.lastBackup, restoredLastBackup)
+        }.onError {
+            AppLog.put("服务器恢复出错\n${it.localizedMessage}", it)
+            context.toastOnUi("${context.getString(R.string.restore_fail)}\n${it.localizedMessage}")
+        }.start()
     }
 
     fun restoreWebDav(name: String, restoredLastBackup: Long) {

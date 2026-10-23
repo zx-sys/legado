@@ -9,7 +9,6 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
@@ -144,18 +143,37 @@ object Backup {
         backupRestoreMutex.withLock {
             if (AppConfig.autoBackup && shouldBackup()) {
                 withContext(IO) {
-                    check(backup(context, AppConfig.backupPath, uploadWebDav = AppConfig.autoBackupWebDav)) {
-                        "生成备份失败"
-                    }
+                    val uploadServer =
+                        AppConfig.autoBackupWebDav && BackupServer.isConfigured
+                    check(
+                        backup(
+                            context,
+                            AppConfig.backupPath,
+                            uploadServer = uploadServer,
+                            trigger = "auto",
+                        )
+                    ) { "生成备份失败" }
                 }
             }
         }
     }
 
-    suspend fun backupLocked(context: Context, path: String?, uploadWebDav: Boolean = true) {
+    suspend fun backupLocked(
+        context: Context,
+        path: String?,
+        uploadServer: Boolean = true,
+        trigger: String = "manual",
+    ) {
         backupRestoreMutex.withLock {
             withContext(IO) {
-                check(backup(context, path, uploadWebDav = uploadWebDav)) { "生成备份失败" }
+                check(
+                    backup(
+                        context,
+                        path,
+                        uploadServer = uploadServer,
+                        trigger = trigger,
+                    )
+                ) { "生成备份失败" }
             }
         }
     }
@@ -196,7 +214,7 @@ object Backup {
                     backup(
                         context,
                         AppConfig.backupPath,
-                        uploadWebDav = false,
+                        uploadServer = false,
                         contentKeys = BackupConfig.contentKeys
                             .filterNotTo(hashSetOf()) {
                                 it == BackupConfig.cookieContentKey ||
@@ -212,7 +230,8 @@ object Backup {
         context: Context,
         path: String?,
         lanTransfer: Boolean = false,
-        uploadWebDav: Boolean = !lanTransfer,
+        uploadServer: Boolean = false,
+        trigger: String = "manual",
         contentKeys: Set<String>? = null,
         workingZipFile: File = File(zipFilePath),
     ): Boolean {
@@ -452,13 +471,8 @@ object Backup {
                     copyBackup(workingZipFile, File(path), backupFileName)
                 }
             }
-            if (uploadWebDav) {
-                AppWebDav.backUpWebDav(zipFileName)
-                if (backupBackgrounds) {
-                    backgroundPaths.map {
-                        if (it.contains(File.separator)) File(it) else appCtx.externalFiles.getFile("bg", it)
-                    }.let { AppWebDav.upBgs(it.toTypedArray()) }
-                }
+            if (uploadServer) {
+                BackupServer.upload(workingZipFile, trigger, backupFileName)
             }
             currentCoroutineContext().ensureActive()
             if (!lanTransfer) LocalConfig.lastBackup = System.currentTimeMillis()

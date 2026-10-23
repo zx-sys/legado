@@ -117,6 +117,29 @@ object DefaultData {
         }
     }
 
+    private val removedBookSourceUrls: List<String> by lazy {
+        val json = String(
+            appCtx.assets.open("defaultData${File.separator}removedBookSources.json")
+                .readBytes()
+        )
+        GSON.fromJsonArray<String>(json).getOrElse { emptyList() }
+    }
+
+    /**
+     * 清理历史版本导入的不可用默认书源（需登录/验证码/已失效）。
+     */
+    fun removeUnusableBookSourcesIfNeeded() {
+        if (LocalConfig.unusableBookSourcesRemoved) return
+        removedBookSourceUrls.forEach { appDb.bookSourceDao.delete(it) }
+        appDb.bookSourceDao.getBookSource("https://www.lanlanbo.com")?.let { source ->
+            if (source.bookSourceName.contains('\uFFFD')) {
+                source.bookSourceName = "海棠搜书🔞蓝海搜书"
+                appDb.bookSourceDao.insert(source)
+            }
+        }
+        LocalConfig.unusableBookSourcesRemoved = true
+    }
+
     val keyboardAssists: List<KeyboardAssist> by lazy {
         val json = String(
             appCtx.assets.open("defaultData${File.separator}keyboardAssists.json")

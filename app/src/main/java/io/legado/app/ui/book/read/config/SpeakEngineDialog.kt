@@ -165,8 +165,6 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
                 cbName.setOnClickListener {
                     if (NeuralTtsModel.isInstalled()) {
                         upTts(GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID)))
-                    } else if (NeuralTtsModel.isBundledAvailable) {
-                        installBundledModel()
                     } else {
                         downloadLocalModel()
                     }
@@ -324,35 +322,24 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
     }
 
     private fun localModelSummary(): String {
-        return when {
-            NeuralTtsModel.isInstalled() ->
-                "${NeuralTtsModel.DISPLAY_NAME}（已安装 · 1 个女声）"
-            NeuralTtsModel.isBundledAvailable ->
-                "${NeuralTtsModel.DISPLAY_NAME}（内置模型，首次使用自动安装）"
-            else ->
-                "${NeuralTtsModel.DISPLAY_NAME}（需下载约 ${NeuralTtsModel.DOWNLOAD_SIZE / 1024 / 1024}MB，长按可导入）"
+        return if (NeuralTtsModel.isInstalled()) {
+            "${NeuralTtsModel.DISPLAY_NAME}（已安装 · 1 个女声）"
+        } else {
+            "${NeuralTtsModel.DISPLAY_NAME}（需下载约 ${NeuralTtsModel.DOWNLOAD_SIZE / 1024 / 1024}MB，长按可导入）"
         }
     }
 
     private fun showLocalModelActions() {
         val installed = NeuralTtsModel.isInstalled()
-        val bundled = NeuralTtsModel.isBundledAvailable
         val actions = buildList {
-            add(
-                when {
-                    bundled && installed -> "重新安装内置模型"
-                    bundled -> "安装内置模型"
-                    installed -> "重新下载模型（自动切换线路）"
-                    else -> "在线下载模型（自动切换线路）"
-                }
-            )
+            add(if (installed) "重新下载模型（自动切换线路）" else "在线下载模型（自动切换线路）")
             add("导入本地模型压缩包")
             if (installed) add("删除本地模型")
         }
         alert(NeuralTtsModel.DISPLAY_NAME) {
             items(actions) { _, index ->
                 when (index) {
-                    0 -> if (bundled) installBundledModel() else downloadLocalModel()
+                    0 -> downloadLocalModel()
                     1 -> localModelImportResult.launch {
                         mode = HandleFileContract.FILE
                         title = "选择 vits-melo-tts-zh_en.tar.bz2"
@@ -360,26 +347,6 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
                     }
                     else -> confirmDeleteLocalModel()
                 }
-            }
-        }
-    }
-
-    private fun installBundledModel() {
-        val dialog = ProgressDialog(requireContext()).apply {
-            setTitle(NeuralTtsModel.DISPLAY_NAME)
-            setMessage("正在安装内置模型…")
-            setCancelable(false)
-            show()
-        }
-        lifecycleScope.launch {
-            val installed = NeuralTtsModel.ensureBundledInstalled()
-            if (isAdded) dialog.dismiss()
-            localModelRadio?.text = localModelSummary()
-            if (installed) {
-                toastOnUi("内置语音模型安装完成")
-                upTts(GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID)))
-            } else {
-                toastOnUi("安装失败，可长按选择在线下载或导入本地模型")
             }
         }
     }

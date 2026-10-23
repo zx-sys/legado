@@ -131,8 +131,19 @@
     <string name="lan_backup_send_confirm">Creates a temporary encrypted backup without saved cookies, login data, source/book variables, WebDAV/remote server settings, direct-link upload settings, caches, fonts, or local book files. Selected source/rule definitions and custom headers are transferred. Pair only with a trusted device and keep this screen open while it scans the QR code.</string>
     <string name="lan_backup_receive_confirm">Receive %1$s from %2$s and restore it? The current device will be backed up first. Saved cookies, login data, source/book variables, server settings, caches, fonts, and local book files are not transferred; selected source/rule definitions and custom headers are transferred.</string>
     <string name="lan_backup_waiting">Scan this QR code on the receiving device. The temporary session expires in five minutes.</string>
+    <string name="backup_account">Backup account</string>
+    <string name="backup_server_url">Server URL</string>
+    <string name="backup_server_url_s">e.g. http://192.168.1.10:8000</string>
+    <string name="backup_phone">Phone number</string>
+    <string name="backup_phone_s">Used directly as the user ID, no password</string>
+    <string name="backup_local_server">Local + phone backup</string>
+    <string name="backup_server_not_configured">Please fill in the backup server URL and phone number</string>
+    <string name="backup_server_empty">No backups on the server</string>
+    <string name="web_dav_sync_set">WebDav settings (book sync)</string>
     <string name="web_dav_set">WebDav settings</string>
     <string name="web_dav_set_import_old">WebDav settings/Import legacy data</string>
+    <string name="manual_backup">Manual backup</string>
+    <string name="manual_backup_summary">Create a backup now and upload it to the server</string>
     <string name="backup">Backup</string>
     <string name="restore">Restore</string>
     <string name="backup_permission">Backup needs storage permission</string>
@@ -982,7 +993,7 @@
     <string name="restore_ignore">Bypass list</string>
     <string name="restore_ignore_summary">Ignore some contents while restoring</string>
     <string name="backup_content">Backup content</string>
-    <string name="backup_content_summary">Select the data and media included in local and WebDAV backups</string>
+    <string name="backup_content_summary">Select the data and media included in local and phone backups</string>
     <string name="backup_content_bookshelf">Bookshelf and groups</string>
     <string name="backup_content_annotations">Bookmarks and annotations</string>
     <string name="backup_content_sources">Sources and subscriptions</string>
@@ -1405,7 +1416,7 @@
     <string name="same_title_removed">Remove duplicate title</string>
     <string name="update_book_fail">Update failed</string>
     <string name="notification_permission_rationale">Reading requires sending notifications to show reading control and download progress</string>
-    <string name="webdav_after_local_restore_confirm">The webDav book source is newer than the local one, whether to restore it or not</string>
+    <string name="webdav_after_local_restore_confirm">The cloud backup is newer than the local one, restore it?</string>
     <string name="c_whitelist">白名单(contentWhitelist)</string>
     <string name="c_blacklist">黑名单(contentBlacklist)</string>
     <string name="confirm">Confirm</string>

@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.database.ContentObserver
 import android.graphics.PorterDuff
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.provider.Settings
 import android.util.AttributeSet
@@ -45,11 +44,9 @@ import io.legado.app.ui.browser.WebViewActivity
 import io.legado.app.ui.widget.popupActionMenu
 import io.legado.app.ui.widget.seekbar.SeekBarChangeListener
 import io.legado.app.utils.ColorUtils
-import io.legado.app.utils.ConstraintModify
 import io.legado.app.utils.activity
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.applyNavigationBarPadding
-import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.gone
 import io.legado.app.utils.invisible
@@ -189,10 +186,6 @@ class ReadMenu @JvmOverloads constructor(
             tvChapterName.setTextColor(textColor)
             tvChapterUrl.setTextColor(textColor)
         }
-        val brightnessBackground = GradientDrawable()
-        brightnessBackground.cornerRadius = 5F.dpToPx()
-        brightnessBackground.setColor(ColorUtils.adjustAlpha(bgColor, 0.5f))
-        llBrightness.background = brightnessBackground
         if (AppConfig.isEInkMode) {
             titleBar.setBackgroundResource(R.drawable.bg_eink_border_bottom)
             llBottomBg.setBackgroundResource(R.drawable.bg_eink_border_top)
@@ -219,13 +212,10 @@ class ReadMenu @JvmOverloads constructor(
         tvReadAloud.setTextColor(textColor)
         ivFont.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
         tvFont.setTextColor(textColor)
-        ivVoice.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
-        tvVoice.setTextColor(textColor)
         ivSetting.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
         tvSetting.setTextColor(textColor)
         ivMemo.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
         tvMemo.setTextColor(textColor)
-        vwBrightnessPosAdjust.setColorFilter(textColor, PorterDuff.Mode.SRC_IN)
         seekBrightness.applyTint(context.accentColor)
         llBrightness.setOnClickListener(null)
         seekBrightness.post {
@@ -237,7 +227,6 @@ class ReadMenu @JvmOverloads constructor(
             titleBarAddition.gone()
         }
         updateTitleAdditionLayout()
-        upBrightnessVwPos()
         /**
          * 确保视图不被导航栏遮挡
          */
@@ -518,10 +507,6 @@ class ReadMenu @JvmOverloads constructor(
             }
 
         })
-        vwBrightnessPosAdjust.setOnClickListener {
-            AppConfig.brightnessVwPos = !AppConfig.brightnessVwPos
-            upBrightnessVwPos()
-        }
         //阅读进度
         seekReadPage.setOnSeekBarChangeListener(object : SeekBarChangeListener {
 
@@ -611,13 +596,6 @@ class ReadMenu @JvmOverloads constructor(
         llFont.setOnClickListener {
             runMenuOut {
                 callBack.showReadStyle()
-            }
-        }
-
-        //音色
-        llVoice.setOnClickListener {
-            runMenuOut {
-                callBack.showVoiceSelect()
             }
         }
 
@@ -729,19 +707,6 @@ class ReadMenu @JvmOverloads constructor(
         fabAutoPage.setColorFilter(textColor)
     }
 
-    private fun upBrightnessVwPos() {
-        if (AppConfig.brightnessVwPos) {
-            binding.root.modifyBegin()
-                .clear(R.id.ll_brightness, ConstraintModify.Anchor.LEFT)
-                .rightToRightOf(R.id.ll_brightness, R.id.vw_menu_root)
-                .commit()
-        } else {
-            binding.root.modifyBegin()
-                .clear(R.id.ll_brightness, ConstraintModify.Anchor.RIGHT)
-                .leftToLeftOf(R.id.ll_brightness, R.id.vw_menu_root)
-                .commit()
-        }
-    }
 
     interface CallBack {
         fun autoPage()
@@ -763,7 +728,6 @@ class ReadMenu @JvmOverloads constructor(
         fun skipToChapter(index: Int)
         fun onMenuShow()
         fun onMenuHide()
-        fun showVoiceSelect()
     }
 
 }

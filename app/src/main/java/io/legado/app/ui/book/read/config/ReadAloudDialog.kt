@@ -14,6 +14,8 @@ import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.databinding.DialogReadAloudBinding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.tts.NeuralTtsModel
+import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.ReadAloud
@@ -97,8 +99,15 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
         upEngineName()
         upStopText()
         cbTtsFollowSys.isChecked = requireContext().getPrefBoolean("ttsFollowSys", true)
+        upFollowSysVisibility()
         upTtsSpeechRateEnabled(true)
         upSeekTimer()
+    }
+
+    private fun upFollowSysVisibility() {
+        val isLocalNeural = GSON.fromJsonObject<SelectItem<String>>(ReadAloud.ttsEngine)
+            .getOrNull()?.value == NeuralTtsModel.ENGINE_ID
+        binding.cbTtsFollowSys.visible(!isLocalNeural)
     }
 
     private fun initEvent() = binding.run {
@@ -282,6 +291,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
 
     override fun upSpeakEngineSummary() {
         upEngineName()
+        upFollowSysVisibility()
     }
 
     override fun onSleepTimerMinute(minute: Int) {

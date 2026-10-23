@@ -102,7 +102,9 @@ import io.legado.app.ui.book.read.config.BgTextConfigDialog.Companion.UNDERLINE_
 import io.legado.app.ui.book.read.config.MoreConfigDialog
 import io.legado.app.ui.book.read.config.ReadAloudDialog
 import io.legado.app.ui.book.read.config.ReaderMenuConfigDialog
+import io.legado.app.help.tts.NeuralTtsModel
 import io.legado.app.ui.book.read.config.ReadStyleDialog
+import io.legado.app.ui.book.read.config.SpeakEngineDialog
 import io.legado.app.ui.book.read.config.TextSelectMenuConfigDialog
 import io.legado.app.ui.book.read.config.TipConfigDialog.Companion.TITLE_COLOR
 import io.legado.app.ui.book.read.config.TipConfigDialog.Companion.TITLE_NUMBER_COLOR
@@ -1912,15 +1914,6 @@ class ReadBookActivity : BaseReadBookActivity(),
     /**
      * 显示音色选择
      */
-    override fun showVoiceSelect() {
-        ReadAloud.httpTTS?.let { httpTTS ->
-            startActivity<SourceLoginActivity> {
-                putExtra("type", "httpTts")
-                putExtra("key", httpTTS.id.toString())
-            }
-        }
-    }
-
     override fun showBookMemo() {
         ReadBook.book?.let { book ->
             showDialogFragment<io.legado.app.ui.widget.dialog.BookMemoDialog> {
@@ -2462,6 +2455,11 @@ class ReadBookActivity : BaseReadBookActivity(),
      */
     override fun onClickReadAloud() {
         autoPageStop()
+        if (ReadAloud.isNeuralTtsSelected && !NeuralTtsModel.isInstalled()) {
+            toastOnUi("请先下载本地语音包（约 159MB）")
+            showDialogFragment<SpeakEngineDialog>()
+            return
+        }
         when {
             !BaseReadAloudService.isRun -> {
                 ReadAloud.upReadAloudClass()

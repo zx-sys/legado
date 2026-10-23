@@ -102,23 +102,12 @@ class ReadStyleDialog : BaseDialogFragment(R.layout.dialog_read_book_style),
                 }
             }
         }
-        llGlobalActions.visible()
         tvPadding.gone()
         tvTip.gone()
         tvShareLayout.gone()
         cbShareLayout.gone()
         tvRestoreDefault.setTextColor(textColor)
-        tvReadSettings.setTextColor(textColor)
-        tvInterfaceSettings.setTextColor(textColor)
         tvRestoreDefault.setOnClickListener { restoreDefault() }
-        tvInterfaceSettings.setOnClickListener {
-            dismissAllowingStateLoss()
-            callBack?.showPaddingConfig()
-        }
-        tvReadSettings.setOnClickListener {
-            dismissAllowingStateLoss()
-            callBack?.showMoreSetting()
-        }
     }
 
     private fun initData() {

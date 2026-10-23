@@ -76,18 +76,15 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
 
     private fun initTts() {
         if (tts != null || ttsLoading) return
+        if (!NeuralTtsModel.isInstalled()) {
+            pendingPlay = false
+            toastOnUi("本地语音包未下载，请先在朗读引擎中下载")
+            stopSelf()
+            return
+        }
         ttsLoading = true
-        toastOnUi(
-            if (NeuralTtsModel.isInstalled()) "正在加载本地语音模型…"
-            else "正在安装内置语音模型…"
-        )
+        toastOnUi("正在加载本地语音模型…")
         ttsInitJob = execute {
-            if (!NeuralTtsModel.isInstalled()) {
-                if (!NeuralTtsModel.ensureBundledInstalled()) {
-                    throw IllegalStateException("内置语音模型安装失败，请检查存储空间")
-                }
-                toastOnUi("内置语音模型安装完成")
-            }
             val config = OfflineTtsConfig(
                 model = OfflineTtsModelConfig(
                     vits = OfflineTtsVitsModelConfig(

@@ -30,6 +30,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityMainBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.AppWebDav
+import io.legado.app.help.storage.BackupServer
 import io.legado.app.help.BottomBarSkinManager
 import io.legado.app.help.SourceSharePassphrase
 import io.legado.app.help.SourceSharePassphraseImportPolicy
@@ -396,6 +397,23 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             return
         }
         lifecycleScope.launch {
+            if (BackupServer.isConfigured) {
+                val serverBackup = withContext(IO) {
+                    runCatching { BackupServer.latestOrNull() }.getOrNull()
+                } ?: return@launch
+                val backupTime = serverBackup.createdMillis
+                if (backupTime - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
+                    alert(R.string.restore, R.string.webdav_after_local_restore_confirm) {
+                        cancelButton {
+                            LocalConfig.lastBackup = maxOf(LocalConfig.lastBackup, backupTime)
+                        }
+                        okButton {
+                            viewModel.restoreServer(serverBackup, backupTime)
+                        }
+                    }
+                }
+                return@launch
+            }
             val lastBackupFile =
                 withContext(IO) { AppWebDav.lastBackUp().getOrNull() } ?: return@launch
             if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {

@@ -8,5 +8,6 @@
 | 思源宋体.ttf | Noto Serif SC (variable) | https://fonts.google.com/noto/specimen/Noto+Serif+SC | SIL OFL 1.1 |
 | 朱雀仿宋.ttf | Zhuque Fangsong v0.212 | https://github.com/TrionesType/zhuque | SIL OFL 1.1 |
 | 得意黑.ttf | Smiley Sans v2.0.1 | https://github.com/atelier-anchor/smiley-sans | SIL OFL 1.1 |
+| 寒蝉全圆体.ttf | ChillRoundF v3.000 | https://github.com/Warren2060/ChillRound | SIL OFL 1.1 |
 
 许可证全文见 `licenses/` 目录。

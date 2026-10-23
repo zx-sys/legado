@@ -3,7 +3,33 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <io.legado.app.lib.prefs.PreferenceCategory
-        android:title="@string/web_dav_set"
+        android:title="@string/backup_account"
+        app:allowDividerAbove="false"
+        app:allowDividerBelow="false"
+        app:iconSpaceReserved="false"
+        app:layout="@layout/view_preference_category">
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="backupServerUrl"
+            android:summary="@string/backup_server_url_s"
+            android:title="@string/backup_server_url"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="backupPhone"
+            android:summary="@string/backup_phone_s"
+            android:title="@string/backup_phone"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="webDavDeviceName"
+            android:title="@string/webdav_device_name"
+            app:iconSpaceReserved="false" />
+
+    </io.legado.app.lib.prefs.PreferenceCategory>
+
+    <io.legado.app.lib.prefs.PreferenceCategory
+        android:title="@string/web_dav_sync_set"
         app:allowDividerAbove="false"
         app:allowDividerBelow="false"
         app:iconSpaceReserved="false"
@@ -30,13 +56,6 @@
         <io.legado.app.lib.prefs.EditTextPreference
             android:key="webDavDir"
             android:title="@string/sub_dir"
-            app:allowDividerAbove="false"
-            app:allowDividerBelow="false"
-            app:iconSpaceReserved="false" />
-
-        <io.legado.app.lib.prefs.EditTextPreference
-            android:key="webDavDeviceName"
-            android:title="@string/webdav_device_name"
             app:allowDividerAbove="false"
             app:allowDividerBelow="false"
             app:iconSpaceReserved="false" />
@@ -103,8 +122,8 @@
 
         <io.legado.app.lib.prefs.Preference
             android:key="web_dav_backup"
-            android:summary="@string/backup_destination_summary"
-            android:title="@string/backup"
+            android:summary="@string/manual_backup_summary"
+            android:title="@string/manual_backup"
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.Preference
@@ -120,7 +139,7 @@
             app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.SwitchPreference
-            android:defaultValue="true"
+            android:defaultValue="false"
             android:key="onlyLatestBackup"
             android:summary="@string/only_latest_backup_s"
             android:title="@string/only_latest_backup_t"
