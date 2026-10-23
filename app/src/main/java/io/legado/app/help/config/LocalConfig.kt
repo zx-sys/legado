@@ -78,6 +78,10 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
         get() = getBoolean("unusableBookSourcesRemoved")
         set(value) = putBoolean("unusableBookSourcesRemoved", value)
 
+    var newDefaultBookSourcesAdded: Boolean
+        get() = getBoolean("newDefaultBookSourcesAdded")
+        set(value) = putBoolean("newDefaultBookSourcesAdded", value)
+
     var versionCode
         get() = getLong(versionCodeKey, 0)
         set(value) {

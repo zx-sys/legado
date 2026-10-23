@@ -140,6 +140,44 @@ object DefaultData {
         LocalConfig.unusableBookSourcesRemoved = true
     }
 
+    private val addedDefaultBookSourceUrls = listOf(
+        "https://www.suduguu.com",
+        "http://www.chensiwx.info",
+        "https://bcshuku.com/",
+        "https://fanqienovel.com",
+        "https://www.min-yuan.com",
+        "https://m.libahao2.com",
+        "https://www.deqixss.com/",
+        "https://www.sudugu.cc",
+        "https://www.banshanren.com",
+        "https://apibi.cc",
+        "https://api-bc.wtzw.com/#qimao-aggregate-md3",
+        "https://www.huangjinwu.org/",
+        "https://www.quanben.io",
+        "https://www.zzbook.net",
+        "https://www.shenwen.org",
+        "https://wap.longshuwu.com",
+        "http://www.3yt.info",
+        "https://book.washai.net",
+        "https://ik8.net",
+        "http://www.gdbzkz.com",
+        "https://www.sushujuan.org",
+        "https://m.tkshuw.com",
+        "https://m.xhwx8.com",
+    )
+
+    fun addNewDefaultBookSourcesIfNeeded() {
+        if (LocalConfig.newDefaultBookSourcesAdded) return
+        addedDefaultBookSourceUrls.forEach { url ->
+            if (appDb.bookSourceDao.getBookSource(url) == null) {
+                bookSources.find { it.bookSourceUrl == url }?.let {
+                    appDb.bookSourceDao.insert(it)
+                }
+            }
+        }
+        LocalConfig.newDefaultBookSourcesAdded = true
+    }
+
     val keyboardAssists: List<KeyboardAssist> by lazy {
         val json = String(
             appCtx.assets.open("defaultData${File.separator}keyboardAssists.json")

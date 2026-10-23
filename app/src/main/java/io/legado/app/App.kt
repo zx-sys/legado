@@ -106,6 +106,7 @@ class App : Application() {
             DefaultData.upVersion()
             DefaultData.importDefaultHttpTTS()
             DefaultData.removeUnusableBookSourcesIfNeeded()
+            DefaultData.addNewDefaultBookSourcesIfNeeded()
             AppFreezeMonitor.init(this@App)
             DispatchersMonitor.init()
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))
