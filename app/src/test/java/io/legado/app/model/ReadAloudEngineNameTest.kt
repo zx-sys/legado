@@ -3,7 +3,6 @@ package io.legado.app.model
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.utils.GSON
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class ReadAloudEngineNameTest {
@@ -12,63 +11,30 @@ class ReadAloudEngineNameTest {
 
     @Test
     fun emptyEngineUsesSystemTtsName() {
-        assertEquals(systemTtsName, resolveReadAloudEngineName(null, systemTtsName) { null })
-        assertEquals(systemTtsName, resolveReadAloudEngineName("", systemTtsName) { null })
-    }
-
-    @Test
-    fun httpTtsIdUsesStoredEngineName() {
-        assertEquals(
-            "Online engine",
-            resolveReadAloudEngineName("42", systemTtsName) { id ->
-                if (id == 42L) "Online engine" else null
-            }
-        )
-    }
-
-    @Test
-    fun missingHttpTtsFallsBackToSystemTtsName() {
-        assertEquals(
-            systemTtsName,
-            resolveReadAloudEngineName("42", systemTtsName) { null }
-        )
+        assertEquals(systemTtsName, resolveReadAloudEngineName(null, systemTtsName))
+        assertEquals(systemTtsName, resolveReadAloudEngineName("", systemTtsName))
     }
 
     @Test
     fun systemEngineJsonUsesItsTitle() {
         val engine = GSON.toJson(SelectItem("Device engine", "package.name"))
 
-        assertEquals(
-            "Device engine",
-            resolveReadAloudEngineName(engine, systemTtsName) { null }
-        )
+        assertEquals("Device engine", resolveReadAloudEngineName(engine, systemTtsName))
     }
 
     @Test
     fun malformedOrBlankEngineTitleFallsBackToSystemTtsName() {
         val blankTitle = GSON.toJson(SelectItem("", "package.name"))
 
-        assertEquals(
-            systemTtsName,
-            resolveReadAloudEngineName("not-json", systemTtsName) { null }
-        )
-        assertEquals(
-            systemTtsName,
-            resolveReadAloudEngineName(blankTitle, systemTtsName) { null }
-        )
+        assertEquals(systemTtsName, resolveReadAloudEngineName("not-json", systemTtsName))
+        assertEquals(systemTtsName, resolveReadAloudEngineName(blankTitle, systemTtsName))
     }
 
     @Test
-    fun overflowingNumericIdFallsBackWithoutDatabaseLookup() {
-        var lookedUp = false
-
+    fun legacyNumericEngineIdFallsBackToSystemTtsName() {
         assertEquals(
             systemTtsName,
-            resolveReadAloudEngineName("999999999999999999999999", systemTtsName) {
-                lookedUp = true
-                "Unexpected"
-            }
+            resolveReadAloudEngineName("999999999999999999999999", systemTtsName)
         )
-        assertFalse(lookedUp)
     }
 }

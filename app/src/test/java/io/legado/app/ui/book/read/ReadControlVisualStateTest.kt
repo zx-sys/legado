@@ -31,8 +31,8 @@ class ReadControlVisualStateTest {
     }
 
     @Test
-    fun httpTtsDeleteActionIsVerticallyCentered() {
-        val layout = parseXml("src/main/res/layout/item_http_tts.xml")
+    fun ttsEngineDeleteActionIsVerticallyCentered() {
+        val layout = parseXml("src/main/res/layout/item_tts_engine.xml")
         val delete = layout.getElementsByTagName("*").asSequence()
             .filterIsInstance<Element>()
             .first { it.androidAttribute("id") == "@+id/iv_menu_delete" }

@@ -9,7 +9,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookProgress
 import io.legado.app.data.entities.BookSource
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.CacheManager
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
@@ -17,6 +16,7 @@ import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.model.BookCover
 import io.legado.app.model.ImageProvider
 import io.legado.app.model.ReadBook
@@ -251,8 +251,13 @@ object BookController {
     suspend fun saveBook(postData: String?): ReturnData {
         val returnData = ReturnData()
         GSON.fromJsonObject<Book>(postData).getOrNull()?.let { book ->
-            AppWebDav.uploadBookProgress(book)
             book.save()
+            SyncManager.enqueueProgress(
+                book,
+                book.durChapterIndex,
+                book.durChapterPos,
+                book.durChapterTitle,
+            )
             return returnData.setData("")
         }
         return returnData.setErrorMsg("格式不对")
@@ -283,10 +288,13 @@ object BookController {
                     book.durChapterPos = bookProgress.durChapterPos
                     book.durChapterTitle = bookProgress.durChapterTitle
                     book.durChapterTime = bookProgress.durChapterTime
-                    AppWebDav.uploadBookProgress(bookProgress) {
-                        book.syncTime = System.currentTimeMillis()
-                    }
                     book.update()
+                    SyncManager.enqueueProgress(
+                        book,
+                        book.durChapterIndex,
+                        book.durChapterPos,
+                        book.durChapterTitle,
+                    )
                     ReadBook.book?.let {
                         if (it.name == bookProgress.name &&
                             it.author == bookProgress.author

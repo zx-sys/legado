@@ -190,6 +190,14 @@
 
     <io.legado.app.lib.prefs.SwitchPreference
         android:defaultValue="true"
+        android:key="autoFillChapterSource"
+        android:summary="@string/auto_fill_chapter_source_summary"
+        android:title="@string/auto_fill_chapter_source"
+        app:iconSpaceReserved="false"
+        app:isBottomBackground="true" />
+
+    <io.legado.app.lib.prefs.SwitchPreference
+        android:defaultValue="true"
         android:key="selectText"
         android:title="@string/selectText"
         app:iconSpaceReserved="false"

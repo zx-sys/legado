@@ -43,8 +43,6 @@ EXTERNAL_ID_FIELDS = {
     "highlight": ("bookName", "chapterIndex"),
     "bookGroup": ("groupId", "groupName"),
     "replaceRule": ("name",),
-    "httpTTS": ("name",),
-    "servers": ("name", "url"),
 }
 
 

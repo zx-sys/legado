@@ -11,8 +11,6 @@
     <string name="menu_backup">Início</string>
     <string name="menu_restore">Restaurar</string>
     <string name="menu_import_old">Importar dados ao Legado</string>
-    <string name="webdav_cache_backup">Backup do cache dos livros para leitura off-line</string>
-    <string name="webdav_cache_backup_s">Exportar localmente e fazer Backup à pasta de exportação</string>
     <string name="backup_path">Backup para</string>
     <string name="select_backup_path">Por favor, selecione uma pasta de Backup.</string>
     <string name="menu_import_old_version">Importar dados de Legado</string>
@@ -112,8 +110,6 @@
     <string name="pt_auto_download">Download automático</string>
     <string name="ps_auto_download">Baixar automaticamente os últimos capítulos ao atualizar os livros</string>
     <string name="backup_restore">Backup e restauração</string>
-    <string name="web_dav_set">Configurações de WebDav</string>
-    <string name="web_dav_set_import_old">Configurações/importação WebDav de dados Legado </string>
     <string name="backup">Fazer Backup</string>
     <string name="restore">Restaurar</string>
     <string name="backup_permission">O Backup precisa de permissão de armazenamento</string>
@@ -609,12 +605,6 @@
     <string name="load_toc">Carregar os capítulos</string>
     <string name="load_info">Carregar os detalhes do livro</string>
     <string name="tts">TTS</string>
-    <string name="web_dav_pw">Senha WebDav</string>
-    <string name="web_dav_pw_s">Digite sua senha de autorização para WebDav</string>
-    <string name="web_dav_url_s">Digite o endereço do seu servidor</string>
-    <string name="web_dav_url">Endereço do servidor WebDav</string>
-    <string name="web_dav_account">Conta WebDav</string>
-    <string name="web_dav_account_s">Digite sua conta WebDav</string>
     <string name="rss_source">Fonte de assinatura</string>
     <string name="rss_source_edit">Editar a fonte de assinatura</string>
     <string name="screen">Filtrar</string>
@@ -647,7 +637,6 @@
     <string name="auto_dark_mode">Alteração automática ao modo escuro</string>
     <string name="auto_dark_mode_s">Seguir o modo escuro do sistema</string>
     <string name="go_back">Voltar</string>
-    <string name="tone_colour">Tom de voz online</string>
     <string name="select_count">(%1$d/%2$d)</string>
     <string name="show_rss">Exibir assinatura</string>
     <string name="service_stop">Serviço parou</string>
@@ -743,8 +732,7 @@
     <string name="text_bottom_justify">Texto alinhado com parte inferior</string>
     <string name="auto_page_speed">Velocidade de rolagem automática</string>
     <string name="sort_by_url">Ordenar por URL</string>
-    <string name="backup_summary">Faça backup local e de WebDav simultaneamente</string>
-    <string name="restore_summary">Primeiro restaurar de WebDAV, ao clicar longo restaurar do local backup</string>
+    <string name="restore_summary">Restaure primeiro do servidor; pressione e segure para restaurar de um zip local</string>
     <string name="import_old_summary">Selecione uma pasta Legado de Backup</string>
     <string name="enabled">Ativado</string>
     <string name="disabled">Desativado</string>
@@ -825,13 +813,7 @@
     <string name="header_footer">rodapé <![CDATA[&]]> cabeçalho</string>
     <string name="rule_subscription">Assinatura de regras</string>
     <string name="rule_sub_empty_msg">添加大佬们提供的规则导入地址\n添加后点击可导入规则</string>
-    <string name="get_book_progress">Obter o progresso da nuvem</string>
-    <string name="cover_book_progress">Phủ sóng tiến độ trên đám mây</string>
-    <string name="current_progress_exceeds_cloud">O progresso atual excede o progresso da nuvem. Você quer sincronizar?</string>
     <string name="sync_book_progress_t">Progresso de leitura sincronizada</string>
-    <string name="sync_book_progress_s">Sincronizar o progresso da leitura ao entrar e sair da tela de leitura</string>
-    <string name="sync_book_progress_plus_t">Aprimoramento de Sincronização</string>
-    <string name="sync_book_progress_plus_s">Ressincroniza o progresso na nuvem ao retornar à página (tela desligada, retorno do segundo plano, etc.) ou quando a rede estiver disponível. Será solicitada confirmação antes de sincronizar o novo progresso.</string>
     <string name="create_bookmark_error">Falha ao marcar como favorito</string>
     <string name="single_url">URL única</string>
     <string name="export_bookshelf">Exportar a lista de livros</string>
@@ -845,7 +827,6 @@
     <string name="copy_toc_url">Copiar a URL dos capítulos</string>
     <string name="export_folder">Exportar a pasta</string>
     <string name="export_charset">Codificação de texto exportada</string>
-    <string name="export_to_web_dav">Exportar para WebDav</string>
     <string name="reverse_content">Conteúdo reverso</string>
     <string name="debug">Depuração</string>
     <string name="crash_log">Registro de falhas</string>
@@ -1016,12 +997,9 @@
     <string name="auto_save_cookie">CookieJar</string>
     <string name="cookie">清除cookie</string>
     <string name="download_and_import_file">导入在线书籍文件</string>
-    <string name="upload_book_success">Upload Success</string>
     <string name="upload_book_fail">Upload Fail</string>
     <string name="download_book_success">Download Success</string>
     <string name="download_book_fail">Download Fail</string>
-    <string name="upload_to_remote">Upload</string>
-    <string name="add_remote_book">RemoteBook</string>
     <string name="bitmap_cache_size_summary">Current cache max size %1$s MB</string>
     <string name="bitmap_cache_size">bitmap cache size</string>
     <string name="image_retain_number_summary">Keep the number of chapters read %s</string>
@@ -1031,7 +1009,6 @@
     <string name="error_decode_bitmap">Fail to decode bitmap</string>
     <string name="error_image_url_empty">Image url is empty, check replacement rules</string>
     <string name="variable_comment">变量说明(variableComment)</string>
-    <string name="remote_book">远程书籍</string>
     <string name="reading_time_sort">阅读时长排序</string>
     <string name="last_read_time_sort">阅读时间排序</string>
     <string name="reading_time_tag">阅读时长:</string>
@@ -1078,7 +1055,6 @@
     <string name="toggle_search_scope">切换</string>
     <string name="sure_clear_search_history">是否确认清除所有搜索历史记录</string>
     <string name="no_anim_scroll_page">禁用滚动点击动画</string>
-    <string name="webdav_device_name">设备名称</string>
     <string name="web_service_wake_lock">WebService唤醒锁</string>
     <string name="web_service_wake_lock_summary">开启web服务的时候启用唤醒锁,有些手机开启唤醒锁会被杀后台</string>
     <string name="read_aloud_wake_lock">朗读服务唤醒锁</string>
@@ -1096,7 +1072,6 @@
     <string name="same_title_removed">移除重复标题</string>
     <string name="update_book_fail">更新失败</string>
     <string name="notification_permission_rationale">阅读需要发送通知来显示朗读控制和下载进度</string>
-    <string name="webdav_after_local_restore_confirm">webDav书源比本地新,是否恢复</string>
     <string name="c_whitelist">白名单(contentWhitelist)</string>
     <string name="c_blacklist">黑名单(contentBlacklist)</string>
     <string name="confirm">确认</string>
@@ -1113,7 +1088,6 @@
     <string name="import_dict_rule">导入字典规则</string>
     <string name="keep_group">保留分组</string>
     <string name="server_config">服务器配置</string>
-    <string name="sure_upload">Remote webDav url exists, Continue?</string>
     <string name="unsupport_archivefile_entry">Cannot find supported files in archive</string>
     <string name="no_books_dir">没有设置书籍保存位置!</string>
     <string name="delete_alert">删除提醒</string>
@@ -1133,7 +1107,6 @@
     <string name="set_local_password_summary">本地密码用来对备份的敏感信息加密和解密,如需在不同设备之间同步,本地密码需一致.</string>
     <string name="only_latest_backup_t">仅保留最新备份</string>
     <string name="only_latest_backup_s">本地备份仅保留最新备份文件</string>
-    <string name="webdav_application_authorization_error">Fail to authorize WebDav application</string>
     <string name="load_word_count">Carregar os palavras do livro</string>
     <string name="replace_exclude_scope">排除范围，选填书名或者书源 URL</string>
     <string name="format_js_rule">格式化规则(formatJs)</string>
@@ -1165,7 +1138,6 @@
     <string name="sync_book_progress_success">Sincronização de progresso bem-sucedida</string>
     <string name="show_bookshelf_fast_scroller">显示快速滚动条</string>
     <string name="export_all_use_book_source">导出所有书的书源</string>
-    <string name="cloud_progress_exceeds_current">The cloud progress exceeds the current progress. Do you want to synchronize?</string>
     <string name="keep_enable">保留启用状态</string>
     <string name="preview_image_by_click">点击预览图片</string>
     <string name="screen_portrait_reversed">反向竖屏</string>

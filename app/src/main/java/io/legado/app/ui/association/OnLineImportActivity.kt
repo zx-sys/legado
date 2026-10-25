@@ -39,9 +39,6 @@ class OnLineImportActivity :
                     ImportReplaceRuleDialog(it.second, true)
                 )
                 "highlightRule" -> showImportHighlightRuleDialog(it.second, true)
-                "httpTts" -> showDialogFragment(
-                    ImportHttpTtsDialog(it.second, true)
-                )
                 "theme" -> showDialogFragment(
                     ImportThemeDialog(it.second, true)
                 )
@@ -92,9 +89,6 @@ class OnLineImportActivity :
                 )
                 "/textTocRule" -> showDialogFragment(
                     ImportTxtTocRuleDialog(url, true)
-                )
-                "/httpTTS" -> showDialogFragment(
-                    ImportHttpTtsDialog(url, true)
                 )
                 "/dictRule" -> showDialogFragment(
                     ImportDictRuleDialog(url, true)

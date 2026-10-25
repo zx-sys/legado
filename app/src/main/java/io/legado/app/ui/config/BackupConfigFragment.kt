@@ -59,7 +59,6 @@ import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.launch
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.showHelp
 import io.legado.app.utils.toEditable
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.Dispatchers.IO
@@ -132,30 +131,13 @@ class BackupConfigFragment : PreferenceFragment(),
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         manualBackupUploadServer = savedInstanceState?.getBoolean("manualBackupUploadServer", true) ?: true
         addPreferencesFromResource(R.xml.pref_config_backup)
-        findPreference<EditTextPreference>(PreferKey.webDavPassword)?.let {
+        findPreference<EditTextPreference>(PreferKey.deviceName)?.let {
             it.setOnBindEditTextListener { editText ->
-                editText.inputType =
-                    InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
+                editText.text = AppConfig.deviceName?.toEditable()
                 editText.setSelection(editText.text.length)
             }
         }
-        findPreference<EditTextPreference>(PreferKey.webDavDir)?.let {
-            it.setOnBindEditTextListener { editText ->
-                editText.text = AppConfig.webDavDir?.toEditable()
-                editText.setSelection(editText.text.length)
-            }
-        }
-        findPreference<EditTextPreference>(PreferKey.webDavDeviceName)?.let {
-            it.setOnBindEditTextListener { editText ->
-                editText.text = AppConfig.webDavDeviceName?.toEditable()
-                editText.setSelection(editText.text.length)
-            }
-        }
-        upPreferenceSummary(PreferKey.webDavUrl, getPrefString(PreferKey.webDavUrl))
-        upPreferenceSummary(PreferKey.webDavAccount, getPrefString(PreferKey.webDavAccount))
-        upPreferenceSummary(PreferKey.webDavPassword, getPrefString(PreferKey.webDavPassword))
-        upPreferenceSummary(PreferKey.webDavDir, AppConfig.webDavDir)
-        upPreferenceSummary(PreferKey.webDavDeviceName, AppConfig.webDavDeviceName)
+        upPreferenceSummary(PreferKey.deviceName, AppConfig.deviceName)
         findPreference<EditTextPreference>(PreferKey.backupPhone)?.let {
             it.setOnBindEditTextListener { editText ->
                 editText.inputType = InputType.TYPE_CLASS_PHONE
@@ -169,7 +151,7 @@ class BackupConfigFragment : PreferenceFragment(),
         )
         upPreferenceSummary(PreferKey.backupPath, getPrefString(PreferKey.backupPath))
         updateAutoBackupSummary()
-        findPreference<io.legado.app.lib.prefs.Preference>("web_dav_restore")
+        findPreference<io.legado.app.lib.prefs.Preference>(PreferKey.restoreNow)
             ?.onLongClick {
                 restoreFromLocal()
                 true
@@ -196,11 +178,6 @@ class BackupConfigFragment : PreferenceFragment(),
 
     override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
         when (menuItem.itemId) {
-            R.id.menu_help -> {
-                showHelp("webDavHelp")
-                return true
-            }
-
             R.id.menu_import_old -> {
                 restoreOld.launch()
                 return true
@@ -218,18 +195,9 @@ class BackupConfigFragment : PreferenceFragment(),
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         when (key) {
-            PreferKey.autoBackup, PreferKey.autoBackupWebDav, PreferKey.autoBackupIntervalDays -> updateAutoBackupSummary()
+            PreferKey.autoBackup, PreferKey.autoBackupServer, PreferKey.autoBackupIntervalDays -> updateAutoBackupSummary()
             PreferKey.backupPath -> upPreferenceSummary(key, getPrefString(key))
-            PreferKey.webDavUrl,
-            PreferKey.webDavAccount,
-            PreferKey.webDavPassword,
-            PreferKey.webDavDir -> listView.post {
-                upPreferenceSummary(key, appCtx.getPrefString(key))
-                viewModel.upWebDavConfig()
-            }
-
-            PreferKey.webDavDeviceName -> upPreferenceSummary(key, getPrefString(key))
-
+            PreferKey.deviceName -> upPreferenceSummary(key, AppConfig.deviceName)
             PreferKey.backupPhone,
             PreferKey.backupServerUrl -> upPreferenceSummary(key, getPrefString(key))
         }
@@ -241,31 +209,8 @@ class BackupConfigFragment : PreferenceFragment(),
             PreferKey.backupPath -> preference.summary =
                 value?.takeIf { it.isNotBlank() } ?: defaultBackupPathSummary()
 
-            PreferKey.webDavUrl ->
-                if (value.isNullOrBlank()) {
-                    preference.summary = getString(R.string.web_dav_url_s)
-                } else {
-                    preference.summary = value
-                }
-
-            PreferKey.webDavAccount ->
-                if (value.isNullOrBlank()) {
-                    preference.summary = getString(R.string.web_dav_account_s)
-                } else {
-                    preference.summary = value
-                }
-
-            PreferKey.webDavPassword ->
-                if (value.isNullOrEmpty()) {
-                    preference.summary = getString(R.string.web_dav_pw_s)
-                } else {
-                    preference.summary = "*".repeat(value.length)
-                }
-
-            PreferKey.webDavDir -> preference.summary = when (value) {
-                null -> "legado"
-                else -> value
-            }
+            PreferKey.deviceName -> preference.summary =
+                value?.takeIf { it.isNotBlank() } ?: getString(R.string.backup_device_name_s)
 
             PreferKey.backupPhone -> preference.summary =
                 value?.takeIf { it.isNotBlank() } ?: getString(R.string.backup_phone_s)
@@ -292,10 +237,10 @@ class BackupConfigFragment : PreferenceFragment(),
             PreferKey.backupPath -> showBackupPathSelector()
             PreferKey.backupContent -> backupContent()
             PreferKey.restoreIgnore -> backupIgnore()
-            "web_dav_backup" -> backup()
+            PreferKey.backupNow -> backup()
             "localPassword" -> alertLocalPassword()
             PreferKey.autoBackup -> configureAutoBackup()
-            "web_dav_restore" -> restore()
+            PreferKey.restoreNow -> restore()
             "lan_backup_transfer" -> lanBackupTransfer()
         }
         return super.onPreferenceTreeClick(preference)
@@ -307,7 +252,7 @@ class BackupConfigFragment : PreferenceFragment(),
     private fun updateAutoBackupSummary() {
         findPreference<Preference>(PreferKey.autoBackup)?.summary = if (AppConfig.autoBackup) {
             getString(R.string.auto_backup_destination_summary,
-                getString(if (AppConfig.autoBackupWebDav) R.string.backup_local_server else R.string.backup_local_only),
+                getString(if (AppConfig.autoBackupServer) R.string.backup_local_server else R.string.backup_local_only),
                 AppConfig.autoBackupIntervalDays)
         } else getString(R.string.auto_backup_disabled)
     }
@@ -315,7 +260,7 @@ class BackupConfigFragment : PreferenceFragment(),
     private fun configureAutoBackup() {
         val binding = DialogAutoBackupBinding.inflate(layoutInflater)
         binding.enabled.isChecked = AppConfig.autoBackup
-        binding.destination.check(if (AppConfig.autoBackupWebDav) R.id.local_webdav else R.id.local_only)
+        binding.destination.check(if (AppConfig.autoBackupServer) R.id.local_server else R.id.local_only)
         binding.intervalDays.setText(AppConfig.autoBackupIntervalDays.toString())
         binding.intervalDays.doAfterTextChanged { binding.intervalDays.error = null }
         AlertDialog.Builder(requireContext())
@@ -333,7 +278,7 @@ class BackupConfigFragment : PreferenceFragment(),
                         }
                         requireContext().defaultSharedPreferences.edit()
                             .putBoolean(PreferKey.autoBackup, binding.enabled.isChecked)
-                            .putBoolean(PreferKey.autoBackupWebDav, binding.destination.checkedRadioButtonId == R.id.local_webdav)
+                            .putBoolean(PreferKey.autoBackupServer, binding.destination.checkedRadioButtonId == R.id.local_server)
                             .putInt(PreferKey.autoBackupIntervalDays, days).apply()
                         dismiss()
                     }
@@ -403,7 +348,7 @@ class BackupConfigFragment : PreferenceFragment(),
             try {
                 val prepared = withContext(IO) {
                     val backupFile = Backup.backupForLanTransferLocked(appCtx)
-                    val deviceName = AppConfig.webDavDeviceName
+                    val deviceName = AppConfig.deviceName
                         ?.takeIf { it.isNotBlank() }
                         ?: "${Build.MANUFACTURER} ${Build.MODEL}".trim()
                     val session = LanBackupTransfer.prepare(backupFile, deviceName)

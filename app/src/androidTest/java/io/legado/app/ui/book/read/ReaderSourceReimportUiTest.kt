@@ -359,7 +359,7 @@ class ReaderSourceReimportUiTest {
             backupDir.mkdirs()
             BackupConfig.contentKeys.forEach { BackupConfig.ignoreConfig[it] = it != BackupConfig.settingContentKey }
             BackupConfig.ignoreConfig["readConfig"] = false
-            Backup.backupLocked(context, backupDir.path, uploadWebDav = false)
+            Backup.backupLocked(context, backupDir.path, uploadServer = false)
             saveReaderMenuConfig(context, ReaderMenuConfig.default())
             Restore.restoreOrThrow(context, File(backupDir, "backup.zip").toUri(), lanTransfer = true)
         }

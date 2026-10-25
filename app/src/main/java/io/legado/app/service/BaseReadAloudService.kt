@@ -294,11 +294,33 @@ abstract class BaseReadAloudService : BaseService(),
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        saveLastReadAloudPosition()
+        saveBookProgressBeforeRemoval()
+        super.onTaskRemoved(rootIntent)
+    }
+
+    /**
+     * 用户从最近任务里划掉应用时进程随时会被回收, 这里把朗读位置同步落库,
+     * 避免这次朗读的进度整段丢失。
+     */
+    private fun saveBookProgressBeforeRemoval() {
+        if (followReadAloudPosition) {
+            val chapterIndex = speechChapterIndex()
+            if (chapterIndex >= 0 && readAloudChapterStart >= 0) {
+                ReadBook.durChapterIndex = chapterIndex
+                ReadBook.durChapterPos = readAloudChapterStart
+            }
+        }
+        runCatching { ReadBook.saveReadBlocking() }
+    }
+
     override fun onDestroy() {
         readAloudGeneration.incrementAndGet()
         readAloudJob?.cancel()
         chapterTransitionJob?.cancel()
         chapterLoadRetryJob?.cancel()
+        saveLastReadAloudPosition()
         super.onDestroy()
         restoreReadAloudFollow()
         updateReadAloudChapterIndex(-1)
@@ -443,6 +465,7 @@ abstract class BaseReadAloudService : BaseService(),
             wifiLock?.release()
         }
         pause = true
+        saveLastReadAloudPosition()
         if (abandonFocus) {
             abandonFocus()
         }
@@ -451,6 +474,17 @@ abstract class BaseReadAloudService : BaseService(),
         postEvent(EventBus.ALOUD_STATE, Status.PAUSE)
         ReadBook.uploadProgress()
         doDs()
+    }
+
+    private fun saveLastReadAloudPosition() {
+        val book = ReadBook.book ?: return
+        val chapterIndex = speechChapterIndex()
+        val position = readAloudChapterStart
+        if (chapterIndex >= 0 && position >= 0) {
+            AppConfig.readAloudLastBookUrl = book.bookUrl
+            AppConfig.readAloudLastChapterIndex = chapterIndex
+            AppConfig.readAloudLastPosition = position
+        }
     }
 
     @SuppressLint("WakelockTimeout")
@@ -848,11 +882,12 @@ abstract class BaseReadAloudService : BaseService(),
 
     open fun prevChapter() {
         toLast = false
-        resumeReadAloudInternal()
+        val wasPaused = pause
+        if (!wasPaused) resumeReadAloudInternal()
         if (shouldSyncSpeechNavigation()) {
             ReadBook.moveToPrevChapter(true, toLast = false, syncReadAloudFollow = true)
         } else {
-            loadSpeechChapterOnly(speechChapterIndex() - 1)
+            loadSpeechChapterOnly(speechChapterIndex() - 1, startPaused = wasPaused)
         }
     }
 
@@ -870,7 +905,8 @@ abstract class BaseReadAloudService : BaseService(),
             }
         }
         AppLog.putDebug("${ReadBook.curTextChapter?.chapter?.title} 朗读结束跳转下一章并朗读")
-        resumeReadAloudInternal()
+        val wasPaused = pause
+        if (!wasPaused) resumeReadAloudInternal()
         val nextSpeechIndex = speechChapterIndex() + 1
         val hasNextChapter = nextSpeechIndex < ReadBook.simulatedChapterSize
         val visibleSyncMoved = ReadBook.moveToNextChapter(true, syncReadAloudFollow = true)
@@ -883,7 +919,7 @@ abstract class BaseReadAloudService : BaseService(),
             }
 
             SpeechFollowState.NextChapterDecision.ContinueSpeechOnly -> {
-                loadSpeechChapterOnly(nextSpeechIndex)
+                loadSpeechChapterOnly(nextSpeechIndex, startPaused = wasPaused)
             }
 
             SpeechFollowState.NextChapterDecision.Stop -> stopSelf()
@@ -911,7 +947,11 @@ abstract class BaseReadAloudService : BaseService(),
         return textChapter?.chapter?.index ?: ReadBook.durChapterIndex
     }
 
-    private fun loadSpeechChapterOnly(chapterIndex: Int, attempt: Int = 0) {
+    private fun loadSpeechChapterOnly(
+        chapterIndex: Int,
+        attempt: Int = 0,
+        startPaused: Boolean = false
+    ) {
         if (chapterIndex !in 0..<ReadBook.simulatedChapterSize) return
         execute(executeContext = IO) {
             val book = ReadBook.book ?: return@execute false
@@ -954,7 +994,7 @@ abstract class BaseReadAloudService : BaseService(),
             chapterLoadRetryJob?.cancel()
             if (canContinue) {
                 upTtsProgress(0)
-                play()
+                if (!startPaused) play()
             } else {
                 stopSelf()
             }

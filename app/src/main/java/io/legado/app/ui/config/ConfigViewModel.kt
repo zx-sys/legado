@@ -5,7 +5,6 @@ import android.content.Context
 import io.legado.app.R
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.appDb
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.book.BookHelp
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.restart
@@ -14,12 +13,6 @@ import kotlinx.coroutines.delay
 import splitties.init.appCtx
 
 class ConfigViewModel(application: Application) : BaseViewModel(application) {
-
-    fun upWebDavConfig() {
-        execute {
-            AppWebDav.upConfig()
-        }
-    }
 
     fun clearCache() {
         execute {

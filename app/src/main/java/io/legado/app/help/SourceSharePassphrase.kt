@@ -44,7 +44,6 @@ object SourceSharePassphrase {
         DICT_RULE("zd"),
         REPLACE_RULE("jh"),
         TOC_RULE("ml"),
-        TTS_RULE("ld"),
         AUTO_TASK("rw");
 
         companion object {

@@ -85,7 +85,6 @@ class FileAssociationActivity :
                 "rssSource" -> showDialogFragment(ImportRssSourceDialog(it.second, true))
                 "replaceRule" -> showDialogFragment(ImportReplaceRuleDialog(it.second, true))
                 "highlightRule" -> showImportHighlightRuleDialog(it.second, true)
-                "httpTts" -> showDialogFragment(ImportHttpTtsDialog(it.second, true))
                 "theme" -> showDialogFragment(ImportThemeDialog(it.second, true))
                 "txtRule" -> showDialogFragment(ImportTxtTocRuleDialog(it.second, true))
                 "dictRule" -> showDialogFragment(ImportDictRuleDialog(it.second, true))

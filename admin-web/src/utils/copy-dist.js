@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 // 源目录 (Vite 默认输出目录)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const distPath = path.resolve(__dirname, '../../dist');
+const distPath = path.resolve(__dirname, '../../legado');
 
 // 目标目录列表
 const targetDirs = [

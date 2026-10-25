@@ -10,8 +10,6 @@
     <string name="menu_backup">備份</string>
     <string name="menu_restore">復原</string>
     <string name="menu_import_old">匯入閱讀資料</string>
-    <string name="webdav_cache_backup">離線快取書籍備份</string>
-    <string name="webdav_cache_backup_s">匯出本機同時備份到legado資料夾下exports目錄</string>
     <string name="backup_path">備份路徑</string>
     <string name="select_backup_path">請選擇備份路徑</string>
     <string name="menu_import_old_version">匯入舊版資料</string>
@@ -111,8 +109,10 @@
     <string name="pt_auto_download">自動下載最新章節</string>
     <string name="ps_auto_download">更新書籍時自動下載最新章節</string>
     <string name="backup_restore">備份與復原</string>
-    <string name="web_dav_set">WebDav設定</string>
-    <string name="web_dav_set_import_old">WebDav設定/匯入舊版本資料</string>
+    <string name="backup_device_name">裝置名稱</string>
+    <string name="backup_device_name_s">用於在備份清單中標識本裝置</string>
+    <string name="backup_setting_summary">備份、復原與匯入舊資料</string>
+    <string name="backup_after_local_restore_confirm">雲端備份比本機新，是否復原？</string>
     <string name="backup">備份</string>
     <string name="restore">復原</string>
     <string name="backup_permission">備份請給予儲存權限</string>
@@ -635,12 +635,6 @@
     <string name="load_toc">載入目錄</string>
     <string name="load_info">載入詳情頁</string>
     <string name="tts">文字轉語音</string>
-    <string name="web_dav_pw">WebDav 密碼</string>
-    <string name="web_dav_pw_s">輸入你的WebDav授權密碼</string>
-    <string name="web_dav_url_s">輸入你的伺服器地址</string>
-    <string name="web_dav_url">WebDav 伺服器地址</string>
-    <string name="web_dav_account">WebDav 帳號</string>
-    <string name="web_dav_account_s">輸入你的WebDav帳號</string>
     <string name="rss_source">訂閱源</string>
     <string name="rss_source_edit">編輯訂閱源</string>
     <string name="screen">篩選</string>
@@ -673,7 +667,6 @@
     <string name="auto_dark_mode">自動切換夜間模式</string>
     <string name="auto_dark_mode_s">夜間模式跟隨系統</string>
     <string name="go_back">上級</string>
-    <string name="tone_colour">線上朗讀音色</string>
     <string name="select_count">(%1$d/%2$d)</string>
     <string name="show_rss">顯示訂閱</string>
     <string name="service_stop">服務已停止</string>
@@ -785,8 +778,7 @@
     <string name="punctuation_compress_all">全部半形</string>
     <string name="auto_page_speed">自動翻頁速度</string>
     <string name="sort_by_url">地址排序</string>
-    <string name="backup_summary">本機和 WebDav 一起備份</string>
-    <string name="restore_summary">優先從 WebDav 復原，長按從本機復原</string>
+    <string name="restore_summary">優先從伺服器備份復原，長按從本機備份復原</string>
     <string name="import_old_summary">選擇舊版備份資料夾</string>
     <string name="enabled">已啟用</string>
     <string name="disabled">已禁用</string>
@@ -809,7 +801,7 @@
     <string name="restore_ignore">復原忽略列表</string>
     <string name="restore_ignore_summary">復原時忽略一些內容不復原，方便不同手機配置不同</string>
     <string name="backup_content">備份內容</string>
-    <string name="backup_content_summary">選擇本機與 WebDAV 備份中包含的資料和媒體</string>
+    <string name="backup_content_summary">選擇本機與伺服器備份中包含的資料和媒體</string>
     <string name="backup_content_bookshelf">書架與分組</string>
     <string name="backup_content_annotations">書籤與標註</string>
     <string name="backup_content_sources">書源與訂閱</string>
@@ -889,13 +881,7 @@
     <string name="header_footer">頁首<![CDATA[&]]>頁尾</string>
     <string name="rule_subscription">規則訂閱</string>
     <string name="rule_sub_empty_msg">新增大佬們提供的規則匯入地址\n新增後點擊可匯入規則</string>
-    <string name="get_book_progress">拉取雲端進度</string>
-    <string name="cover_book_progress">覆蓋雲端進度</string>
-    <string name="current_progress_exceeds_cloud">目前進度超過雲端進度，是否同步？</string>
     <string name="sync_book_progress_t">同步閱讀進度</string>
-    <string name="sync_book_progress_s">進入退出閱讀介面時同步閱讀進度</string>
-    <string name="sync_book_progress_plus_t">同步增強</string>
-    <string name="sync_book_progress_plus_s">重新進入頁面（息屏、從背景返回等）或網路恢復可用時同步雲端進度，同步新進度時會詢問</string>
     <string name="create_bookmark_error">建立書籤失敗</string>
     <string name="single_url">單URL</string>
     <string name="export_bookshelf">匯出書單</string>
@@ -911,7 +897,6 @@
     <string name="export_folder">匯出資料夾</string>
     <string name="export_charset">匯出編碼</string>
     <string name="export_no_chapter_name">TXT不匯出章節名</string>
-    <string name="export_to_web_dav">匯出到WebDav</string>
     <string name="reverse_content">反轉內容</string>
     <string name="debug">除錯</string>
     <string name="crash_log">當機日誌</string>
@@ -1087,12 +1072,9 @@
     <string name="auto_save_cookie">CookieJar</string>
     <string name="cookie">清除cookie</string>
     <string name="download_and_import_file">匯入線上書籍文件</string>
-    <string name="upload_book_success">上傳成功</string>
     <string name="upload_book_fail">上傳失敗</string>
     <string name="download_book_success">下載成功</string>
     <string name="download_book_fail">下載失敗</string>
-    <string name="upload_to_remote">上傳</string>
-    <string name="add_remote_book">远程書籍</string>
     <string name="bitmap_cache_size_summary">目前最大快取 %1$s MB</string>
     <string name="bitmap_cache_size">圖片繪製快取</string>
     <string name="image_retain_number_summary">保留已讀章節數量 %s</string>
@@ -1102,7 +1084,6 @@
     <string name="error_decode_bitmap">圖片解碼失敗</string>
     <string name="error_image_url_empty">圖片連結為空，檢查取代淨化規則</string>
     <string name="variable_comment">變數說明(variableComment)</string>
-    <string name="remote_book">遠端書籍</string>
     <string name="reading_time_sort">閱讀時長排序</string>
     <string name="last_read_time_sort">閱讀時間排序</string>
     <string name="reading_time_tag">閱讀時長：</string>
@@ -1152,7 +1133,6 @@
     <string name="toggle_search_scope">切換</string>
     <string name="sure_clear_search_history">是否確認清除所有搜尋歷史記錄</string>
     <string name="no_anim_scroll_page">禁用滾動點擊動畫</string>
-    <string name="webdav_device_name">裝置名稱</string>
     <string name="web_service_wake_lock">WebService喚醒鎖</string>
     <string name="web_service_wake_lock_summary">開啟web服務的時候啟用喚醒鎖，有些手機開啟喚醒鎖會被殺後台</string>
     <string name="read_aloud_wake_lock">朗讀服務喚醒鎖</string>
@@ -1170,7 +1150,6 @@
     <string name="same_title_removed">移除重复标题</string>
     <string name="update_book_fail">更新失败</string>
     <string name="notification_permission_rationale">阅读需要发送通知来显示朗读控制和下载进度</string>
-    <string name="webdav_after_local_restore_confirm">webDav书源比本地新,是否恢复</string>
     <string name="c_whitelist">白名单(contentWhitelist)</string>
     <string name="c_blacklist">黑名单(contentBlacklist)</string>
     <string name="confirm">确认</string>
@@ -1187,7 +1166,6 @@
     <string name="import_dict_rule">导入字典规则</string>
     <string name="keep_group">保留分组</string>
     <string name="server_config">服务器配置</string>
-    <string name="sure_upload">远程webDav链接已存在，是否继续</string>
     <string name="unsupport_archivefile_entry">压缩文件内没有支持的文件</string>
     <string name="no_books_dir">没有设置书籍保存位置!</string>
     <string name="delete_alert">删除提醒</string>
@@ -1208,7 +1186,6 @@
     <string name="source_variables_backup_password_required">備份或復原來源變數前，請先設定非空的本機密碼。</string>
     <string name="only_latest_backup_t">仅保留最新备份</string>
     <string name="only_latest_backup_s">本地备份仅保留最新备份文件</string>
-    <string name="webdav_application_authorization_error">webDav应用验证失败</string>
     <string name="load_word_count">加載字數</string>
     <string name="replace_exclude_scope">排除范围，选填书名或者书源 URL</string>
     <string name="format_js_rule">格式化规则(formatJs)</string>
@@ -1240,7 +1217,6 @@
     <string name="default_home_page">默认主页</string>
     <string name="show_bookshelf_fast_scroller">显示快速滚动条</string>
     <string name="export_all_use_book_source">导出所有书的书源</string>
-    <string name="cloud_progress_exceeds_current">雲端進度超過目前進度，是否同步？</string>
     <string name="keep_enable">保留启用状态</string>
     <string name="preview_image_by_click">点击预览图片</string>
     <string name="screen_portrait_reversed">反向竖屏</string>

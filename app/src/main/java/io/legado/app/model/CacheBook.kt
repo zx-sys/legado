@@ -11,6 +11,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.ConcurrentException
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentSaveToken
+import io.legado.app.help.book.isInvalidChapterContent
 import io.legado.app.help.book.refreshBookResources
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
@@ -347,10 +348,18 @@ object CacheBook {
                             }.single().content
                         }
                     } else {
-                        val content = BookHelp.getContent(requestBook, chapter)
+                        val fetched = BookHelp.getContent(requestBook, chapter)
                             ?: WebBook.getContentAwait(source, requestBook, chapter)
-                        BookHelp.saveImages(source, requestBook, chapter, content, 1)
-                        content
+                        BookHelp.saveImages(source, requestBook, chapter, fetched, 1)
+                        val current = BookHelp.getContent(requestBook, chapter) ?: fetched
+                        if (isInvalidChapterContent(current)) {
+                            ChapterSourceFallback.fillChapter(requestBook, chapter)?.let { fallback ->
+                                contentToken = BookHelp.contentSaveToken(requestBook, chapter)
+                                fallback
+                            } ?: current
+                        } else {
+                            current
+                        }
                     }
                     val currentContent = BookHelp.getContent(requestBook, chapter) ?: content
                     if (!refreshingResources) onSuccess(ticket, requestBook, chapter, currentContent,
@@ -359,7 +368,18 @@ object CacheBook {
                     throw e
                 } catch (e: Exception) {
                     delay(1000)
-                    if (onError(ticket, requestBook, chapter, e, contentToken) && !refreshingResources) {
+                    val fallback = if (refreshingResources) {
+                        null
+                    } else {
+                        ChapterSourceFallback.fillChapter(requestBook, chapter)
+                    }
+                    if (fallback != null) {
+                        contentToken = BookHelp.contentSaveToken(requestBook, chapter)
+                        onSuccess(ticket, requestBook, chapter, fallback,
+                            notifyReader = true, contentToken = contentToken)
+                    } else if (onError(ticket, requestBook, chapter, e, contentToken) &&
+                        !refreshingResources
+                    ) {
                         downloadFinish(requestBook, chapter, "获取正文失败\n${e.localizedMessage}",
                             contentToken = contentToken)
                     }
@@ -410,7 +430,9 @@ object CacheBook {
                     val contentToken = contentTokens.getValue(ticket.index)
                     if (!BookHelp.isContentSaveCurrent(contentToken)) continue
                     val content = BookHelp.getContent(requestBook, chapter)
-                    if (content.isNullOrBlank()) {
+                    if (content.isNullOrBlank() ||
+                        (AppConfig.autoFillChapterSource && isInvalidChapterContent(content))
+                    ) {
                         downloads.finish(ticket, fallback = true)
                         continue
                     }
@@ -451,15 +473,24 @@ object CacheBook {
             return chapters.filter { BookHelp.getContent(requestBook, it).isNullOrBlank() }
         }
 
-        suspend fun downloadAwait(chapter: BookChapter): String {
+        suspend fun downloadAwait(
+            chapter: BookChapter,
+            allowFallback: Boolean = true,
+        ): String {
             while (true) {
                 currentCoroutineContext().ensureActive()
                 var contentToken = BookHelp.contentSaveToken(book, chapter)
-                BookHelp.getContent(book, chapter)?.takeUnless { needsResourceRefresh(book, chapter) }?.let {
-                    if (!BookHelp.isContentSaveCurrent(contentToken)) return@let
-                    onFinally()
-                    return it
-                }
+                BookHelp.getContent(book, chapter)
+                    ?.takeUnless { needsResourceRefresh(book, chapter) }
+                    ?.takeUnless {
+                        allowFallback && AppConfig.autoFillChapterSource &&
+                            isInvalidChapterContent(it)
+                    }
+                    ?.let {
+                        if (!BookHelp.isContentSaveCurrent(contentToken)) return@let
+                        onFinally()
+                        return it
+                    }
                 val (model, claim) = synchronized(CacheBook) {
                     val current = cacheBookMap.getOrPut(book.bookUrl) { this }
                     current to current.downloads.claimRead(chapter.index)
@@ -471,10 +502,14 @@ object CacheBook {
                     val result = ticket.result.await() ?: continue
                     if (!BookHelp.isContentSaveCurrent(contentToken)) continue
                     if (model.needsResourceRefresh(requestBook, chapter)) continue
-                    return result.fold(
+                    val content = result.fold(
                         { BookHelp.getContent(requestBook, chapter) ?: it },
                         { BookHelp.getContent(requestBook, chapter) ?: "获取正文失败\n${it.localizedMessage}" },
                     )
+                    if (allowFallback && isInvalidChapterContent(content)) {
+                        ChapterSourceFallback.fillChapter(requestBook, chapter)?.let { return it }
+                    }
+                    return content
                 }
                 val refreshingResources = model.needsResourceRefresh(requestBook, chapter)
                 var published = false
@@ -493,7 +528,15 @@ object CacheBook {
                         }
                     } else BookHelp.getContent(requestBook, chapter)
                         ?: WebBook.getContentAwait(model.bookSource, requestBook, chapter)
-                    val currentContent = BookHelp.getContent(requestBook, chapter) ?: content
+                    var currentContent = BookHelp.getContent(requestBook, chapter) ?: content
+                    if (!refreshingResources && allowFallback &&
+                        isInvalidChapterContent(currentContent)
+                    ) {
+                        ChapterSourceFallback.fillChapter(requestBook, chapter)?.let { fallback ->
+                            currentContent = fallback
+                            contentToken = BookHelp.contentSaveToken(requestBook, chapter)
+                        }
+                    }
                     if (refreshingResources) {
                         if (!published) continue
                     } else if (!model.onSuccess(ticket, requestBook, chapter, currentContent,
@@ -502,6 +545,17 @@ object CacheBook {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    if (!refreshingResources && allowFallback) {
+                        val fallback = ChapterSourceFallback.fillChapter(requestBook, chapter)
+                        if (fallback != null) {
+                            contentToken = BookHelp.contentSaveToken(requestBook, chapter)
+                            if (model.onSuccess(ticket, requestBook, chapter, fallback,
+                                    notifyReader = false, contentToken = contentToken)) {
+                                return fallback
+                            }
+                            continue
+                        }
+                    }
                     if (!model.onError(ticket, requestBook, chapter, e, contentToken)) continue
                     if (refreshingResources) BookHelp.getContent(requestBook, chapter)?.let { return it }
                     return "获取正文失败\n${e.localizedMessage}"
@@ -523,10 +577,13 @@ object CacheBook {
             val requestBook = book
             val contentToken = BookHelp.contentSaveToken(requestBook, chapter)
             Coroutine.async(scope, IO, start = CoroutineStart.LAZY, executeContext = IO, semaphore = semaphore) {
-                downloadAwait(chapter)
+                downloadAwait(chapter, allowFallback = semaphore == null)
             }.onSuccess { content ->
-                downloadFinish(requestBook, chapter, content, resetPageOffset,
-                    readPositionVersion = readPositionVersion, contentToken = contentToken, success = success)
+                // 自动补源会改写本章缓存并提升版本号，回调必须使用最新版本。
+                val latestToken = BookHelp.contentSaveToken(requestBook, chapter)
+                val latestContent = BookHelp.getContent(requestBook, chapter) ?: content
+                downloadFinish(requestBook, chapter, latestContent, resetPageOffset,
+                    readPositionVersion = readPositionVersion, contentToken = latestToken, success = success)
             }.onCancel {
                 downloadFinish(requestBook, chapter, "download canceled", resetPageOffset,
                     canceled = true, readPositionVersion = readPositionVersion, contentToken = contentToken)

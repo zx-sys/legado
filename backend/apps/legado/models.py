@@ -151,6 +151,7 @@ class UserConfig(BaseModel):
         ("theme_config", "主题配置"),
         ("app_config", "应用设置"),
         ("video_config", "视频设置"),
+        ("book_source_config", "书源选择"),
     )
 
     user = models.ForeignKey(
@@ -247,10 +248,40 @@ class BookSource(BaseModel):
         return self.name
 
 
+class FontPack(BaseModel):
+    name = models.CharField(max_length=128, verbose_name="字体名称")
+    code = models.CharField(max_length=64, unique=True, db_index=True, verbose_name="字体标识")
+    languages = models.CharField(
+        max_length=64, blank=True, default="zh", verbose_name="字体语言", help_text="例如 zh,en"
+    )
+    version = models.CharField(max_length=64, blank=True, default="", verbose_name="版本")
+    license = models.CharField(max_length=255, blank=True, default="", verbose_name="许可证")
+    source_url = models.CharField(max_length=1024, blank=True, default="", verbose_name="来源地址")
+    description = models.TextField(blank=True, default="", verbose_name="说明")
+    package_url = models.CharField(max_length=1024, blank=True, default="", verbose_name="下载地址")
+    package_key = models.CharField(max_length=512, blank=True, default="", verbose_name="OSS Key")
+    package_file_name = models.CharField(
+        max_length=255, blank=True, default="", verbose_name="包文件名"
+    )
+    package_size = models.BigIntegerField(default=0, verbose_name="包大小")
+    sha256 = models.CharField(max_length=64, blank=True, default="", verbose_name="文件SHA256")
+    enabled = models.BooleanField(default=True, verbose_name="启用")
+    sort = models.IntegerField(default=1, verbose_name="排序")
+    download_count = models.IntegerField(default=0, verbose_name="下载次数")
+
+    class Meta:
+        db_table = table_prefix + "legado_font_pack"
+        verbose_name = "Legado 字体包"
+        verbose_name_plural = verbose_name
+        ordering = ("sort", "-create_time")
+
+    def __str__(self):
+        return self.name
+
+
 class TtsEngine(BaseModel):
     ENGINE_TYPE_CHOICES = (
         ("sherpa_onnx", "sherpa-onnx"),
-        ("http", "HTTP TTS"),
         ("system", "系统 TTS"),
         ("other", "其他"),
     )

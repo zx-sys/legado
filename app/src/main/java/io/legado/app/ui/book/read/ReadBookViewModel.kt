@@ -16,7 +16,6 @@ import io.legado.app.data.entities.replaceBookAfterSourceChange
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookProgress
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.ResourceThemeGeneration
@@ -184,12 +183,6 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
         if (ReadBook.chapterChanged) {
             // 有章节跳转不同步阅读进度
             ReadBook.chapterChanged = false
-        } else if (!(isSameBook && BaseReadAloudService.isRun) && ReadBook.inBookshelf) {
-            if (AppConfig.syncBookProgressPlus) {
-                ReadBook.syncProgress({ progress -> ReadBook.callBack?.sureNewProgress(progress) })
-            } else {
-                syncBookProgress(book)
-            }
         }
         if (!book.isLocal && ReadBook.bookSource == null) {
             autoChangeSource(book.name, book.author)
@@ -282,36 +275,6 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             }
         }
         return true
-    }
-
-    /**
-     * 同步进度
-     */
-    fun syncBookProgress(
-        book: Book,
-        alertSync: ((progress: BookProgress) -> Unit)? = null
-    ) {
-        if (!AppConfig.syncBookProgress) return
-        execute {
-            AppWebDav.getBookProgress(book)
-        }.onError {
-            AppLog.put("拉取阅读进度失败《${book.name}》\n${it.localizedMessage}", it)
-        }.onSuccess { progress ->
-            progress ?: return@onSuccess
-            if (progress.durChapterIndex == book.durChapterIndex && progress.durChapterPos == book.durChapterPos) {
-                return@onSuccess
-            }
-            if (progress.durChapterIndex < book.durChapterIndex ||
-                (progress.durChapterIndex == book.durChapterIndex
-                        && progress.durChapterPos < book.durChapterPos)
-            ) {
-                alertSync?.invoke(progress)
-            } else if (progress.durChapterIndex < book.simulatedTotalChapterNum()) {
-                ReadBook.setProgress(progress)
-                AppLog.put("自动同步阅读进度成功《${book.name}》 ${progress.durChapterTitle}")
-                context.toastOnUi("已同步最新阅读进度")
-            }
-        }
     }
 
     /**

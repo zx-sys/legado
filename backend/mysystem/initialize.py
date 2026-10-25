@@ -375,7 +375,7 @@ class Initialize:
             {'id': '3593fb777e1e4f77a1e62ed7eb0681a7', 'creator_id': '0', 'parent_id': None, 'title': '基础配置', 'key': 'base', 'value': None,
              'sort': 0, 'status': True, 'data_options': None, 'form_item_type': 0, 'rule': None, 'placeholder': None, 'tip': None, 'setting': None},
             {'id': '59421c76edb34bc8a7ba622cb6ed8133', 'creator_id': '0', 'parent_id': '3593fb777e1e4f77a1e62ed7eb0681a7', 'title': 'logo',
-             'key': 'logo', 'value': 'http://127.0.0.1:8000/media/platform/2025-07-08/20250708113144_688.png', 'sort': 10, 'status': True,
+             'key': 'logo', 'value': 'http://127.0.0.1:9666/media/platform/2025-07-08/20250708113144_688.png', 'sort': 10, 'status': True,
              'data_options': None, 'form_item_type': 7, 'rule': None, 'placeholder': None, 'tip': None, 'setting': None},
             {'id': '5d66345539d849e4b4ad766e99c0b25f', 'creator_id': '0', 'parent_id': None, 'title': 'Api白名单', 'key': 'apiWhiteList',
              'value': '[]', 'sort': 0, 'status': True, 'data_options': None, 'form_item_type': 0, 'rule': None, 'placeholder': None, 'tip': None,

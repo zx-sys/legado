@@ -25,7 +25,17 @@ object DatabaseMigrations {
             migration_39_40, migration_40_41, migration_41_42, migration_42_43,
             migration_100_101, migration_104_105, migration_105_106, migration_106_107,
             migration_107_108, migration_108_109, migration_109_110, migration_112_113,
+            migration_113_114,
         )
+    }
+
+    private val migration_113_114 = object : Migration(113, 114) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 在线 TTS 与 WebDAV 功能已移除，旧书籍统一按本地书处理
+            db.execSQL("UPDATE books SET origin = '${BookType.localTag}' WHERE origin LIKE 'webDav::%'")
+            db.execSQL("DROP TABLE IF EXISTS `httpTTS`")
+            db.execSQL("DROP TABLE IF EXISTS `servers`")
+        }
     }
 
     private val migration_112_113 = object : Migration(112, 113) {
@@ -478,7 +488,7 @@ object DatabaseMigrations {
             db.execSQL(
                 """
                 update books set type = type | ${BookType.local}
-                where origin like '${BookType.localTag}%' or origin like '${BookType.webDavTag}%'
+                where origin like '${BookType.localTag}%' or origin like 'webDav::%'
             """.trimIndent()
             )
         }

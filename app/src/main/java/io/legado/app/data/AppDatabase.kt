@@ -21,7 +21,6 @@ import io.legado.app.data.dao.AutoTaskRuleDao
 import io.legado.app.data.dao.CacheDao
 import io.legado.app.data.dao.CookieDao
 import io.legado.app.data.dao.DictRuleDao
-import io.legado.app.data.dao.HttpTTSDao
 import io.legado.app.data.dao.HighlightRuleDao
 import io.legado.app.data.dao.KeyboardAssistsDao
 import io.legado.app.data.dao.ReadRecordDao
@@ -33,7 +32,6 @@ import io.legado.app.data.dao.RssStarDao
 import io.legado.app.data.dao.RuleSubDao
 import io.legado.app.data.dao.SearchBookDao
 import io.legado.app.data.dao.SearchKeywordDao
-import io.legado.app.data.dao.ServerDao
 import io.legado.app.data.dao.TxtTocRuleDao
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -48,7 +46,6 @@ import io.legado.app.data.entities.AutoTaskRule
 import io.legado.app.data.entities.Cache
 import io.legado.app.data.entities.Cookie
 import io.legado.app.data.entities.DictRule
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.ReadRecord
@@ -60,7 +57,6 @@ import io.legado.app.data.entities.RssStar
 import io.legado.app.data.entities.RuleSub
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.SearchKeyword
-import io.legado.app.data.entities.Server
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.help.DefaultData
 import org.intellij.lang.annotations.Language
@@ -77,13 +73,13 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 113,
+    version = 114,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
         RssSource::class, Bookmark::class, RssArticle::class, RssReadRecord::class,
-        RssStar::class, TxtTocRule::class, ReadRecord::class, HttpTTS::class, Cache::class,
-        RuleSub::class, DictRule::class, KeyboardAssist::class, Server::class,
+        RssStar::class, TxtTocRule::class, ReadRecord::class, Cache::class,
+        RuleSub::class, DictRule::class, KeyboardAssist::class,
         AutoTaskRule::class, BookHighlight::class, HighlightRule::class, BookSourceCheckState::class,
         BookMemo::class],
     views = [BookSourcePart::class],
@@ -173,12 +169,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val cookieDao: CookieDao
     abstract val txtTocRuleDao: TxtTocRuleDao
     abstract val readRecordDao: ReadRecordDao
-    abstract val httpTTSDao: HttpTTSDao
     abstract val cacheDao: CacheDao
     abstract val ruleSubDao: RuleSubDao
     abstract val dictRuleDao: DictRuleDao
     abstract val keyboardAssistsDao: KeyboardAssistsDao
-    abstract val serverDao: ServerDao
 
     companion object {
 
@@ -265,14 +259,6 @@ abstract class AppDatabase : RoomDatabase() {
                 val upRssSourceLoginUiSql =
                     "update rssSources set loginUi = null where loginUi = 'null'"
                 db.execSQL(upRssSourceLoginUiSql)
-                @Language("sql")
-                val upHttpTtsLoginUiSql =
-                    "update httpTTS set loginUi = null where loginUi = 'null'"
-                db.execSQL(upHttpTtsLoginUiSql)
-                @Language("sql")
-                val upHttpTtsConcurrentRateSql =
-                    "update httpTTS set concurrentRate = '0' where concurrentRate is null"
-                db.execSQL(upHttpTtsConcurrentRateSql)
                 db.query("select * from keyboardAssists order by serialNo").use {
                     if (it.count == 0) {
                         DefaultData.keyboardAssists.forEach { keyboardAssist ->

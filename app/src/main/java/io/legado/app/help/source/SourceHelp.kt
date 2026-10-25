@@ -70,15 +70,21 @@ object SourceHelp {
         }
     }
 
-    fun deleteBookSourceParts(sources: List<BookSourcePart>) {
-        deleteBookSourceKeys(sources.map { it.bookSourceUrl })
+    fun deleteBookSourceParts(
+        sources: List<BookSourcePart>,
+        recordExcluded: Boolean = false
+    ) {
+        deleteBookSourceKeys(sources.map { it.bookSourceUrl }, recordExcluded)
     }
 
-    fun deleteBookSources(sources: List<BookSource>) {
-        deleteBookSourceKeys(sources.map { it.bookSourceUrl })
+    fun deleteBookSources(
+        sources: List<BookSource>,
+        recordExcluded: Boolean = false
+    ) {
+        deleteBookSourceKeys(sources.map { it.bookSourceUrl }, recordExcluded)
     }
 
-    private fun deleteBookSourceKeys(keys: Collection<String>) {
+    private fun deleteBookSourceKeys(keys: Collection<String>, recordExcluded: Boolean = false) {
         if (keys.isEmpty()) return
         val sourceKeys = keys.distinct()
         appDb.runInTransaction {
@@ -86,6 +92,11 @@ object SourceHelp {
         }
         SourceConfig.removeSources(sourceKeys)
         AppCacheManager.clearSourceVariables()
+        if (recordExcluded) {
+            // 用户主动删除：记入排除项，避免服务器目录同步时复活
+            BookSourceSync.addExcludedUrls(sourceKeys)
+            BookSourceSync.uploadSelectionInBackground()
+        }
     }
 
     private fun deleteBookSourceInternal(key: String) {
@@ -94,8 +105,8 @@ object SourceHelp {
         appDb.cacheDao.deleteSourceVariables(key)
     }
 
-    fun deleteBookSource(key: String) {
-        deleteBookSourceKeys(listOf(key))
+    fun deleteBookSource(key: String, recordExcluded: Boolean = false) {
+        deleteBookSourceKeys(listOf(key), recordExcluded)
     }
 
     fun deleteRssSources(sources: List<RssSource>) {

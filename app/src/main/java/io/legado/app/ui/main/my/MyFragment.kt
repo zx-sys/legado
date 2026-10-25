@@ -260,7 +260,7 @@ class MyFragment() : BaseFragment(R.layout.fragment_my_config), MainFragmentInte
                     putExtra("configTag", ConfigTag.OTHER_CONFIG)
                 }
 
-                "web_dav_setting" -> startActivity<ConfigActivity> {
+                "backup_setting" -> startActivity<ConfigActivity> {
                     putExtra("configTag", ConfigTag.BACKUP_CONFIG)
                 }
 

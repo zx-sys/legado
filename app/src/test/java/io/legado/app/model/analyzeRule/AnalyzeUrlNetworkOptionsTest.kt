@@ -1,7 +1,6 @@
 package io.legado.app.model.analyzeRule
 
 import io.legado.app.data.entities.BookSource
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.utils.GSONStrict
 import io.legado.app.utils.NetworkUtils
 import okhttp3.Dns
@@ -37,7 +36,7 @@ class AnalyzeUrlNetworkOptionsTest {
 
     @Test
     fun cookieDomainKeepsSyntheticSourceNamespace() {
-        val source = HttpTTS(id = 42)
+        val source = BookSource(bookSourceUrl = "synthetic:42")
         val analyzedUrl = AnalyzeUrl(
             "https://speech.example.com/audio",
             source = source,

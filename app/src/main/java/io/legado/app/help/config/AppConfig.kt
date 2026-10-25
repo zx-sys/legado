@@ -8,8 +8,8 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.help.book.ResourceThemeGeneration
-import io.legado.app.help.tts.NeuralTtsModel
-import io.legado.app.lib.dialogs.SelectItem
+import io.legado.app.help.tts.RemoteTtsEngines
+import io.legado.app.help.tts.TtsSelection
 import io.legado.app.utils.GSON
 import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
 import io.legado.app.utils.defaultSharedPreferences
@@ -421,12 +421,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.threadCount, value)
         }
 
-    var remoteServerId: Long
-        get() = appCtx.getPrefLong(PreferKey.remoteServerId)
-        set(value) {
-            appCtx.putPrefLong(PreferKey.remoteServerId, value)
-        }
-
     // 添加本地选择的目录
     var importBookPath: String?
         get() = appCtx.getPrefString("importBookPath")
@@ -514,11 +508,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.exportUseReplace, value)
         }
 
-    var exportToWebDav: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.exportToWebDav)
-        set(value) {
-            appCtx.putPrefBoolean(PreferKey.exportToWebDav, value)
-        }
     var exportNoChapterName: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.exportNoChapterName)
         set(value) {
@@ -556,11 +545,18 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     private val defaultTtsEngine: String by lazy {
-        GSON.toJson(SelectItem(NeuralTtsModel.DISPLAY_NAME, NeuralTtsModel.ENGINE_ID))
+        GSON.toJson(
+            TtsSelection(
+                title = RemoteTtsEngines.LEGACY_TITLE,
+                code = RemoteTtsEngines.LEGACY_CODE,
+            )
+        )
     }
 
     var ttsEngine: String?
-        get() = appCtx.getPrefString(PreferKey.ttsEngine) ?: defaultTtsEngine
+        get() = (appCtx.getPrefString(PreferKey.ttsEngine) ?: defaultTtsEngine)
+            ?.takeIf { it.toLongOrNull() == null }
+            ?: defaultTtsEngine
         set(value) {
             appCtx.putPrefString(PreferKey.ttsEngine, value)
         }
@@ -642,6 +638,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val autoChangeSource: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.autoChangeSource, true)
+
+    val autoFillChapterSource: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.autoFillChapterSource, true)
 
     var changeSourceLoadInfo: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.changeSourceLoadInfo)
@@ -762,10 +761,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefInt(PreferKey.preDownloadNum, value)
         }
 
-    val syncBookProgress get() = appCtx.getPrefBoolean(PreferKey.syncBookProgress, true)
-
-    val syncBookProgressPlus get() = appCtx.getPrefBoolean(PreferKey.syncBookProgressPlus, false)
-
     val mediaButtonOnExit get() = appCtx.getPrefBoolean("mediaButtonOnExit", true)
 
     val readAloudByMediaButton
@@ -783,26 +778,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefBoolean(PreferKey.manualReplaceRule, false)
         set(value) = appCtx.putPrefBoolean(PreferKey.manualReplaceRule, value)
 
-    val webDavDir get() = appCtx.getPrefString(PreferKey.webDavDir, "legado")
-
-    val webDavDeviceName get() = appCtx.getPrefString(PreferKey.webDavDeviceName, Build.MODEL)
-
-    val webDavBookAutoRestore
-        get() = appCtx.getPrefBoolean(PreferKey.webDavBookAutoRestore, false)
-
-    /**
-     * WebDAV 上保留的备份份数，默认 0 表示**不自动清理**。
-     *
-     * 之所以默认不清理：已有用户可能积累了大量备份，升级后若默认取一个小数字，
-     * 会在下一次备份时把历史备份一次性删掉。设成 0 则对存量用户零影响，
-     * 需要清理的用户自行填一个正整数（填 1 即只保留最新一份）。
-     */
-    val webDavBackupKeepCount: Int
-        get() = appCtx.getPrefString(PreferKey.webDavBackupKeepCount)
-            ?.trim()?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-
-    val webDavBookAutoUpload
-        get() = appCtx.getPrefBoolean(PreferKey.webDavBookAutoUpload, false)
+    val deviceName get() = appCtx.getPrefString(PreferKey.deviceName, Build.MODEL)
 
     val recordHeapDump get() = appCtx.getPrefBoolean(PreferKey.recordHeapDump, false)
 
@@ -822,7 +798,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     val autoBackup get() = appCtx.getPrefBoolean(PreferKey.autoBackup, true)
 
-    val autoBackupWebDav get() = appCtx.getPrefBoolean(PreferKey.autoBackupWebDav, true)
+    val autoBackupServer get() = appCtx.getPrefBoolean(PreferKey.autoBackupServer, true)
 
     val autoBackupIntervalDays get() = appCtx.getPrefInt(PreferKey.autoBackupIntervalDays, 1).coerceAtLeast(1)
 
@@ -887,6 +863,54 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         get() = appCtx.getPrefString("searchGroup") ?: ""
         set(value) {
             appCtx.putPrefString("searchGroup", value)
+        }
+
+    var bookSourceSelectionUpdatedAt: Long
+        get() = appCtx.getPrefLong("bookSourceSelectionUpdatedAt")
+        set(value) {
+            appCtx.putPrefLong("bookSourceSelectionUpdatedAt", value)
+        }
+
+    var bookSourceExcludedUrls: String
+        get() = appCtx.getPrefString("bookSourceExcludedUrls") ?: ""
+        set(value) {
+            appCtx.putPrefString("bookSourceExcludedUrls", value)
+        }
+
+    var bookSourceCatalogUrls: String
+        get() = appCtx.getPrefString("bookSourceCatalogUrls") ?: ""
+        set(value) {
+            appCtx.putPrefString("bookSourceCatalogUrls", value)
+        }
+
+    var bookSourceServerDisabledUrls: String
+        get() = appCtx.getPrefString("bookSourceServerDisabledUrls") ?: ""
+        set(value) {
+            appCtx.putPrefString("bookSourceServerDisabledUrls", value)
+        }
+
+    var bookSourceLastSyncTime: Long
+        get() = appCtx.getPrefLong("bookSourceLastSyncTime")
+        set(value) {
+            appCtx.putPrefLong("bookSourceLastSyncTime", value)
+        }
+
+    var readAloudLastBookUrl: String
+        get() = appCtx.getPrefString("readAloudLastBookUrl") ?: ""
+        set(value) {
+            appCtx.putPrefString("readAloudLastBookUrl", value)
+        }
+
+    var readAloudLastChapterIndex: Int
+        get() = appCtx.getPrefInt("readAloudLastChapterIndex", -1)
+        set(value) {
+            appCtx.putPrefInt("readAloudLastChapterIndex", value)
+        }
+
+    var readAloudLastPosition: Int
+        get() = appCtx.getPrefInt("readAloudLastPosition", -1)
+        set(value) {
+            appCtx.putPrefInt("readAloudLastPosition", value)
         }
 
     var pageTouchSlop: Int

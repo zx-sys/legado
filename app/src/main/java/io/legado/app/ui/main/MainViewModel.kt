@@ -14,7 +14,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.saveReadRecordSnapshot
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.storage.BackupServer
 import io.legado.app.help.storage.ServerBackup
 import io.legado.app.help.DefaultData
@@ -344,16 +343,6 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun postLoad() {
-        execute {
-            if (appDb.httpTTSDao.count == 0) {
-                DefaultData.httpTTS.let {
-                    appDb.httpTTSDao.insert(*it.toTypedArray())
-                }
-            }
-        }
-    }
-
     fun restoreServer(backup: ServerBackup, restoredLastBackup: Long) {
         executeLazy {
             BackupServer.restore(backup)
@@ -361,17 +350,6 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
             LocalConfig.lastBackup = maxOf(LocalConfig.lastBackup, restoredLastBackup)
         }.onError {
             AppLog.put("服务器恢复出错\n${it.localizedMessage}", it)
-            context.toastOnUi("${context.getString(R.string.restore_fail)}\n${it.localizedMessage}")
-        }.start()
-    }
-
-    fun restoreWebDav(name: String, restoredLastBackup: Long) {
-        executeLazy {
-            AppWebDav.restoreWebDav(name)
-        }.onSuccess {
-            LocalConfig.lastBackup = maxOf(LocalConfig.lastBackup, restoredLastBackup)
-        }.onError {
-            AppLog.put("WebDav恢复出错\n${it.localizedMessage}", it)
             context.toastOnUi("${context.getString(R.string.restore_fail)}\n${it.localizedMessage}")
         }.start()
     }

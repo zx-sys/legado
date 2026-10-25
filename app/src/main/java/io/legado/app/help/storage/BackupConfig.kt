@@ -106,8 +106,6 @@ object BackupConfig {
         PreferKey.defaultCoverDark,
         PreferKey.backupPath,
         PreferKey.defaultBookTreeUri,
-        PreferKey.webDavDeviceName,
-        PreferKey.webDavBookAutoRestore,
         PreferKey.jsSourceApiToken,
         PreferKey.launcherIcon,
         PreferKey.bitmapCacheSize,

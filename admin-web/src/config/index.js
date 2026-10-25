@@ -2,7 +2,7 @@ import pkg from '../../package.json'
 
 //版本号
 const APP_VER = pkg.version
-const API_HOST = import.meta.env.VITE_API_HOST || (import.meta.env.PROD ? window.location.host : "127.0.0.1:8000")
+const API_HOST = import.meta.env.VITE_API_HOST || (import.meta.env.PROD ? window.location.host : "127.0.0.1:9666")
 //lyadmin系统配置
 export default {
 

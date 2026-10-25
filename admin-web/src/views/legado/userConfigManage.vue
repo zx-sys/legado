@@ -66,7 +66,8 @@ const typeMap = {
   share_read_config: '分享排版',
   theme_config: '主题配置',
   app_config: '应用设置',
-  video_config: '视频设置'
+  video_config: '视频设置',
+  book_source_config: '书源选择'
 }
 const loading = ref(false)
 const rows = ref([])

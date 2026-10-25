@@ -37,6 +37,14 @@ api.ttsEdit = params => ajaxPut({ url: '/api/legado/tts-engines/', params });
 api.ttsDelete = params => ajaxDelete({ url: '/api/legado/tts-engines/', params });
 api.ttsUpload = (id, formData, onProgress) =>
   uploadFile({ url: `/api/legado/tts-engines/${id}/upload_package/`, formData }, onProgress);
+
+// 字体市场
+api.fontList = params => ajaxGet({ url: '/api/legado/font-packs/', params });
+api.fontAdd = params => ajaxPost({ url: '/api/legado/font-packs/', params });
+api.fontEdit = params => ajaxPut({ url: '/api/legado/font-packs/', params });
+api.fontDelete = params => ajaxDelete({ url: '/api/legado/font-packs/', params });
+api.fontUpload = (id, formData, onProgress) =>
+  uploadFile({ url: `/api/legado/font-packs/${id}/upload_package/`, formData }, onProgress);
 api.bookSourceImport = formData =>
   uploadFile({ url: '/api/legado/book-sources/import_json/', formData });
 

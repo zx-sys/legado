@@ -29,7 +29,6 @@ on:
       - 'app/src/main/res/layout/dialog_auto_backup.xml'
       - 'app/src/main/res/values*/backup_options.xml'
       - 'app/src/main/java/io/legado/app/help/storage/BackupRestoreLock.kt'
-      - 'app/src/main/java/io/legado/app/help/AppWebDav.kt'
       - 'app/src/androidTest/java/io/legado/app/help/storage/**'
       - 'app/src/main/java/io/legado/app/model/BookCover.kt'
       - 'app/src/main/java/io/legado/app/ui/widget/image/CoverImageView.kt'

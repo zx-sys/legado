@@ -109,6 +109,12 @@
     </item>
 
     <item
+        android:id="@+id/menu_sync_server_sources"
+        android:icon="@drawable/ic_refresh_black_24dp"
+        android:title="@string/sync_server_sources"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_add_book_source"
         android:icon="@drawable/ic_add"
         android:title="@string/add_book_source"

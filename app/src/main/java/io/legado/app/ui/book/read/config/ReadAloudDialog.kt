@@ -14,8 +14,6 @@ import io.legado.app.base.BaseDialogFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.databinding.DialogReadAloudBinding
 import io.legado.app.help.config.AppConfig
-import io.legado.app.help.tts.NeuralTtsModel
-import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.ReadAloud
@@ -105,9 +103,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
     }
 
     private fun upFollowSysVisibility() {
-        val isLocalNeural = GSON.fromJsonObject<SelectItem<String>>(ReadAloud.ttsEngine)
-            .getOrNull()?.value == NeuralTtsModel.ENGINE_ID
-        binding.cbTtsFollowSys.visible(!isLocalNeural)
+        binding.cbTtsFollowSys.visible(!ReadAloud.isNeuralTtsSelected)
     }
 
     private fun initEvent() = binding.run {

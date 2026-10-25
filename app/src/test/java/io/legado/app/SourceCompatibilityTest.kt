@@ -2,7 +2,6 @@ package io.legado.app
 
 import com.script.rhino.RhinoScriptEngine
 import com.script.rhino.RhinoWrapFactory
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.rhino.NativeBaseSource
 import io.legado.app.help.parseJsRequestHeaders
@@ -10,8 +9,6 @@ import io.legado.app.help.http.TRANSPARENT_ACCEPT_ENCODING
 import io.legado.app.help.http.canUseTransparentDecompression
 import io.legado.app.help.http.decompressResponse
 import io.legado.app.model.analyzeRule.AnalyzeRule
-import io.legado.app.ui.book.read.config.hasLoginCapability
-import io.legado.app.ui.book.read.config.shouldOpenLoginOnSelection
 import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -198,27 +195,6 @@ class SourceCompatibilityTest {
         assertThrows(IllegalArgumentException::class.java) {
             parseJsRequestHeaders(42)
         }
-    }
-
-    @Test
-    fun httpTtsRecognizesScriptAndFormLoginCapabilities() {
-        assertTrue(HttpTTS(loginUrl = "<js>login()</js>").hasLoginCapability())
-        assertTrue(HttpTTS(loginUi = "[]").hasLoginCapability())
-        assertFalse(HttpTTS(loginUrl = " ", loginUi = "\n").hasLoginCapability())
-        assertFalse(HttpTTS().hasLoginCapability())
-    }
-
-    @Test
-    fun httpTtsSelectionAlwaysOffersAvailableLoginAgain() {
-        assertTrue(HttpTTS(loginUrl = "<js>login()</js>").shouldOpenLoginOnSelection())
-        assertTrue(HttpTTS(loginUi = "[]").shouldOpenLoginOnSelection())
-        assertFalse(HttpTTS().shouldOpenLoginOnSelection())
-
-        val source = File(
-            "src/main/java/io/legado/app/ui/book/read/config/SpeakEngineDialog.kt"
-        ).readText()
-        assertTrue(source.contains("if (httpTTS.shouldOpenLoginOnSelection())"))
-        assertFalse(source.contains("&& httpTTS.getLoginInfo().isNullOrBlank()"))
     }
 
     @Test

@@ -4,7 +4,6 @@ import io.legado.app.constant.AppConst
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.DictRule
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.TxtTocRule
@@ -26,9 +25,6 @@ object DefaultData {
     fun upVersion() {
         if (LocalConfig.versionCode < AppConst.appInfo.versionCode) {
             Coroutine.async {
-                if (LocalConfig.needUpHttpTTS) {
-                    importDefaultHttpTTS()
-                }
                 if (LocalConfig.needUpTxtTocRule) {
                     importDefaultTocRules()
                 }
@@ -44,17 +40,6 @@ object DefaultData {
             }.onError {
                 it.printOnDebug()
             }
-        }
-    }
-
-    val httpTTS: List<HttpTTS> by lazy {
-        val json =
-            String(
-                appCtx.assets.open("defaultData${File.separator}httpTTS.json")
-                    .readBytes()
-            )
-        HttpTTS.fromJsonArray(json).getOrElse {
-            emptyList()
         }
     }
 
@@ -168,14 +153,21 @@ object DefaultData {
 
     fun addNewDefaultBookSourcesIfNeeded() {
         if (LocalConfig.newDefaultBookSourcesAdded) return
+        var allLoaded = true
         addedDefaultBookSourceUrls.forEach { url ->
+            val source = bookSources.find { it.bookSourceUrl == url }
+            if (source == null) {
+                allLoaded = false
+                return@forEach
+            }
             if (appDb.bookSourceDao.getBookSource(url) == null) {
-                bookSources.find { it.bookSourceUrl == url }?.let {
-                    appDb.bookSourceDao.insert(it)
-                }
+                appDb.bookSourceDao.insert(source)
             }
         }
-        LocalConfig.newDefaultBookSourcesAdded = true
+        // 资源里缺少目标书源时不置位，等下次启动（或服务器同步）补齐
+        if (allLoaded) {
+            LocalConfig.newDefaultBookSourcesAdded = true
+        }
     }
 
     val keyboardAssists: List<KeyboardAssist> by lazy {
@@ -184,14 +176,6 @@ object DefaultData {
                 .readBytes()
         )
         GSON.fromJsonArray<KeyboardAssist>(json).getOrThrow()
-    }
-
-    fun importDefaultHttpTTS() {
-        appDb.httpTTSDao.all
-            .filter { it.id < 0 }
-            .forEach { it.clearSharedGlobalState() }
-        appDb.httpTTSDao.deleteDefault()
-        appDb.httpTTSDao.insert(*httpTTS.toTypedArray())
     }
 
     fun importDefaultTocRules() {

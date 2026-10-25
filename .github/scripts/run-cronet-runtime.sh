@@ -36,9 +36,9 @@ ffmpeg -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=320x240:rate=24' 
   -t 60 -an -c:v libx264 -profile:v baseline -level 3.0 -pix_fmt yuv420p -g 24 \
   -b:v 1200k -minrate 1200k -maxrate 1200k -bufsize 2400k \
   -x264-params 'nal-hrd=cbr:force-cfr=1' -movflags +faststart "$fixture_dir/rss-seek.mp4"
-node .github/scripts/cronet-webdav-fixture.cjs "$fixture_dir/server.key" \
+node .github/scripts/cronet-tls-fixture.cjs "$fixture_dir/server.key" \
   "$fixture_dir/server.pem" "$fixture_dir/ready" \
-  > app/build/cronet-runtime/webdav-server.jsonl 2>&1 &
+  > app/build/cronet-runtime/tls-server.jsonl 2>&1 &
 fixture_pid=$!
 for _ in {1..50}; do
   [[ -f "$fixture_dir/ready" ]] && break
@@ -79,7 +79,7 @@ grep -Fq 'CRONET_RUNTIME_PASSED' app/build/cronet-runtime/result.txt
 grep -Fq 'productionClientToggle=off,on,off,on' app/build/cronet-runtime/result.txt
 grep -Fq 'INSTRUMENTATION_CODE: -1' app/build/cronet-runtime/result.txt
 grep -Fq 'cachedBefore=false' app/build/cronet-runtime/result.txt
-grep -Fq 'webDav=authenticated,encoded-paths,cronet-first,on-off-on' app/build/cronet-runtime/result.txt
+grep -Fq 'authenticated=encoded-paths,cronet-first,on-off-on' app/build/cronet-runtime/result.txt
 grep -Fq 'loadFailureRecovery=true; componentFiles=1' app/build/cronet-runtime/result.txt
 adb pull /sdcard/Android/data/com.legado.app.release/files/cronet-runtime/storage.txt \
   app/build/cronet-runtime/cold-storage.txt
@@ -91,7 +91,7 @@ grep -Fq 'CRONET_RUNTIME_PASSED' app/build/cronet-runtime/cached-result.txt
 grep -Fq 'productionClientToggle=off,on,off,on' app/build/cronet-runtime/cached-result.txt
 grep -Fq 'INSTRUMENTATION_CODE: -1' app/build/cronet-runtime/cached-result.txt
 grep -Fq 'cachedBefore=true' app/build/cronet-runtime/cached-result.txt
-grep -Fq 'webDav=authenticated,encoded-paths,cronet-first,on-off-on' app/build/cronet-runtime/cached-result.txt
+grep -Fq 'authenticated=encoded-paths,cronet-first,on-off-on' app/build/cronet-runtime/cached-result.txt
 adb pull /sdcard/Android/data/com.legado.app.release/files/cronet-runtime/storage.txt \
   app/build/cronet-runtime/cached-storage.txt
 python3 - <<'PY'

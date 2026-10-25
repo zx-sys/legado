@@ -38,7 +38,7 @@ export default defineConfig({
         minify: 'esbuild',
         manifest: false,
         sourcemap: false,
-        outDir: 'dist',
+        outDir: 'legado',
         emptyOutDir: true,
         assetsDir: 'static',
         chunkSizeWarningLimit: 2000,

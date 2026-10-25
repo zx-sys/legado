@@ -2,15 +2,18 @@
 import json
 import logging
 import re
+import time
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.http import FileResponse, HttpResponseRedirect
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.legado.models import Backup, LegadoUser, TtsEngine
-from apps.legado.services import backup_service
+from apps.legado.models import Backup, FontPack, LegadoUser, TtsEngine, UserConfig
+from apps.legado.services import backup_service, sync_service
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,13 @@ def get_user(request):
 
 
 def backup_dict(backup: Backup) -> dict:
+    # USE_TZ=False 下 create_time 是本地时间, 必须带时区返回, 否则客户端会按 UTC 解析
+    created_at = backup.create_time
+    if created_at is not None:
+        tz = ZoneInfo(settings.TIME_ZONE)
+        created_at_text = created_at.replace(tzinfo=tz).isoformat()
+    else:
+        created_at_text = ""
     return {
         "id": backup.id,
         "device_name": backup.device_name,
@@ -42,13 +52,48 @@ def backup_dict(backup: Backup) -> dict:
         "sha256": backup.sha256,
         "size_bytes": backup.size_bytes,
         "item_count": backup.item_count,
-        "created_at": backup.create_time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "created_at": created_at_text,
     }
 
 
 class NoAuthAPIView(APIView):
     authentication_classes = []
     permission_classes = []
+
+
+def account_payload(user: LegadoUser | None) -> dict:
+    if user is None:
+        return {"exists": False, "backup_count": 0, "latest_backup": None}
+    backups = Backup.objects.filter(user=user, status="ready")
+    latest = backups.order_by("-create_time").first()
+    return {
+        "exists": True,
+        "backup_count": backups.count(),
+        "latest_backup": backup_dict(latest) if latest else None,
+    }
+
+
+class AccountView(NoAuthAPIView):
+    """手机号即账号：查询是否已有用户/备份，或创建新用户。"""
+
+    def get(self, request):
+        phone = normalize_phone(
+            request.query_params.get("phone") or request.headers.get("X-User-Phone")
+        )
+        if not phone:
+            return Response({"detail": "valid phone is required"}, status=400)
+        return Response(account_payload(LegadoUser.objects.filter(phone=phone).first()))
+
+    def post(self, request):
+        phone = normalize_phone(
+            request.data.get("phone") or request.headers.get("X-User-Phone")
+        )
+        if not phone:
+            return Response({"detail": "valid phone is required"}, status=400)
+        user, created = LegadoUser.objects.get_or_create(phone=phone)
+        payload = account_payload(user)
+        payload["created"] = created
+        return Response(payload)
 
 
 class BackupUploadView(NoAuthAPIView):
@@ -192,3 +237,119 @@ class BookSourceListView(NoAuthAPIView):
             for source in BookSource.objects.filter(enabled=True).order_by("-weight")
         ]
         return Response({"items": rows})
+
+
+def _string_list(value) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result = []
+    seen = set()
+    for item in value[:5000]:
+        if not isinstance(item, str):
+            continue
+        text = item.strip()
+        if text and text not in seen:
+            seen.add(text)
+            result.append(text)
+    return result
+
+
+class BookSourceConfigView(NoAuthAPIView):
+    """用户的书源选择：禁用的书源 URL 与主动排除的 URL。"""
+
+    def get(self, request):
+        user, error = get_user(request)
+        if error:
+            return error
+        config = UserConfig.objects.filter(
+            user=user, config_type="book_source_config"
+        ).first()
+        data = config.raw_json if config and isinstance(config.raw_json, dict) else {}
+        return Response(
+            {
+                "disabled": _string_list(data.get("disabled")),
+                "excluded": _string_list(data.get("excluded")),
+                "updated_at": int(data.get("updated_at") or 0),
+            }
+        )
+
+    def put(self, request):
+        user, error = get_user(request)
+        if error:
+            return error
+        disabled = _string_list(request.data.get("disabled"))
+        excluded = _string_list(request.data.get("excluded"))
+        try:
+            updated_at = int(request.data.get("updated_at") or 0)
+        except (TypeError, ValueError):
+            updated_at = 0
+        if updated_at <= 0:
+            updated_at = int(time.time() * 1000)
+        payload = {
+            "disabled": disabled,
+            "excluded": excluded,
+            "updated_at": updated_at,
+        }
+        UserConfig.objects.update_or_create(
+            user=user,
+            config_type="book_source_config",
+            defaults={
+                "source_file": "bookSourceConfig.json",
+                "content": json.dumps(payload, ensure_ascii=False),
+                "raw_json": payload,
+            },
+        )
+        return Response(payload)
+
+class FontPackListView(NoAuthAPIView):
+    def get(self, request):
+        qs = FontPack.objects.filter(enabled=True).order_by("sort", "-create_time")
+        items = [
+            {
+                "id": item.id,
+                "code": item.code,
+                "name": item.name,
+                "languages": [v for v in item.languages.split(",") if v],
+                "version": item.version,
+                "license": item.license,
+                "source_url": item.source_url,
+                "description": item.description,
+                "package_url": item.package_url,
+                "package_file_name": item.package_file_name,
+                "package_size": item.package_size,
+                "sha256": item.sha256,
+                "download_count": item.download_count,
+            }
+            for item in qs
+        ]
+        return Response({"items": items})
+
+
+class FontPackDownloadView(NoAuthAPIView):
+    def get(self, request, code: str):
+        pack = FontPack.objects.filter(code=code, enabled=True).first()
+        if not pack or not pack.package_url:
+            return Response({"detail": "font not found"}, status=404)
+        FontPack.objects.filter(id=pack.id).update(
+            download_count=pack.download_count + 1
+        )
+        return HttpResponseRedirect(pack.package_url)
+
+class SyncView(NoAuthAPIView):
+    """阅读进度/记录/用户配置：Redis 热数据双向同步。"""
+
+    def get(self, request):
+        user, error = get_user(request)
+        if error:
+            return error
+        try:
+            since = int(request.query_params.get("since") or 0)
+        except (TypeError, ValueError):
+            since = 0
+        return Response(sync_service.get_sync(user, since))
+
+    def post(self, request):
+        user, error = get_user(request)
+        if error:
+            return error
+        return Response(sync_service.apply_sync(user, request.data or {}))

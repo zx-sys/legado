@@ -37,10 +37,11 @@ class BackupDefaultPathContractTest {
         val backup = source.substringAfter("fun backup()")
             .substringBefore("private fun backupUsePermission")
         assertTrue(backup.contains("if (backupPath.isNullOrEmpty())"))
-        assertTrue(backup.contains("backup(null, uploadWebDav)"))
-        assertTrue(source.contains("private fun backup(backupPath: String?, uploadWebDav: Boolean)"))
-        assertTrue(backup.contains("manualBackupUploadWebDav = index == 1"))
-        assertTrue(backup.contains("Backup.backupLocked(requireContext(), backupPath, uploadWebDav)"))
+        assertTrue(backup.contains("backup(null, uploadServer)"))
+        assertTrue(source.contains("private fun backup(backupPath: String?, uploadServer: Boolean)"))
+        assertTrue(backup.contains("manualBackupUploadServer = index == 1"))
+        assertTrue(backup.contains("Backup.backupLocked("))
+        assertTrue(backup.contains("uploadServer,"))
     }
 
     private fun source(relativePath: String): String {

@@ -42,7 +42,7 @@ else:
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-+9y7-(76!+viys!c(lybbn24s3h&-zm&l#fujgn03*+-yj@4'
+SECRET_KEY = locals().get('SECRET_KEY') or 'django-insecure-+9y7-(76!+viys!c(lybbn24s3h&-zm&l#fujgn03*+-yj@4'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = locals().get("DEBUG", True)
@@ -51,7 +51,7 @@ ALLOWED_HOSTS = locals().get('ALLOWED_HOSTS', ['*'])
 
 AUTH_USER_MODEL = 'mysystem.Users'
 USERNAME_FIELD = 'username'
-LOGS_DIR = r'D:\tmp'
+LOGS_DIR = locals().get('LOGS_DIR', os.path.join(BASE_DIR, 'logs'))
 
 # 路由结尾不强制带斜杠
 APPEND_SLASH = False
@@ -163,6 +163,7 @@ else:
     }
 
 # 缓存配置
+REDIS_DB = locals().get('REDIS_DB', 0)
 if USE_LOCAL_CACHE:
     CACHES = {
         "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache", "TIMEOUT": None},
@@ -173,7 +174,7 @@ else:
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
-            "LOCATION": f'{REDIS_URL}/0',
+            "LOCATION": f'{REDIS_URL}/{REDIS_DB}',
             'KEY_PREFIX': 'dvhgcc',  # 项目名当做文件前缀
             "TIMEOUT": None,
             "OPTIONS": {
@@ -185,7 +186,7 @@ else:
         },
         "authapi": {  # 接口安全校验（验证接口重复第二次访问会拒绝）
             'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': f'{REDIS_URL}/0',
+            'LOCATION': f'{REDIS_URL}/{REDIS_DB}',
             'KEY_PREFIX': 'authapi',
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',  # 连接选项(默认，不改)
@@ -194,7 +195,7 @@ else:
         "singletoken": {  # jwt单用户登录（确保一个账户只有一个地点登录，后一个会顶掉前一个）
             'BACKEND': 'django_redis.cache.RedisCache',  # 缓存后端 Redis
             # 连接Redis数据库(服务器地址)
-            'LOCATION': f'{REDIS_URL}/0',
+            'LOCATION': f'{REDIS_URL}/{REDIS_DB}',
             'KEY_PREFIX': 'singletoken',
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',  # 连接选项(默认，不改)

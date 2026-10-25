@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import hashlib
 import json
 import logging
 
@@ -14,6 +15,7 @@ from apps.legado.models import (
     BackupItem,
     BackupRecord,
     BookSource,
+    FontPack,
     LegadoBook,
     LegadoBookmark,
     LegadoHighlight,
@@ -26,6 +28,7 @@ from apps.legado.serializers import (
     BackupRecordSerializer,
     BackupSerializer,
     BookSourceSerializer,
+    FontPackSerializer,
     LegadoBookSerializer,
     LegadoBookmarkSerializer,
     LegadoHighlightSerializer,
@@ -132,6 +135,11 @@ class UserConfigViewSet(CustomModelViewSet):
     filterset_fields = ("user", "config_type")
     ordering_fields = ("update_time", "config_type")
 
+    def update(self, request, *args, **kwargs):
+        # 管理端只改内容，PUT 按部分更新处理，避免 user/config_type 必填校验失败
+        kwargs["partial"] = True
+        return super().update(request, *args, **kwargs)
+
 
 class BookSourceViewSet(CustomModelViewSet):
     queryset = BookSource.objects.all()
@@ -169,6 +177,57 @@ class BookSourceViewSet(CustomModelViewSet):
         )
         response["Content-Disposition"] = 'attachment; filename="book_sources.json"'
         return response
+
+
+class FontPackViewSet(CustomModelViewSet):
+    queryset = FontPack.objects.all()
+    serializer_class = FontPackSerializer
+    search_fields = ("name", "code", "languages", "description")
+    filterset_fields = ("enabled",)
+    ordering_fields = ("sort", "create_time", "download_count")
+
+    @action(
+        methods=["post"],
+        detail=True,
+        parser_classes=[MultiPartParser, FormParser],
+    )
+    def upload_package(self, request, pk=None):
+        pack = self.get_object()
+        upload = request.FILES.get("file")
+        if not upload:
+            return ErrorResponse(msg="请选择要上传的字体文件")
+        name = (upload.name or "").lower()
+        if not name.endswith((".ttf", ".otf", ".ttc")):
+            return ErrorResponse(msg="只支持 ttf/otf/ttc 字体文件")
+        try:
+            data = upload.read()
+            key, url = storage.put_font_package(pack.code, upload.name, data)
+        except Exception as exc:
+            logger.exception("字体包上传失败")
+            return ErrorResponse(msg=f"上传失败: {exc}")
+        pack.package_key = key or ""
+        pack.package_url = url
+        pack.package_file_name = upload.name
+        pack.package_size = len(data)
+        pack.sha256 = hashlib.sha256(data).hexdigest()
+        pack.save(
+            update_fields=[
+                "package_key",
+                "package_url",
+                "package_file_name",
+                "package_size",
+                "sha256",
+                "update_time",
+            ]
+        )
+        return DetailResponse(data=FontPackSerializer(pack).data, msg="上传成功")
+
+    def perform_destroy(self, instance):
+        packs = instance if hasattr(instance, "all") else [instance]
+        for pack in packs:
+            if pack.package_key:
+                storage.delete("oss", pack.package_key, None)
+        super().perform_destroy(instance)
 
 
 class TtsEngineViewSet(CustomModelViewSet):

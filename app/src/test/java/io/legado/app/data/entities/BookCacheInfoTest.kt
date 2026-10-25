@@ -31,9 +31,8 @@ class BookCacheInfoTest {
     }
 
     @Test
-    fun `legacy local and webdav books keep case insensitive epub detection`() {
+    fun `legacy local books keep case insensitive epub detection`() {
         assertTrue(cacheInfo(origin = BookType.localTag, originName = "BOOK.EPUB").isEpub)
-        assertTrue(cacheInfo(origin = "${BookType.webDavTag}folder", originName = "book.EpUb").isEpub)
         assertFalse(cacheInfo(origin = "https://example.com", originName = "book.epub").isEpub)
     }
 

@@ -7,15 +7,15 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
-import com.k2fsa.sherpa.onnx.OfflineTtsConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.help.MediaHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.help.tts.NeuralTtsModel
+import io.legado.app.help.tts.LocalTtsConfigFactory
+import io.legado.app.help.tts.RemoteTtsEngines
+import io.legado.app.help.tts.parseTtsSelection
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.ui.book.read.page.entities.TextParagraph
 import io.legado.app.utils.servicePendingIntent
@@ -29,8 +29,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * 本地中英双语神经 TTS，基于 sherpa-onnx + vits-melo-tts-zh_en。
- * 完全离线，中英混排由模型直接处理。
+ * 本地神经 TTS 朗读，引擎与音色由后台目录下发，支持 vits / kokoro / matcha。
  */
 class NeuralTtsReadAloudService : BaseReadAloudService() {
 
@@ -51,6 +50,7 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
 
     private var ttsLoading = false
     private var pendingPlay = false
+    private var speakerId = 0
     private var ttsInitJob: Coroutine<*>? = null
     private var speakJob: Coroutine<*>? = null
     private val playbackSessionId = AtomicLong()
@@ -76,30 +76,22 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
 
     private fun initTts() {
         if (tts != null || ttsLoading) return
-        if (!NeuralTtsModel.isInstalled()) {
+        val selection = parseTtsSelection(ReadAloud.ttsEngine)
+        val engineInfo = selection?.code?.let { RemoteTtsEngines.installedEngine(it) }
+        if (engineInfo == null || !RemoteTtsEngines.isInstalled(engineInfo)) {
             pendingPlay = false
             toastOnUi("本地语音包未下载，请先在朗读引擎中下载")
             stopSelf()
             return
         }
+        speakerId = selection.sid.coerceIn(0, RemoteTtsEngines.speakers(engineInfo).lastIndex)
         ttsLoading = true
         toastOnUi("正在加载本地语音模型…")
         ttsInitJob = execute {
-            val config = OfflineTtsConfig(
-                model = OfflineTtsModelConfig(
-                    vits = OfflineTtsVitsModelConfig(
-                        model = NeuralTtsModel.modelFile("model.onnx"),
-                        lexicon = NeuralTtsModel.modelFile("lexicon.txt"),
-                        tokens = NeuralTtsModel.modelFile("tokens.txt"),
-                    ),
-                    numThreads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4),
-                    provider = "cpu",
-                ),
-                ruleFsts = listOf("date.fst", "number.fst", "phone.fst")
-                    .joinToString(",") { NeuralTtsModel.modelFile(it) },
-                maxNumSentences = 1,
+            OfflineTts(
+                assetManager = null,
+                config = LocalTtsConfigFactory.create(engineInfo),
             )
-            OfflineTts(assetManager = null, config = config)
         }.onSuccess { engine ->
             ttsLoading = false
             if (destroyed) {
@@ -208,7 +200,7 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
                     })
                     engine.generateWithConfigAndCallback(
                         text = speakText,
-                        config = GenerationConfig(sid = 0, speed = speed),
+                        config = GenerationConfig(sid = speakerId, speed = speed),
                         callback = callback,
                     )
                     if (!isCurrent(sessionId)) return@execute

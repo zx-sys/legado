@@ -210,9 +210,18 @@ data class TextPage(
             return this
         }
         hasReadAloudSpan = false
-        for (i in textLines.indices) {
-            textLines[i].isReadAloud = false
+        for (line in textLines) {
+            line.isReadAloud = false
+            var changed = false
+            for (column in line.columns) {
+                if (column is TextBaseColumn && column.isReadAloud) {
+                    column.isReadAloud = false
+                    changed = true
+                }
+            }
+            if (changed) line.invalidate()
         }
+        invalidate()
         return this
     }
 
@@ -224,24 +233,35 @@ data class TextPage(
         var lineStart = 0
         var inParagraph = false
         hasReadAloudSpan = false
+        var changed = false
         for (line in textLines) {
+            val oldReadAloud = line.isReadAloud
             val lineLength = line.text.length + if (line.isParagraphEnd) 1 else 0
             val startsHere = aloudSpanStart >= lineStart && aloudSpanStart < lineStart + lineLength
             if (startsHere) inParagraph = true
             line.isReadAloud = inParagraph
             if (inParagraph) hasReadAloudSpan = true
+            var lineChanged = oldReadAloud != line.isReadAloud
             if (inParagraph) {
                 var columnStart = lineStart
                 for (column in line.columns) {
                     if (column is TextBaseColumn) {
-                        column.isReadAloud = !startsHere || columnStart + column.positionLength > aloudSpanStart
+                        val readAloud = !startsHere || columnStart + column.positionLength > aloudSpanStart
+                        if (column.isReadAloud != readAloud) lineChanged = true
+                        column.isReadAloud = readAloud
                     }
                     columnStart += column.positionLength
                 }
             }
+            // 预渲染缓存只认失效标记, 不失效高亮不会重绘
+            if (lineChanged) {
+                line.invalidate()
+                changed = true
+            }
             if (line.isParagraphEnd) inParagraph = false
             lineStart += lineLength
         }
+        if (changed) invalidate()
     }
 
     /**

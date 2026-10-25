@@ -43,7 +43,7 @@ request.interceptors.response.use(
                             //跳转登录页   callback点击确定按钮后的回调函数
                             autoStorage.clear()
                             ElMessage.success('已退出登录!')
-                            window.location.href="/"
+                            window.location.href = import.meta.env.BASE_URL
                         }
                     })
                 }else{
@@ -63,7 +63,7 @@ request.interceptors.response.use(
                         //跳转登录页   callback点击确定按钮后的回调函数
                         autoStorage.clear()
                         ElMessage.success('已退出登录!')
-                        window.location.href="/"
+                        window.location.href = import.meta.env.BASE_URL
                     }
                 })
                 return response
@@ -76,7 +76,7 @@ request.interceptors.response.use(
     error => {
         if(error.response && error.response.status == 404){
             if (import.meta.env.PROD) {
-                window.location.href="/404"
+                window.location.href = import.meta.env.BASE_URL + "#/404"
                 return
             }
         }else if (error.message == "canceled") {

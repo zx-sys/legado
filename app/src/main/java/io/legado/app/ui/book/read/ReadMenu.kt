@@ -360,7 +360,6 @@ class ReadMenu @JvmOverloads constructor(
     fun runMenuIn(anim: Boolean = !AppConfig.isEInkMode) {
         val showMemo = context.getPrefBoolean(PreferKey.showBookMemo, false)
         binding.llMemo.isVisible = showMemo
-        binding.memoSpacer.isVisible = showMemo
         callBack.onMenuShow()
         this.visible()
         binding.titleBar.visible()

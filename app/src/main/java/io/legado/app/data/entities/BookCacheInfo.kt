@@ -30,7 +30,7 @@ internal val BookCacheInfo.isEpub: Boolean
 private val BookCacheInfo.isLocal: Boolean
     get() {
         if (type == 0) {
-            return origin == BookType.localTag || origin.startsWith(BookType.webDavTag)
+            return origin == BookType.localTag
         }
         return type and BookType.local > 0
     }

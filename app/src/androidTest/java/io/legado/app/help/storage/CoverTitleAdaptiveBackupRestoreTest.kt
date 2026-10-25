@@ -96,7 +96,7 @@ class CoverTitleAdaptiveBackupRestoreTest {
             BackupConfig.contentKeys.forEach { BackupConfig.ignoreConfig[it] = true }
             BackupConfig.ignoreConfig[BackupConfig.settingContentKey] = false
             runBlocking(Dispatchers.IO) {
-                Backup.backupLocked(context, directory.path, uploadWebDav = false)
+                Backup.backupLocked(context, directory.path, uploadServer = false)
             }
             unpacked.mkdirs()
             ZipFile(File(directory, "backup.zip")).use { zip ->
@@ -146,7 +146,7 @@ class CoverTitleAdaptiveBackupRestoreTest {
                 }.commit()
             BackupConfig.contentKeys.forEach { BackupConfig.ignoreConfig[it] = true }
             BackupConfig.ignoreConfig[BackupConfig.settingContentKey] = false
-            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadWebDav = false) }
+            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadServer = false) }
             unpacked.mkdirs()
             ZipFile(File(directory, "backup.zip")).use { zip ->
                 listOf("config.xml", BookCover.fontBackupFileName).forEach { name ->
@@ -176,7 +176,7 @@ class CoverTitleAdaptiveBackupRestoreTest {
             assertEquals("", preferences.getString(PreferKey.coverFont, null))
             assertFalse(preferences.getBoolean(PreferKey.coverHorizontal, true))
             preferences.edit().putString(PreferKey.coverFont, restoredFont.path).commit()
-            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadWebDav = false) }
+            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadServer = false) }
             ZipFile(File(directory, "backup.zip")).use { zip ->
                 org.junit.Assert.assertNull(zip.getEntry(BookCover.fontBackupFileName))
                 assertFalse(zip.getInputStream(zip.getEntry("config.xml")).bufferedReader().use { it.readText() }
@@ -201,7 +201,7 @@ class CoverTitleAdaptiveBackupRestoreTest {
             preferences.edit().putBoolean(PreferKey.coverCustomFontSize, true).apply {
                 sizes.forEachIndexed { index, key -> putInt(key, 110 + index * 10) }
             }.commit()
-            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadWebDav = false) }
+            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadServer = false) }
             configDirectory.mkdirs()
             ZipFile(File(directory, "backup.zip")).use { zip ->
                 File(configDirectory, "config.xml").writeBytes(zip.getInputStream(zip.getEntry("config.xml")).use { it.readBytes() })
@@ -220,7 +220,7 @@ class CoverTitleAdaptiveBackupRestoreTest {
             runBlocking(Dispatchers.IO) { Restore.restoreLocked(configDirectory.path) }
             assertFalse(preferences.getBoolean(PreferKey.coverCustomFontSize, true))
             sizes.forEach { assertEquals(90, preferences.getInt(it, 0)) }
-            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadWebDav = false) }
+            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadServer = false) }
             ZipFile(File(directory, "backup.zip")).use { zip ->
                 val xml = zip.getInputStream(zip.getEntry("config.xml")).bufferedReader().use { it.readText() }
                 (sizes + PreferKey.coverCustomFontSize).forEach { assertFalse("ignored key $it must not be exported", xml.contains(it)) }

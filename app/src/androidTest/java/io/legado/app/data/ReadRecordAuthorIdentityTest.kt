@@ -96,7 +96,7 @@ class ReadRecordAuthorIdentityTest {
                 .build()
             try {
                 val dao = database.readRecordDao
-                assertEquals(113, database.openHelper.writableDatabase.version)
+                assertEquals(114, database.openHelper.writableDatabase.version)
                 assertEquals(legacy.toSet(), dao.all.toSet())
                 assertEquals(1350L, dao.allTime)
                 assertNull(dao.getRecord("phone", "Same", "Author A"))
@@ -119,7 +119,7 @@ class ReadRecordAuthorIdentityTest {
     }
 
     @Test
-    fun migrate109To113PreservesLargeHistoryAndIndexesBothActualDaoQueries() {
+    fun migrate109To114PreservesLargeHistoryAndIndexesBothActualDaoQueries() {
         val name = "read-record-index-migration-${UUID.randomUUID()}"
         val records = (0 until 6375).map { index ->
             ReadRecord(deviceId = "phone", bookName = "History $index", author = "Author $index",
@@ -174,7 +174,7 @@ class ReadRecordAuthorIdentityTest {
                 }, Executor { it.run() }).build()
             try {
                 val sqlite = database.openHelper.writableDatabase
-                assertEquals(113, sqlite.version)
+                assertEquals(114, sqlite.version)
                 assertEquals(records.toSet(), database.readRecordDao.all.toSet())
                 for (search in listOf(false, true)) {
                     val start = android.os.SystemClock.elapsedRealtime()
@@ -197,7 +197,7 @@ class ReadRecordAuthorIdentityTest {
     }
 
     @Test
-    fun migrate111To113KeepsPhysicalIdentityAndUsesTheResolvedAuthorForDisplay() {
+    fun migrate111To114KeepsPhysicalIdentityAndUsesTheResolvedAuthorForDisplay() {
         val name = "read-record-display-migration-${UUID.randomUUID()}"
         try {
             helper.createDatabase(name, 111).use { legacy ->
@@ -209,7 +209,7 @@ class ReadRecordAuthorIdentityTest {
             val database = Room.databaseBuilder(context, AppDatabase::class.java, name)
                 .addMigrations(*DatabaseMigrations.migrations).build()
             try {
-                assertEquals(113, database.openHelper.writableDatabase.version)
+                assertEquals(114, database.openHelper.writableDatabase.version)
                 val records = database.readRecordDao.all.associateBy { it.deviceId }
                 assertEquals(ReadRecord(deviceId = "phone", bookName = "Same", readTime = 700,
                     lastRead = 50, lastChapterIndex = 4, lastChapterPos = 17,
@@ -280,7 +280,7 @@ class ReadRecordAuthorIdentityTest {
                     .addMigrations(*DatabaseMigrations.migrations).build()
                 try {
                     val sqlite = database.openHelper.writableDatabase
-                    assertEquals(113, sqlite.version)
+                    assertEquals(114, sqlite.version)
                     assertEquals(expected.toSet(), database.readRecordDao.all.toSet())
                     assertEquals(1350L, database.readRecordDao.allTime)
                     assertEquals(expected.map { it.displayBookName }.toSet(),

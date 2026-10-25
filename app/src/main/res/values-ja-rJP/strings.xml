@@ -11,8 +11,6 @@
     <string name="menu_backup">Home</string>
     <string name="menu_restore">Restore</string>
     <string name="menu_import_old">Import Legado data</string>
-    <string name="webdav_cache_backup">Offline cache book backup</string>
-    <string name="webdav_cache_backup_s">Export to local and back up to the exports directory under the legado folder</string>
     <string name="backup_path">Backup to</string>
     <string name="select_backup_path">Please select a backup path.</string>
     <string name="menu_import_old_version">Import legacy data</string>
@@ -112,8 +110,6 @@
     <string name="pt_auto_download">Auto-download</string>
     <string name="ps_auto_download">Download the latest chapters automatically  when updating books</string>
     <string name="backup_restore">Backup and restore</string>
-    <string name="web_dav_set">WebDav settings</string>
-    <string name="web_dav_set_import_old">WebDav settings/Import legacy data</string>
     <string name="backup">Backup</string>
     <string name="restore">Restore</string>
     <string name="backup_permission">Backup needs storage permission</string>
@@ -611,12 +607,6 @@
     <string name="load_toc">Load chapters</string>
     <string name="load_info">Load book detail</string>
     <string name="tts">TTS</string>
-    <string name="web_dav_pw">WebDav password</string>
-    <string name="web_dav_pw_s">Input you WebDav authorized password</string>
-    <string name="web_dav_url_s">Input you server address</string>
-    <string name="web_dav_url">WebDav server address</string>
-    <string name="web_dav_account">WebDav account</string>
-    <string name="web_dav_account_s">Input your WebDav account</string>
     <string name="rss_source">Subscription source</string>
     <string name="rss_source_edit">Edit Subscription source</string>
     <string name="screen">Filter</string>
@@ -649,7 +639,6 @@
     <string name="auto_dark_mode">Automatic switching dark mode</string>
     <string name="auto_dark_mode_s">Following system dark mode</string>
     <string name="go_back">Go back</string>
-    <string name="tone_colour">Online Speech tone</string>
     <string name="select_count">(%1$d/%2$d)</string>
     <string name="show_rss">Display Subscription</string>
     <string name="service_stop">Service stopped</string>
@@ -745,8 +734,7 @@
     <string name="text_bottom_justify">Text align bottom</string>
     <string name="auto_page_speed">Auto scroll speed</string>
     <string name="sort_by_url">Sort by URL</string>
-    <string name="backup_summary">Backup the local and WebDav simultaneously</string>
-    <string name="restore_summary">Restore from WebDAV first, Restore form the local backup on long click</string>
+    <string name="restore_summary">サーバーのバックアップから復元します。長押しでローカル zip から復元します</string>
     <string name="import_old_summary">Select a legacy backup folder</string>
     <string name="enabled">Enabled</string>
     <string name="disabled">Disabled</string>
@@ -827,13 +815,7 @@
     <string name="header_footer">footer <![CDATA[&]]> header</string>
     <string name="rule_subscription">Rule Subscription</string>
     <string name="rule_sub_empty_msg">添加大佬们提供的规则导入地址\n添加后点击可导入规则</string>
-    <string name="get_book_progress">クラウド上の進捗状況のカバー</string>
-    <string name="cover_book_progress">Cobertura do progresso na nuvem</string>
-    <string name="current_progress_exceeds_cloud">The current progress exceeds the cloud progress. Do you want to synchronize?</string>
     <string name="sync_book_progress_t">Synchronous reading progress</string>
-    <string name="sync_book_progress_s">Synchronize reading progress when entering / exiting the reading interface</string>
-    <string name="sync_book_progress_plus_t">同期強化</string>
-    <string name="sync_book_progress_plus_s">ページに再度入ったとき（画面オフ、バックグラウンドからの復帰など）やネットワークが利用可能になったときにクラウドの進捗を同期します。新しい進捗を同期する前に確認します。</string>
     <string name="create_bookmark_error">Failed to create bookmark</string>
     <string name="single_url">Single URL</string>
     <string name="export_bookshelf">Export the list of books</string>
@@ -847,7 +829,6 @@
     <string name="copy_toc_url">Copy chapters URL</string>
     <string name="export_folder">Export to a folder</string>
     <string name="export_charset">Exported text coding</string>
-    <string name="export_to_web_dav">Export to WebDav</string>
     <string name="reverse_content">Reverse content</string>
     <string name="debug">Debug</string>
     <string name="crash_log">Crash log</string>
@@ -1016,12 +997,9 @@
     <string name="auto_save_cookie">CookieJar</string>
     <string name="cookie">清除cookie</string>
     <string name="download_and_import_file">导入在线书籍文件</string>
-    <string name="upload_book_success">Upload Success</string>
     <string name="upload_book_fail">Upload Fail</string>
     <string name="download_book_success">Download Success</string>
     <string name="download_book_fail">Download Fail</string>
-    <string name="upload_to_remote">Upload</string>
-    <string name="add_remote_book">RemoteBook</string>
     <string name="bitmap_cache_size_summary">Current cache max size %1$s MB</string>
     <string name="bitmap_cache_size">bitmap cache size</string>
     <string name="image_retain_number_summary">保留已读章节数量 %s</string>
@@ -1031,7 +1009,6 @@
     <string name="error_decode_bitmap">Fail to decode bitmap</string>
     <string name="error_image_url_empty">Image url is empty, check replacement rules</string>
     <string name="variable_comment">变量说明(variableComment)</string>
-    <string name="remote_book">远程书籍</string>
     <string name="reading_time_sort">阅读时长排序</string>
     <string name="last_read_time_sort">阅读时间排序</string>
     <string name="reading_time_tag">阅读时长:</string>
@@ -1078,7 +1055,6 @@
     <string name="toggle_search_scope">切换</string>
     <string name="sure_clear_search_history">是否确认清除所有搜索历史记录</string>
     <string name="no_anim_scroll_page">禁用滚动点击动画</string>
-    <string name="webdav_device_name">设备名称</string>
     <string name="web_service_wake_lock">WebService唤醒锁</string>
     <string name="web_service_wake_lock_summary">开启web服务的时候启用唤醒锁,有些手机开启唤醒锁会被杀后台</string>
     <string name="read_aloud_wake_lock">朗读服务唤醒锁</string>
@@ -1096,7 +1072,6 @@
     <string name="same_title_removed">移除重复标题</string>
     <string name="update_book_fail">更新失败</string>
     <string name="notification_permission_rationale">阅读需要发送通知来显示朗读控制和下载进度</string>
-    <string name="webdav_after_local_restore_confirm">webDav书源比本地新,是否恢复</string>
     <string name="c_whitelist">白名单(contentWhitelist)</string>
     <string name="c_blacklist">黑名单(contentBlacklist)</string>
     <string name="confirm">确认</string>
@@ -1113,7 +1088,6 @@
     <string name="import_dict_rule">导入字典规则</string>
     <string name="keep_group">保留分组</string>
     <string name="server_config">服务器配置</string>
-    <string name="sure_upload">Remote webDav url exists, Continue?</string>
     <string name="unsupport_archivefile_entry">Cannot find supported files in archive</string>
     <string name="no_books_dir">没有设置书籍保存位置!</string>
     <string name="delete_alert">删除提醒</string>
@@ -1133,7 +1107,6 @@
     <string name="set_local_password_summary">本地密码用来对备份的敏感信息加密和解密,如需在不同设备之间同步,本地密码需一致.</string>
     <string name="only_latest_backup_t">仅保留最新备份</string>
     <string name="only_latest_backup_s">本地备份仅保留最新备份文件</string>
-    <string name="webdav_application_authorization_error">Fail to authorize WebDav application</string>
     <string name="load_word_count">Load word count</string>
     <string name="replace_exclude_scope">排除范围，选填书名或者书源 URL</string>
     <string name="format_js_rule">格式化规则(formatJs)</string>
@@ -1165,7 +1138,6 @@
     <string name="sync_book_progress_success">Sync progress success</string>
     <string name="show_bookshelf_fast_scroller">显示快速滚动条</string>
     <string name="export_all_use_book_source">导出所有书的书源</string>
-    <string name="cloud_progress_exceeds_current">The cloud progress exceeds the current progress. Do you want to synchronize?</string>
     <string name="keep_enable">保留启用状态</string>
     <string name="preview_image_by_click">点击预览图片</string>
     <string name="screen_portrait_reversed">反向竖屏</string>

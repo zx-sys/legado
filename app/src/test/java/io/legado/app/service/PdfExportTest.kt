@@ -139,14 +139,12 @@ class PdfExportTest {
         val activity = projectFile(
             "src/main/java/io/legado/app/ui/book/cache/CacheActivity.kt"
         ).readText().replace("\r\n", "\n")
-        val webDav = projectFile("src/main/java/io/legado/app/help/AppWebDav.kt").readText()
         val exportPdf = service.substringAfter("private suspend fun exportPdf(fileDoc")
             .substringBefore("private fun decodePdfBitmap")
 
         assertTrue(activity.contains("arrayListOf(\"txt\", \"epub\", \"pdf\")"))
         assertTrue(activity.contains("2 -> \"pdf\""))
         assertTrue(service.contains("\"pdf\" -> exportPdf(exportConfig.path, book)"))
-        assertTrue(webDav.contains("upload(uri, FileUtils.getMimeType(fileName))"))
         assertTrue(exportPdf.contains("if (book.isPdf)"))
         assertFalse(exportPdf.contains("book.isImage || book.isPdf"))
         assertTrue(exportPdf.contains("getChapterContentForExport(book, exportChapter)"))

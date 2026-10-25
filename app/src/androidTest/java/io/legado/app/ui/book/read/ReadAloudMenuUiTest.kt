@@ -42,7 +42,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.TTS
 import io.legado.app.help.TextSelectMenuConfig
 import io.legado.app.help.book.BookHelp
@@ -57,7 +56,6 @@ import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.TextFile
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.TTSReadAloudService
-import io.legado.app.service.HttpReadAloudService
 import io.legado.app.ui.book.read.config.ClickActionConfigDialog
 import io.legado.app.ui.book.read.config.ReadAloudControlsDialog
 import io.legado.app.ui.book.read.config.ReadAloudConfigDialog
@@ -457,7 +455,7 @@ class ReadAloudMenuUiTest {
                 .putString(PreferKey.textSelectMenuConfig, menuConfig.toJson())
                 .putBoolean(PreferKey.readAloudByPage, false)
                 .putInt(PreferKey.contentSelectSpeakMod, 1).commit()
-            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadWebDav = false) }
+            runBlocking(Dispatchers.IO) { Backup.backupLocked(context, directory.path, uploadServer = false) }
             val archive = directory.listFiles()!!.single { it.extension == "zip" }
             ZipFile(archive).use { zip ->
                 val entry = zip.getEntry("config.xml") ?: error("Settings missing from real backup")
@@ -764,67 +762,6 @@ class ReadAloudMenuUiTest {
         } finally {
             scenario!!.onActivity { service.clearTTS() }
             recorder.shutdown()
-        }
-    }
-
-    @Test fun selectedReadFromHereUsesTheBooksHttpEngineInBufferedAndStreamingModes() {
-        val requests = Collections.synchronizedList(mutableListOf<String>())
-        // A real decodable clip keeps the first paragraph active while its start is inspected.
-        val dataSize = 8000 * 2 * 20
-        val wav = ByteBuffer.allocate(44 + dataSize).order(ByteOrder.LITTLE_ENDIAN).apply {
-            put("RIFF".toByteArray()); putInt(36 + dataSize); put("WAVEfmt ".toByteArray())
-            putInt(16); putShort(1); putShort(1); putInt(8000); putInt(16000)
-            putShort(2); putShort(16); put("data".toByteArray()); putInt(dataSize)
-        }.array()
-        val server = object : NanoHTTPD("127.0.0.1", 0) {
-            override fun serve(session: IHTTPSession): Response {
-                requests.add(session.parameters["text"]?.firstOrNull().orEmpty())
-                return newFixedLengthResponse(Response.Status.OK, "audio/wav", wav.inputStream(), wav.size.toLong())
-            }
-        }.also { it.start() }
-        val engine = HttpTTS(name = "Selection HTTP ${System.nanoTime()}",
-            url = "http://127.0.0.1:${server.listeningPort}/speech?text={{java.encodeURI(speakText)}}")
-        appDb.httpTTSDao.insert(engine)
-        shell("pm grant ${context.packageName} $notificationPermission")
-        shell("dumpsys deviceidle whitelist +${context.packageName}")
-        try {
-            for (streaming in listOf(false, true)) {
-                prefs.edit().putBoolean(PreferKey.cronet, false)
-                    .putBoolean(PreferKey.streamReadAloudAudio, streaming)
-                    .putBoolean(PreferKey.readAloudByPage, false)
-                    .putBoolean(PreferKey.readAloudWakeLock, false)
-                    .putInt(PreferKey.ttsTimer, 0).putInt(PreferKey.contentSelectSpeakMod, 0)
-                    .putString(PreferKey.readAloudStart, "sentence").commit()
-                requests.clear()
-                scenario!!.onActivity { ReadBook.book!!.setTtsEngine(engine.id.toString()) }
-                val selected = selectBodyWord()
-                onView(withText(R.string.read_aloud_from_here)).inRoot(isPlatformPopup()).perform(click())
-                await("selection starts the configured HTTP service and sends the exact continuation") {
-                    readAloudService(HttpReadAloudService::class.java) != null && requests.isNotEmpty()
-                }
-                assertEquals(selected.paragraphTail, requests.first())
-                assertEquals(engine.id, ReadAloud.httpTTS?.id)
-                assertEquals(null, readAloudService())
-                scenario!!.onActivity {
-                    val service = checkNotNull(readAloudService(HttpReadAloudService::class.java))
-                    val paragraph = service.textChapter!!.getParagraphs(false)[service.nowSpeak]
-                    assertEquals(selected.position, paragraph.chapterPosition + service.paragraphStartPos)
-                }
-                context.stopService(Intent(context, HttpReadAloudService::class.java))
-                await("HTTP service stopped before next playback mode") {
-                    readAloudService(HttpReadAloudService::class.java) == null && !BaseReadAloudService.isRun
-                }
-                // A distinct engine key avoids hitting the previous mode's persistent audio cache.
-                engine.url += "&streaming=$streaming"
-                appDb.httpTTSDao.update(engine)
-            }
-        } finally {
-            context.stopService(Intent(context, HttpReadAloudService::class.java))
-            await("HTTP selection service cleaned up") { readAloudService(HttpReadAloudService::class.java) == null }
-            scenario!!.onActivity { ReadBook.book!!.setTtsEngine(""); ReadAloud.upReadAloudClass() }
-            appDb.httpTTSDao.delete(engine)
-            server.stop()
-            if (!wasBatteryExempt) shell("dumpsys deviceidle whitelist -${context.packageName}")
         }
     }
 

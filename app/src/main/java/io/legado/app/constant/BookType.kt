@@ -70,9 +70,4 @@ object BookType {
      */
     const val localTag = "loc_book"
 
-    /**
-     * 书源已webDav::开头的书籍,可以从webDav更新或重新下载
-     */
-    const val webDavTag = "webDav::"
-
 }

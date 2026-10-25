@@ -3,6 +3,8 @@ package io.legado.app.help.config
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import io.legado.app.constant.PreferKey
+import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getBoolean
 import io.legado.app.utils.putBoolean
 import io.legado.app.utils.putLong
@@ -17,7 +19,7 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
     private const val versionCodeKey = "appVersionCode"
 
     /**
-     * 本地密码,用来对需要备份的敏感信息加密,如 webdav 配置等
+     * 本地密码,用来对需要备份的敏感信息加密,如 Cookie 等
      */
     var password: String?
         get() = getString("password", null)
@@ -29,10 +31,66 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
             }
         }
 
+    /**
+     * 清理已移除功能留下的配置，并迁移仍需要的旧键。
+     */
+    fun cleanupRemovedPreferences() {
+        val prefs = appCtx.defaultSharedPreferences
+        val edit = prefs.edit()
+        if (!prefs.contains(PreferKey.deviceName)) {
+            prefs.getString("webDavDeviceName", null)?.let {
+                edit.putString(PreferKey.deviceName, it)
+            }
+        }
+        if (!prefs.contains(PreferKey.autoBackupServer)) {
+            edit.putBoolean(
+                PreferKey.autoBackupServer,
+                prefs.getBoolean("autoBackupWebDav", true),
+            )
+        }
+        listOf(
+            "webDavDeviceName",
+            "autoBackupWebDav",
+            "web_dav_url",
+            "web_dav_account",
+            "web_dav_password",
+            "webDavDir",
+            "webDavBookAutoRestore",
+            "webDavBackupKeepCount",
+            "webDavBookAutoUpload",
+            "syncBookProgress",
+            "syncBookProgressPlus",
+            "webDavCacheBackup",
+            "remoteServerId",
+        ).forEach(edit::remove)
+        val ttsEngine = prefs.getString(PreferKey.ttsEngine, null)
+        if (ttsEngine != null && ttsEngine.toLongOrNull() != null) {
+            edit.remove(PreferKey.ttsEngine)
+        }
+        edit.apply()
+        edit().remove("uploadImportedBookToWebDav")
+            .remove("webDavBookHelpVersion")
+            .apply()
+    }
+
     var lastBackup: Long
         get() = getLong("lastBackup", 0)
         set(value) {
             putLong("lastBackup", value)
+        }
+
+    /** 服务器同步游标(毫秒时间戳), 用于只拉取比上次更新的数据 */
+    var syncCursor: Long
+        get() = getLong("syncCursor", 0)
+        set(value) {
+            putLong("syncCursor", value)
+        }
+
+    /** 首次启动的手机号绑定提示只弹一次, 跳过后可在备份设置里再绑定 */
+    var accountBindPrompted: Boolean
+        get() = getBoolean("accountBindPrompted", false)
+        set(value) {
+            putBoolean("accountBindPrompted", value)
         }
 
     var privacyPolicyOk: Boolean
@@ -53,14 +111,8 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
     val bookSourcesHelpVersionIsLast: Boolean
         get() = isLastVersion(1, "bookSourceHelpVersion", "firstOpenBookSources")
 
-    val webDavBookHelpVersionIsLast: Boolean
-        get() = isLastVersion(1, "webDavBookHelpVersion", "firstOpenWebDavBook")
-
     val ruleHelpVersionIsLast: Boolean
         get() = isLastVersion(1, "ruleHelpVersion")
-
-    val needUpHttpTTS: Boolean
-        get() = !isLastVersion(6, "httpTtsVersion")
 
     val needUpTxtTocRule: Boolean
         get() = !isLastVersion(3, "txtTocRuleVersion")
@@ -141,12 +193,6 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
         get() = getBoolean("deleteBookOriginal")
         set(value) {
             putBoolean("deleteBookOriginal", value)
-        }
-
-    var uploadImportedBookToWebDav: Boolean
-        get() = getBoolean("uploadImportedBookToWebDav")
-        set(value) {
-            putBoolean("uploadImportedBookToWebDav", value)
         }
 
     var appCrash: Boolean

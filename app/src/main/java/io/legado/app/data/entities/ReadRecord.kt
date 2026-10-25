@@ -7,6 +7,7 @@ import io.legado.app.constant.AppConst
 import io.legado.app.data.appDb
 import io.legado.app.help.book.ReadRecordCoverCache
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 
@@ -86,6 +87,7 @@ fun ReadRecord.saveWithCover(book: Book?, elapsed: Long? = null) {
         saved = saved.copy(resolvedAuthor = current?.resolvedAuthor ?: saved.resolvedAuthor).withDisplayMetadata(current)
         appDb.readRecordDao.insert(saved)
     }
+    SyncManager.enqueueRecord(saved)
     ReadRecordCoverCache.request(saved.copy(), snapshotBook?.getCoverSourceOrigin())
 }
 

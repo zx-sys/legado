@@ -207,7 +207,7 @@ object BookSourceController {
     fun deleteSources(postData: String?): ReturnData {
         kotlin.runCatching {
             GSON.fromJsonArray<BookSource>(postData).getOrThrow().let {
-                SourceHelp.deleteBookSources(it)
+                SourceHelp.deleteBookSources(it, recordExcluded = true)
             }
         }.onFailure {
             return ReturnData().setErrorMsg(it.localizedMessage ?: "数据格式错误")

@@ -275,7 +275,7 @@ data class Book(
     }
 
     fun getTtsEngine(): String? {
-        return config.ttsEngine
+        return config.ttsEngine?.takeIf { it.toLongOrNull() == null }
     }
 
     fun setSplitLongChapter(limitLongContent: Boolean) {

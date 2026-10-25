@@ -20,3 +20,5 @@ package-lock.json
 .kotlin/
 .cxx
 .vscode
+# local UI verification screenshots
+.uitest/

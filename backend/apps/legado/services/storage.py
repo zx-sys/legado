@@ -92,6 +92,30 @@ class OssStorage:
         base = getattr(settings, "DOMAIN_HOST", "").rstrip("/")
         return "", f"{base}{settings.MEDIA_URL}{rel}"
 
+    def put_font_package(self, code: str, filename: str, data: bytes):
+        bucket = self._get_bucket()
+        # OSS 地址用 ASCII 文件名, 避免中文名在 Location 头里转义问题
+        suffix = PurePosixPath(filename).suffix.lower() or ".ttf"
+        safe_name = f"{code}{suffix}"
+        if bucket is not None:
+            key = "/".join(
+                part.strip("/")
+                for part in (settings.OSS_PREFIX, "fonts", code, safe_name)
+                if part
+            )
+            bucket.put_object(
+                key, data, headers={"Content-Type": "application/octet-stream"}
+            )
+            base = (getattr(settings, "OSS_PUBLIC_BASE_URL", "") or "").rstrip("/")
+            url = f"{base}/{key}" if base else ""
+            return key, url
+        local_path = Path(settings.MEDIA_ROOT) / "legado" / "fonts" / code / safe_name
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        local_path.write_bytes(data)
+        rel = local_path.relative_to(settings.MEDIA_ROOT).as_posix()
+        base = getattr(settings, "DOMAIN_HOST", "").rstrip("/")
+        return "", f"{base}{settings.MEDIA_URL}{rel}"
+
     def read_bytes(self, storage: str, object_key: str | None, local_path: str | None) -> bytes:
         if storage == "oss":
             bucket = self._get_bucket()

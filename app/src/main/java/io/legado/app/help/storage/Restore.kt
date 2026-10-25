@@ -22,7 +22,6 @@ import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.Cache
 import io.legado.app.data.entities.Cookie
 import io.legado.app.data.entities.DictRule
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.HighlightRule
 import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.ReadRecord
@@ -32,7 +31,6 @@ import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssStar
 import io.legado.app.data.entities.RuleSub
 import io.legado.app.data.entities.SearchKeyword
-import io.legado.app.data.entities.Server
 import io.legado.app.data.entities.TxtTocRule
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.AppCacheManager
@@ -359,9 +357,6 @@ object Restore {
         fileToListT<TxtTocRule>(path, "txtTocRule.json")?.let {
             appDb.txtTocRuleDao.insert(*it.toTypedArray())
         }
-        fileToListT<HttpTTS>(path, "httpTTS.json")?.let {
-            appDb.httpTTSDao.insert(*it.toTypedArray())
-        }
         fileToListT<DictRule>(path, "dictRule.json")?.let {
             appDb.dictRuleDao.insert(*it.toTypedArray())
         }
@@ -388,19 +383,6 @@ object Restore {
                     ))
                 }
             }
-        }
-        File(path, "servers.json").takeIf {
-            !lanTransfer && it.exists()
-        }?.runCatching {
-            var json = readText()
-            if (!json.isJsonArray()) {
-                json = aes.decryptStr(json)
-            }
-            GSON.fromJsonArray<Server>(json).getOrNull()?.let {
-                appDb.serverDao.insert(*it.toTypedArray())
-            }
-        }?.onFailure {
-            AppLog.put("恢复服务器配置出错\n${it.localizedMessage}", it)
         }
         restoredCookies?.filter { cookie -> cookie.url.isNotBlank() }?.forEach { cookie ->
             if ('|' in cookie.url) {
@@ -465,14 +447,11 @@ object Restore {
                 AppLog.put("恢复阅读界面出错\n${it.localizedMessage}", it)
             }
         }
-        //AppWebDav.downBgs()
         restoredPreferences?.let { map ->
             val edit = appCtx.defaultSharedPreferences.edit()
 
             map.forEach { (key, value) ->
-                if (BackupConfig.keyIsNotIgnore(key) &&
-                    (!lanTransfer || key !in lanTransferIgnoredPrefKeys)
-                ) {
+                if (BackupConfig.keyIsNotIgnore(key)) {
                     when (key) {
                         "readRecordSort" -> (value as? Int)?.let {
                             LocalConfig.edit().putInt(key, it.coerceIn(0, 2)).apply()
@@ -495,19 +474,6 @@ object Restore {
                                 }
                             } else (value as? String).orEmpty().takeIf { File(it).isFile }.orEmpty()
                             edit.putString(key, fontPath)
-                        }
-                        PreferKey.webDavPassword -> {
-                            kotlin.runCatching {
-                                aes.decryptStr(value.toString())
-                            }.getOrNull()?.let {
-                                edit.putString(key, it)
-                            } ?: let {
-                                if (appCtx.getPrefString(PreferKey.webDavPassword)
-                                        .isNullOrBlank()
-                                ) {
-                                    edit.putString(key, value.toString())
-                                }
-                            }
                         }
 
                         else -> when (value) {
@@ -566,7 +532,7 @@ object Restore {
             }
             if (PreferKey.myMoreItems !in map) edit.remove(PreferKey.myMoreItems)
             if (PreferKey.autoBackup !in map) edit.putBoolean(PreferKey.autoBackup, true)
-            if (PreferKey.autoBackupWebDav !in map) edit.putBoolean(PreferKey.autoBackupWebDav, true)
+            if (PreferKey.autoBackupServer !in map) edit.putBoolean(PreferKey.autoBackupServer, true)
             if (PreferKey.autoBackupIntervalDays !in map) edit.putInt(PreferKey.autoBackupIntervalDays, 1)
             if ("readRecordSimpleLayout" !in map) edit.putBoolean("readRecordSimpleLayout", true)
             if ("readRecordUseDays" !in map) edit.putBoolean("readRecordUseDays", false)
@@ -579,6 +545,7 @@ object Restore {
                 edit.putBoolean(PreferKey.mangaRightToLeft, false)
             }
             edit.apply()
+            LocalConfig.cleanupRemovedPreferences()
         }
         restoredVideoPreferences?.let { map ->
             appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).edit().apply {

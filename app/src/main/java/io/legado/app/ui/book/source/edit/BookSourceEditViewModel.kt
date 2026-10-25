@@ -66,7 +66,7 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
             }
             bookSource?.let {
                 if (it.bookSourceUrl != source.bookSourceUrl) {
-                    SourceHelp.deleteBookSource(it.bookSourceUrl)
+                    SourceHelp.deleteBookSource(it.bookSourceUrl, recordExcluded = true)
                 } else {
                     appDb.bookSourceDao.delete(it)
                     SourceConfig.removeSource(it.bookSourceUrl)

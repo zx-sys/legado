@@ -38,7 +38,6 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.databinding.ActivityBookInfoBinding
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.GlideImageGetter
 import io.legado.app.help.TextViewTagHandler
 import io.legado.app.help.WebCacheManager
@@ -64,15 +63,12 @@ import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
-import io.legado.app.lib.webdav.WebDavException
-import io.legado.app.lib.webdav.isWebDavOverwriteConflict
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.AutoTask
 import io.legado.app.model.BookCover
-import io.legado.app.model.remote.RemoteBookWebDav
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.autoTask.AutoTaskEditActivity
 import io.legado.app.ui.autoTask.ImportAutoTaskDialog
@@ -306,8 +302,6 @@ class BookInfoActivity :
             viewModel.bookSource != null
         menu.findItem(R.id.menu_split_long_chapter)?.isVisible =
             viewModel.bookData.value?.isLocalTxt ?: false
-        menu.findItem(R.id.menu_upload)?.isVisible =
-            viewModel.bookData.value?.isLocal ?: false
         menu.findItem(R.id.menu_create_book_update_task)?.isVisible =
             viewModel.bookData.value?.let {
                 viewModel.inBookshelf &&
@@ -439,9 +433,6 @@ class BookInfoActivity :
             }
 
             R.id.menu_delete_alert -> LocalConfig.bookInfoDeleteAlert = !item.isChecked
-            R.id.menu_upload -> {
-                viewModel.getBook()?.let { confirmAndUploadBook(it) }
-            }
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -507,103 +498,6 @@ class BookInfoActivity :
         upLoading(true)
         viewModel.getBook()?.let {
             viewModel.loadChapter(it, true, isFromBookInfo = true)
-        }
-    }
-
-    private fun upLoadBook(
-        book: Book,
-        bookWebDav: RemoteBookWebDav? = AppWebDav.defaultBookWebDav,
-        overwrite: Boolean = true,
-        onConflict: (() -> Unit)? = null,
-        onFinished: () -> Unit = {},
-    ) {
-        lifecycleScope.launch {
-            waitDialog.setText(R.string.loading)
-            waitDialog.show()
-            var uploadConflict = false
-            try {
-                bookWebDav
-                    ?.upload(book, overwrite)
-                    ?: throw NoStackTraceException(getString(R.string.webdav_not_configured))
-                //更新书籍最后更新时间,使之比远程书籍的时间新
-                book.lastCheckTime = System.currentTimeMillis()
-                viewModel.saveBook(book)
-            } catch (e: Exception) {
-                currentCoroutineContext().ensureActive()
-                if (!overwrite &&
-                    e is WebDavException &&
-                    isWebDavOverwriteConflict(e.responseCode)
-                ) {
-                    uploadConflict = true
-                } else {
-                    toastOnUi(e.localizedMessage)
-                }
-            } finally {
-                waitDialog.dismiss()
-            }
-            if (uploadConflict) {
-                onConflict?.invoke() ?: onFinished()
-            } else {
-                onFinished()
-            }
-        }
-    }
-
-    private fun confirmAndUploadBook(
-        book: Book,
-        onFinished: () -> Unit = {},
-    ) {
-        val bookWebDav = AppWebDav.defaultBookWebDav
-        if (bookWebDav == null) {
-            toastOnUi(R.string.webdav_not_configured)
-            onFinished()
-            return
-        }
-        lifecycleScope.launch {
-            waitDialog.setText(R.string.loading)
-            waitDialog.show()
-            val remoteExists = try {
-                withContext(IO) { bookWebDav.hasRemoteBook(book) }
-            } catch (e: Exception) {
-                currentCoroutineContext().ensureActive()
-                toastOnUi(e.localizedMessage)
-                onFinished()
-                return@launch
-            } finally {
-                waitDialog.dismiss()
-            }
-            if (!remoteExists) {
-                upLoadBook(
-                    book = book,
-                    bookWebDav = bookWebDav,
-                    overwrite = false,
-                    onConflict = {
-                        showUploadOverwriteConfirm(book, bookWebDav, onFinished)
-                    },
-                    onFinished = onFinished,
-                )
-                return@launch
-            }
-            showUploadOverwriteConfirm(book, bookWebDav, onFinished)
-        }
-    }
-
-    private fun showUploadOverwriteConfirm(
-        book: Book,
-        bookWebDav: RemoteBookWebDav,
-        onFinished: () -> Unit,
-    ) {
-        alert(R.string.draw, R.string.webdav_book_exists_confirm) {
-            yesButton {
-                upLoadBook(
-                    book = book,
-                    bookWebDav = bookWebDav,
-                    overwrite = true,
-                    onFinished = onFinished,
-                )
-            }
-            noButton { onFinished() }
-            onCancelled { onFinished() }
         }
     }
 
@@ -1241,7 +1135,6 @@ class BookInfoActivity :
                     messageResource = R.string.sure_del
                 ) {
                     var deleteOriginalCheckBox: CheckBox? = null
-                    var deleteRemoteCheckBox: CheckBox? = null
                     if (book.isLocal) {
                         deleteOriginalCheckBox = CheckBox(this@BookInfoActivity).apply {
                             setText(R.string.delete_book_file)
@@ -1251,12 +1144,6 @@ class BookInfoActivity :
                             orientation = LinearLayout.VERTICAL
                             setPadding(16.dpToPx(), 0, 16.dpToPx(), 0)
                             addView(deleteOriginalCheckBox)
-                            if (AppWebDav.defaultBookWebDav != null) {
-                                deleteRemoteCheckBox = CheckBox(this@BookInfoActivity).apply {
-                                    setText(R.string.delete_webdav_book_file)
-                                }
-                                addView(deleteRemoteCheckBox)
-                            }
                         }
                         customView { view }
                     }
@@ -1264,47 +1151,13 @@ class BookInfoActivity :
                         if (deleteOriginalCheckBox != null) {
                             LocalConfig.deleteBookOriginal = deleteOriginalCheckBox.isChecked
                         }
-                        deleteBook(
-                            book = book,
-                            deleteOriginal = LocalConfig.deleteBookOriginal,
-                            deleteRemote = deleteRemoteCheckBox?.isChecked == true,
-                        )
+                        finishDeleteBook(book, LocalConfig.deleteBookOriginal)
                     }
                     noButton()
                 }
             } else {
-                deleteBook(book, LocalConfig.deleteBookOriginal, deleteRemote = false)
+                finishDeleteBook(book, LocalConfig.deleteBookOriginal)
             }
-        }
-    }
-
-    private fun deleteBook(book: Book, deleteOriginal: Boolean, deleteRemote: Boolean) {
-        if (!deleteRemote) {
-            finishDeleteBook(book, deleteOriginal)
-            return
-        }
-        val bookWebDav = AppWebDav.defaultBookWebDav
-        if (bookWebDav == null) {
-            toastOnUi(R.string.webdav_not_configured)
-            return
-        }
-        lifecycleScope.launch {
-            waitDialog.setText(R.string.loading)
-            waitDialog.show()
-            val deleted = try {
-                withContext(IO) { bookWebDav.delete(book) }
-            } catch (e: Exception) {
-                currentCoroutineContext().ensureActive()
-                toastOnUi(e.localizedMessage ?: getString(R.string.delete_webdav_book_file_fail))
-                return@launch
-            } finally {
-                waitDialog.dismiss()
-            }
-            if (!deleted) {
-                toastOnUi(R.string.delete_webdav_book_file_fail)
-                return@launch
-            }
-            finishDeleteBook(book, deleteOriginal)
         }
     }
 
@@ -1383,20 +1236,12 @@ class BookInfoActivity :
             toastOnUi("Unexpected webFileData")
             return
         }
-        val uploadCheckBox = CheckBox(this).apply {
-            setText(R.string.upload_imported_book_to_webdav)
-            isChecked = LocalConfig.uploadImportedBookToWebDav
-            setOnCheckedChangeListener { _, isChecked ->
-                LocalConfig.uploadImportedBookToWebDav = isChecked
-            }
-        }
         alert(titleResource = R.string.download_and_import_file) {
             items(webFiles) { _, webFile, _ ->
-                val uploadToWebDav = uploadCheckBox.isChecked
                 if (webFile.isSupported) {
                     /* import */
                     viewModel.importOrDownloadWebFile<Book>(webFile) {
-                        onWebBookImported(it, uploadToWebDav, onClick)
+                        onClick?.invoke(it)
                     }
                 } else if (webFile.isSupportDecompress) {
                     /* 解压筛选后再选择导入项 */
@@ -1404,11 +1249,11 @@ class BookInfoActivity :
                         viewModel.getArchiveFilesName(uri) { fileNames ->
                             if (fileNames.size == 1) {
                                 viewModel.importArchiveBook(uri, fileNames[0]) {
-                                    onWebBookImported(it, uploadToWebDav, onClick)
+                                    onClick?.invoke(it)
                                 }
                             } else {
                                 showDecompressFileImportAlert(uri, fileNames) {
-                                    onWebBookImported(it, uploadToWebDav, onClick)
+                                    onClick?.invoke(it)
                                 }
                             }
                         }
@@ -1428,25 +1273,6 @@ class BookInfoActivity :
                     }
                 }
             }
-            customView {
-                LinearLayout(this@BookInfoActivity).apply {
-                    setPadding(16.dpToPx(), 0, 16.dpToPx(), 8.dpToPx())
-                    addView(uploadCheckBox)
-                }
-            }
-        }
-    }
-
-    private fun onWebBookImported(
-        book: Book,
-        uploadToWebDav: Boolean,
-        onClick: ((Book) -> Unit)?,
-    ) {
-        val onFinished: () -> Unit = { onClick?.invoke(book) }
-        if (uploadToWebDav) {
-            confirmAndUploadBook(book, onFinished)
-        } else {
-            onFinished()
         }
     }
 

@@ -34,6 +34,7 @@ import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.SourceSharePassphrase
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.source.BookSourceSync
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.sourceSharePassphraseButton
 import io.legado.app.lib.theme.primaryColor
@@ -329,6 +330,7 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
                 upBookSource(searchView.query?.toString())
             }
 
+            R.id.menu_sync_server_sources -> syncServerSources()
             R.id.menu_help -> showHelp("SourceMBookHelp")
             R.id.menu_block_source_navigation -> {
                 AppConfig.blockSourceNavigation = !AppConfig.blockSourceNavigation
@@ -360,6 +362,63 @@ class BookSourceActivity : VMBaseActivity<ActivityBookSourceBinding, BookSourceV
             searchView.setQuery("group:${item.title}", true)
         }
         return super.onCompatOptionsItemSelected(item)
+    }
+
+    private fun syncServerSources() {
+        if (!BookSourceSync.isConfigured) {
+            toastOnUi(R.string.backup_server_not_configured)
+            return
+        }
+        val deletedCount = BookSourceSync.excludedUrls().size
+        if (deletedCount == 0) {
+            runServerSync(restoreDeleted = false)
+            return
+        }
+        alert(
+            getString(R.string.restore_deleted_sources),
+            getString(R.string.restore_deleted_sources_message, deletedCount),
+        ) {
+            okButton { runServerSync(restoreDeleted = true) }
+            neutralButton(R.string.sync_only) { runServerSync(restoreDeleted = false) }
+            cancelButton()
+        }
+    }
+
+    private fun runServerSync(restoreDeleted: Boolean) {
+        if (!NetworkUtils.isAvailable()) {
+            toastOnUi(
+                getString(
+                    R.string.sync_server_sources_failed,
+                    getString(R.string.network_unavailable),
+                )
+            )
+            return
+        }
+        lifecycleScope.launch {
+            runCatching { BookSourceSync.sync(restoreDeleted) }
+                .onSuccess { result ->
+                    if (result == null) {
+                        toastOnUi(getString(R.string.sync_server_sources_failed, "未配置服务器"))
+                    } else {
+                        toastOnUi(
+                            getString(
+                                R.string.sync_server_sources_done,
+                                result.added,
+                                result.updated,
+                            )
+                        )
+                        upBookSource(searchView.query?.toString())
+                    }
+                }
+                .onFailure {
+                    toastOnUi(
+                        getString(
+                            R.string.sync_server_sources_failed,
+                            it.localizedMessage ?: it.javaClass.simpleName,
+                        )
+                    )
+                }
+        }
     }
 
     private fun initRecyclerView() {

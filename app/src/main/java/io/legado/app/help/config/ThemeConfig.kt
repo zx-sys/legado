@@ -14,6 +14,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Theme
 import io.legado.app.help.DefaultData
 import io.legado.app.help.LifecycleHelp
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.model.BookCover
 import io.legado.app.utils.BitmapUtils
@@ -146,10 +147,17 @@ object ThemeConfig {
         addConfigs(getConfigs())
     }
 
+    /** 云端配置写入后重新加载内存里的主题列表 */
+    fun reloadFromFile() {
+        configList.clear()
+        configList.addAll(getConfigs() ?: DefaultData.themeConfigs)
+    }
+
     fun save() {
         val json = GSON.toJson(configList)
         FileUtils.delete(configFilePath)
         FileUtils.createFileIfNotExist(configFilePath).writeText(json)
+        SyncManager.enqueueConfig("theme_config", json)
     }
 
     fun delConfig(index: Int) {

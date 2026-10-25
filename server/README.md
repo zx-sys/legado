@@ -47,7 +47,7 @@ RDS 时请用 `docker-compose.external.yml`，不要混用。
 
 ## APK 对接
 
-APP 备份触发逻辑不变（手动 / 每日自动），只把上传目标从 WebDAV 改成：
+APP 备份触发逻辑不变（手动 / 每日自动），上传目标为：
 
 ```
 POST /api/v1/backups/upload

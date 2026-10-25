@@ -83,8 +83,8 @@
 
         <io.legado.app.lib.prefs.Preference
             android:icon="@drawable/ic_cfg_backup"
-            android:key="web_dav_setting"
-            android:summary="@string/web_dav_set_import_old"
+            android:key="backup_setting"
+            android:summary="@string/backup_setting_summary"
             android:title="@string/backup_restore"
             app:iconSpaceReserved="false" />
 

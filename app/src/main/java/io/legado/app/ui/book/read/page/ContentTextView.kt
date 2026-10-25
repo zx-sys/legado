@@ -18,6 +18,7 @@ import io.legado.app.help.book.isOnLineTxt
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.ReadBook
 import io.legado.app.model.isForBook
+import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.association.OpenUrlConfirmActivity
 import io.legado.app.ui.book.read.page.delegate.PageDelegate
 import io.legado.app.ui.book.read.page.entities.TextLine
@@ -117,6 +118,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     fun setContent(textPage: TextPage) {
         cancelHighlightTap()
         this.textPage = textPage
+        applyReadAloudSpan()
         upHighlight()
         // 非滑动翻页动画需要同步重绘，不然翻页可能会出现闪烁
         if (isScroll) {
@@ -124,6 +126,19 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         } else {
             invalidate()
         }
+    }
+
+    /**
+     * 页面重绑定后新的 TextPage 实例不带朗读标记, 跟随时补一次, 否则高亮会丢。
+     */
+    private fun applyReadAloudSpan() {
+        if (!BaseReadAloudService.isRun || !BaseReadAloudService.followReadAloudPosition) return
+        if (textPage.isMsgPage) return
+        val start = BaseReadAloudService.readAloudChapterStart
+        if (start < 0) return
+        val chapter = textPage.getTextChapter()
+        if (chapter.chapter.index != BaseReadAloudService.readAloudChapterIndex) return
+        textPage.upPageAloudSpan(start - chapter.getReadLength(textPage.index))
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -284,10 +299,12 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
     fun restorePageOffset(chapterPos: Int) {
         val line = textPage.lines.firstOrNull { it.chapterPosition == chapterPos }
             ?: textPage.lines.firstOrNull {
-                chapterPos in it.chapterPosition..<it.chapterPosition + it.charSize
+                // 段尾换行符也属于该行, 否则朗读停在段尾时不滚动
+                val lineEnd = it.chapterPosition + it.charSize + if (it.isParagraphEnd) 1 else 0
+                chapterPos in it.chapterPosition..<lineEnd
             }
-            ?: return
         if (line === textPage.lines.firstOrNull()) return
+        if (line == null) return
         scroll((ChapterProvider.paddingTop - line.lineTop).toInt())
     }
 

@@ -124,7 +124,7 @@ result.get("telephone")
 login函数获取登录信息
 source.getLoginInfo()
 source.getLoginInfoMap().get("telephone")
-source登录相关方法,可在js内通过source.调用,可以参考阿里云语音登录
+source登录相关方法,可在js内通过source.调用
 login()
 getHeaderMap(hasLoginHeader: Boolean = false)
 getLoginHeader(): String?
@@ -137,7 +137,7 @@ AnalyzeUrl相关函数,js中通过java.调用
 initUrl() //重新解析url,可以用于登录检测js登录后重新解析url重新访问
 getHeaderMap().putAll(source.getHeaderMap(true)) //重新设置登录头
 getStrResponse( jsStr: String? = null, sourceRegex: String? = null) //返回访问结果,文本类型,书源内部重新登录后可调用此方法重新返回结果
-getResponse(): Response //返回访问结果,网络朗读引擎采用的是这个,调用登录后在调用这方法可以重新访问,参考阿里云登录检测
+getResponse(): Response //返回访问结果,调用登录后可重新访问
 ```
 
 * 登录 UI v2（动态状态协议）

@@ -84,12 +84,10 @@ class ChapterStopTimerTest {
         val root = listOf(File("src/main/java"), File("app/src/main/java"))
             .first { it.isDirectory }
         val base = File(root, "io/legado/app/service/BaseReadAloudService.kt").readText()
-        val http = File(root, "io/legado/app/service/HttpReadAloudService.kt").readText()
         val tts = File(root, "io/legado/app/service/TTSReadAloudService.kt").readText()
 
         assertTrue(base.contains("IntentAction.next -> nextChapter()"))
         assertTrue(base.contains("open fun nextChapter(auto: Boolean = false)"))
-        assertTrue(http.contains("nextChapter(auto = true)"))
         assertEquals(2, Regex("nextChapter\\(auto = true\\)").findAll(tts).count())
     }
 }

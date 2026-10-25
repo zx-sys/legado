@@ -16,6 +16,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.DialogFontSelectBinding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.font.RemoteFonts
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.permission.Permissions
@@ -35,6 +36,7 @@ import io.legado.app.utils.listFileDocs
 import io.legado.app.utils.openInputStream
 import io.legado.app.utils.putPrefString
 import io.legado.app.utils.setLayout
+import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.launch
@@ -45,7 +47,8 @@ import java.io.File
  */
 class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
     Toolbar.OnMenuItemClickListener,
-    FontAdapter.CallBack {
+    FontAdapter.CallBack,
+    RemoteFontDialog.CallBack {
     private val fontRegex = Regex("(?i).*\\.[ot]tf")
     private val binding by viewBinding(DialogFontSelectBinding::bind)
     private val adapter by lazy {
@@ -89,14 +92,10 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
         binding.toolBar.setOnMenuItemClickListener(this)
         binding.recyclerView.layoutManager = LinearLayoutManager(context)
         binding.recyclerView.adapter = adapter
-
-        execute {
-            BundledFonts.ensureInstalled(requireContext())
-        }.onSuccess {
-            loadFonts()
-        }.onError {
-            AppLog.put("安装内置字体失败\n${it.localizedMessage}", it)
-            loadFonts()
+        loadFonts()
+        lifecycleScope.launch {
+            RemoteFonts.fetch()
+            if (isAdded) loadFonts()
         }
     }
 
@@ -145,6 +144,9 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
                     mode = HandleFileContract.FILE
                     title = getString(R.string.import_str)
                 }
+            }
+            R.id.menu_store -> {
+                showDialogFragment<RemoteFontDialog>()
             }
         }
         return true
@@ -253,6 +255,10 @@ class FontSelectDialog : BaseDialogFragment(R.layout.dialog_font_select),
             o1.doc.name.cnCompare(o2.doc.name).takeIf { it != 0 }
                 ?: o1.privateFolder.compareTo(o2.privateFolder)
         }
+    }
+
+    override fun onRemoteFontsChanged() {
+        loadFonts()
     }
 
     override fun onFontSelect(docItem: FileDoc) {

@@ -6,20 +6,14 @@ import android.os.Bundle
 import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
-import io.legado.app.BuildConfig
 import io.legado.app.constant.IntentAction
-import io.legado.app.data.appDb
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.help.config.AppConfig
-import io.legado.app.help.tts.NeuralTtsModel
-import io.legado.app.lib.dialogs.SelectItem
+import io.legado.app.help.tts.RemoteTtsEngines
+import io.legado.app.help.tts.parseTtsSelection
 import io.legado.app.service.BaseReadAloudService
-import io.legado.app.service.HttpReadAloudService
 import io.legado.app.service.NeuralTtsReadAloudService
 import io.legado.app.service.TTSReadAloudService
-import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
-import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.startForegroundServiceCompat
 import io.legado.app.utils.toastOnUi
@@ -28,27 +22,18 @@ import splitties.init.appCtx
 internal fun resolveReadAloudEngineName(
     ttsEngine: String?,
     systemTtsName: String,
-    httpTtsName: (Long) -> String?,
 ): String {
     val engine = ttsEngine?.takeIf { it.isNotBlank() } ?: return systemTtsName
-    if (engine == NeuralTtsModel.ENGINE_ID) {
-        return NeuralTtsModel.DISPLAY_NAME
-    }
-    engine.toLongOrNull()?.let { id ->
-        return httpTtsName(id)?.takeIf { it.isNotBlank() } ?: systemTtsName
-    }
-    return GSON.fromJsonObject<SelectItem<String>>(engine).getOrNull()
-        ?.title?.takeIf { it.isNotBlank() }
-        ?: systemTtsName
+    return parseTtsSelection(engine)?.title?.takeIf { it.isNotBlank() } ?: systemTtsName
 }
 
 object ReadAloud {
-    var httpTTS: HttpTTS? = null
     val ttsEngine get() = ReadBook.book?.getTtsEngine() ?: AppConfig.ttsEngine
 
     val isNeuralTtsSelected: Boolean
-        get() = GSON.fromJsonObject<SelectItem<String>>(ttsEngine)
-            .getOrNull()?.value == NeuralTtsModel.ENGINE_ID
+        get() = parseTtsSelection(ttsEngine)?.let {
+            RemoteTtsEngines.isLocalCode(it.code)
+        } == true
     private var aloudClass: Class<*> = getReadAloudClass()
 
     val followReadAloudPosition: Boolean
@@ -69,28 +54,12 @@ object ReadAloud {
     }
 
     private fun getReadAloudClass(): Class<*> {
-        httpTTS = null
         val ttsEngine = ttsEngine
         if (ttsEngine.isNullOrBlank()) {
             return TTSReadAloudService::class.java
         }
-        ttsEngine.toLongOrNull()?.let { id ->
-            httpTTS = appDb.httpTTSDao.get(id)
-            if (httpTTS != null) {
-                // 优先使用登录页里填写的 API Key，留空时回退到 local.properties
-                val storedKey = runCatching {
-                    httpTTS?.getLoginInfoMap()?.get("api_key")
-                }.getOrNull()?.takeIf { it.isNotBlank() }
-                val token = storedKey ?: BuildConfig.EdgeTtsToken
-                if (token.isNotEmpty()) {
-                    httpTTS?.header = "{\"Authorization\":\"Bearer $token\"}"
-                }
-                return HttpReadAloudService::class.java
-            }
-        }
-        val engineValue = GSON.fromJsonObject<SelectItem<String>>(ttsEngine)
-            .getOrNull()?.value
-        if (engineValue == NeuralTtsModel.ENGINE_ID) {
+        val engineValue = parseTtsSelection(ttsEngine)?.code
+        if (engineValue != null && RemoteTtsEngines.isLocalCode(engineValue)) {
             return NeuralTtsReadAloudService::class.java
         }
         return TTSReadAloudService::class.java
@@ -224,9 +193,7 @@ object ReadAloud {
 
     fun getEngineName(context: Context): String {
         val systemTtsName = context.getString(R.string.system_tts)
-        return resolveReadAloudEngineName(ttsEngine, systemTtsName) { id ->
-            appDb.httpTTSDao.getName(id)
-        }
+        return resolveReadAloudEngineName(ttsEngine, systemTtsName)
     }
 
 }

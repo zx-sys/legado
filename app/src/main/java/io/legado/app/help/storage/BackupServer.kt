@@ -16,14 +16,15 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import splitties.init.appCtx
 import java.io.File
 import java.io.IOException
+import java.net.URLEncoder
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.OffsetDateTime
 import java.time.ZoneId
-import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import com.google.gson.annotations.SerializedName
@@ -41,7 +42,11 @@ data class ServerBackup(
         get() = runCatching {
             OffsetDateTime.parse(createdAt).toInstant().toEpochMilli()
         }.recoverCatching {
-            LocalDateTime.parse(createdAt).toInstant(ZoneOffset.UTC).toEpochMilli()
+            // 兼容旧服务端不带时区的时间串, 按设备本地时区解析
+            LocalDateTime.parse(createdAt)
+                .atZone(ZoneId.systemDefault())
+                .toInstant()
+                .toEpochMilli()
         }.getOrDefault(0L)
 
     val displayName: String
@@ -66,6 +71,13 @@ private data class UploadResponse(
     @SerializedName("backup") val backup: ServerBackup,
 )
 
+data class ServerAccount(
+    @SerializedName("exists") val exists: Boolean = false,
+    @SerializedName("created") val created: Boolean = false,
+    @SerializedName("backup_count") val backupCount: Int = 0,
+    @SerializedName("latest_backup") val latestBackup: ServerBackup? = null,
+)
+
 object BackupServer {
 
     private val client by lazy {
@@ -88,7 +100,11 @@ object BackupServer {
     val isConfigured: Boolean
         get() = phone.isNotEmpty() && rawServerUrl.isNotEmpty()
 
-    private val apiBase: String
+    /** 只判断服务器地址是否可用, 首次绑定手机号时还没有 phone */
+    val serverUrlConfigured: Boolean
+        get() = rawServerUrl.isNotEmpty()
+
+    internal val apiBase: String
         get() {
             val raw = rawServerUrl
             if (raw.isEmpty()) throw NoStackTraceException("请先填写备份服务器地址")
@@ -101,7 +117,7 @@ object BackupServer {
         }
 
     private fun deviceName(): String {
-        return AppConfig.webDavDeviceName?.takeIf { it.isNotBlank() }
+        return AppConfig.deviceName?.takeIf { it.isNotBlank() }
             ?: "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()
     }
 
@@ -155,6 +171,33 @@ object BackupServer {
             val text = response.body.string()
             if (!response.isSuccessful) throw IOException(errorMessage(response.code, text))
             GSON.fromJsonObject<ServerBackup>(text).getOrThrow()
+        }
+    }
+
+    /**
+     * 查询手机号是否已有账号与云端备份，不会创建用户。
+     */
+    suspend fun checkAccount(phone: String): ServerAccount = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(phone, "UTF-8")
+        val request = Request.Builder().url("$apiBase/account?phone=$encoded").get().build()
+        client.newCall(request).execute().use { response ->
+            val text = response.body.string()
+            if (!response.isSuccessful) throw IOException(errorMessage(response.code, text))
+            GSON.fromJsonObject<ServerAccount>(text).getOrThrow()
+        }
+    }
+
+    /**
+     * 绑定手机号；服务端没有该用户时创建。
+     */
+    suspend fun bindAccount(phone: String): ServerAccount = withContext(Dispatchers.IO) {
+        val body = GSON.toJson(mapOf("phone" to phone))
+            .toRequestBody("application/json; charset=utf-8".toMediaType())
+        val request = Request.Builder().url("$apiBase/account").post(body).build()
+        client.newCall(request).execute().use { response ->
+            val text = response.body.string()
+            if (!response.isSuccessful) throw IOException(errorMessage(response.code, text))
+            GSON.fromJsonObject<ServerAccount>(text).getOrThrow()
         }
     }
 

@@ -109,8 +109,6 @@ class MangaReadingDirectionTest {
             .putBoolean(PreferKey.enableMangaEInk, false)
             .putBoolean(PreferKey.enableMangaGray, false)
             .putBoolean(PreferKey.enableReadRecord, false)
-            .putBoolean(PreferKey.syncBookProgress, false)
-            .putBoolean(PreferKey.syncBookProgressPlus, false)
             .putInt(PreferKey.mangaPreDownloadNum, 0)
             .putInt(PreferKey.preDownloadNum, 0)
             .commit())

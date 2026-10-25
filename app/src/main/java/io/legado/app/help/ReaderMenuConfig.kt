@@ -39,8 +39,6 @@ data class ReaderMenuConfig(
             "highlightRule",
             "editContent",
             "pageAnim",
-            "getProgress",
-            "coverProgress",
             "reverseContent",
             "simulatedReading",
             "replace",

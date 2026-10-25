@@ -129,7 +129,7 @@ function getCacheActiveTab() {
 function loginSuccess() {
   let firstpath = getCacheActiveTab()
   if (!firstpath) {
-    window.location.href = API_BASE_URL + "/#/"
+    window.location.href = import.meta.env.BASE_URL + "#/"
   } else {
     router.push(firstpath);
   }

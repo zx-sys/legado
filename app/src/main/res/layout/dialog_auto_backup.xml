@@ -25,7 +25,7 @@
             android:text="@string/backup_local_only" />
 
         <RadioButton
-            android:id="@+id/local_webdav"
+            android:id="@+id/local_server"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="48dp"

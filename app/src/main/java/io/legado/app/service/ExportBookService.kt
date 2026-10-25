@@ -30,7 +30,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.getBookSource
@@ -396,10 +395,6 @@ class ExportBookService : BaseService() {
                 }
             }
         }
-        if (AppConfig.exportToWebDav) {
-            // 导出到webdav
-            AppWebDav.exportWebDav(bookDoc.uri, filename)
-        }
     }
 
     private suspend fun exportPdf(path: String, book: Book) {
@@ -660,10 +655,6 @@ class ExportBookService : BaseService() {
         } finally {
             cleanupExportFile(stagingDoc, "PDF 临时文件")
         }
-
-        if (AppConfig.exportToWebDav) {
-            AppWebDav.exportWebDav(bookDoc.uri, filename)
-        }
     }
 
     private fun decodePdfBitmap(path: String, reqWidth: Int, reqHeight: Int): Bitmap? {
@@ -830,11 +821,6 @@ class ExportBookService : BaseService() {
         val bookDoc = fileDoc.createFileIfNotExist(filename)
         bookDoc.openOutputStream().getOrThrow().buffered().use { bookOs ->
             EpubWriter().write(epubBook, bookOs)
-        }
-
-        if (AppConfig.exportToWebDav) {
-            // 导出到webdav
-            AppWebDav.exportWebDav(bookDoc.uri, filename)
         }
     }
 
@@ -1295,11 +1281,6 @@ class ExportBookService : BaseService() {
                         }
                     })
                     .write(epubBook, bookOs)
-            }
-
-            if (AppConfig.exportToWebDav) {
-                // 导出到webdav
-                AppWebDav.exportWebDav(bookDoc.uri, filename)
             }
         }
 

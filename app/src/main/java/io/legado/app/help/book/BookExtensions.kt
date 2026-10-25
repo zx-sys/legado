@@ -18,7 +18,6 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.config.AppConfig
-import io.legado.app.model.analyzeRule.CustomUrl
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.GSON
@@ -50,7 +49,7 @@ val Book.isImage: Boolean
 val Book.isLocal: Boolean
     get() {
         if (type == 0) {
-            return origin == BookType.localTag || origin.startsWith(BookType.webDavTag)
+            return origin == BookType.localTag
         }
         return isType(BookType.local)
     }
@@ -91,10 +90,7 @@ val Book.archiveName: String
     get() {
         if (!isArchive) throw NoStackTraceException("Book is not deCompressed from archive")
         // local_book::archive.rar
-        // webDav::https://...../archive.rar
-        val archivePath = origin.substringAfter("::").let {
-            if (origin.startsWith(BookType.webDavTag)) CustomUrl(it).getUrl() else it
-        }
+        val archivePath = origin.substringAfter("::")
         return archivePath.substringAfterLast("/")
     }
 
@@ -191,13 +187,6 @@ fun Book.removeLocalUriCache() {
     localUriCache.remove(bookUrl)
 }
 
-fun Book.getRemoteUrl(): String? {
-    if (origin.startsWith(BookType.webDavTag)) {
-        return origin.substring(BookType.webDavTag.length)
-    }
-    return null
-}
-
 fun Book.setType(@BookType.Type vararg types: Int) {
     type = 0
     addType(*types)
@@ -233,7 +222,7 @@ fun Book.upType() {
             BookSourceType.file -> BookType.webFile
             else -> BookType.text
         }
-        if (origin == BookType.localTag || origin.startsWith(BookType.webDavTag)) {
+        if (origin == BookType.localTag) {
             type = type or BookType.local
         }
     }

@@ -11,6 +11,7 @@ import io.legado.app.base.adapter.ItemViewHolder
 import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.constant.AppLog
 import io.legado.app.databinding.ItemFontBinding
+import io.legado.app.help.font.RemoteFonts
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.utils.*
 
@@ -51,9 +52,14 @@ class FontAdapter(context: Context, private val curFilePath: String, val callBac
                 it.printOnDebug()
                 AppLog.put("读取字体 ${doc.name} 出错\n${it.localizedMessage}", it, true)
             }.getOrNull() ?: Typeface.DEFAULT
+            val displayName = if (item.privateFolder) {
+                RemoteFonts.displayName(doc.name) ?: doc.name
+            } else {
+                doc.name
+            }
             tvFont.text = context.getString(
                 if (item.privateFolder) R.string.font_item_private else R.string.font_item_external,
-                doc.name,
+                displayName,
             )
             root.setOnClickListener { callBack.onFontSelect(doc) }
             val selected = doc.toString() == curFilePath

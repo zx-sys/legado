@@ -42,6 +42,7 @@ import io.legado.app.help.book.isPdf
 import io.legado.app.help.book.removeType
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.model.ReadManga
 import io.legado.app.model.localBook.PdfFile
@@ -118,7 +119,6 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
 
     private var justInitData: Boolean = false
     private var contentUpdateId = 0
-    private var syncDialog: AlertDialog? = null
     private val mScrollTimer by lazy {
         ScrollTimer(this, binding.recyclerView, lifecycleScope).apply {
             setSpeed(AppConfig.mangaAutoPageSpeed)
@@ -406,8 +406,8 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
         networkChangedListener.register()
         networkChangedListener.onNetworkChanged = {
             // 当网络是可用状态且无需初始化时同步进度（初始化中已有同步进度逻辑）
-            if (AppConfig.syncBookProgressPlus && NetworkUtils.isAvailable() && !justInitData && ReadManga.inBookshelf) {
-                ReadManga.syncProgress({ progress -> sureNewProgress(progress) })
+            if (NetworkUtils.isAvailable() && !justInitData && ReadManga.inBookshelf) {
+                SyncManager.requestPull()
             }
         }
         if (enableAutoScrollPage) {
@@ -424,11 +424,7 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
         if (ReadManga.inBookshelf) {
             ReadManga.saveRead()
             if (!BuildConfig.DEBUG) {
-                if (AppConfig.syncBookProgressPlus) {
-                    ReadManga.syncProgress()
-                } else {
-                    ReadManga.uploadProgress()
-                }
+                ReadManga.uploadProgress()
             }
         }
         if (!BuildConfig.DEBUG) {
@@ -461,17 +457,6 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
     override fun onLowMemory() {
         super.onLowMemory()
         Glide.get(this).clearMemory()
-    }
-
-    override fun sureNewProgress(progress: BookProgress) {
-        syncDialog?.dismiss()
-        syncDialog = alert(R.string.get_book_progress) {
-            setMessage(R.string.cloud_progress_exceeds_current)
-            okButton {
-                ReadManga.setProgress(progress)
-            }
-            noButton()
-        }
     }
 
     override fun showLoading() {

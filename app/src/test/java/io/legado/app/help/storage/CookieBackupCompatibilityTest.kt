@@ -82,14 +82,14 @@ class CookieBackupCompatibilityTest {
         assertTrue(backup.contains("private suspend fun backup("))
         assertTrue(restore.contains("private suspend fun restore("))
         assertTrue(mainActivity.contains("private fun backupSync()"))
-        assertTrue(mainViewModel.contains("fun restoreWebDav("))
+        assertTrue(mainViewModel.contains("fun restoreServer("))
         val backupFunction = backup.substringAfter("private suspend fun backup(")
             .substringBefore("private suspend fun writeListToJson")
         val restoreFunction = restore.substringAfter("private suspend fun restore(")
             .substringBefore("private inline fun <reified T> fileToListT")
         val backupSync = mainActivity.substringAfter("private fun backupSync()")
             .substringBefore("override fun onSaveInstanceState")
-        val autoRestore = mainViewModel.substringAfter("fun restoreWebDav(")
+        val autoRestore = mainViewModel.substringAfter("fun restoreServer(")
             .substringBefore("private fun deleteNotShelfBook")
         val contentIsEnabled = config.substringAfter("internal fun contentIsEnabled(")
             .substringBefore("fun saveIgnoreConfig")
@@ -126,12 +126,7 @@ class CookieBackupCompatibilityTest {
         )
         assertTrue(backupSync.contains("cancelButton {"))
         assertTrue(backupSync.contains("LocalConfig.lastBackup = maxOf("))
-        assertTrue(
-            backupSync.contains(
-                "viewModel.restoreWebDav("
-            )
-        )
-        assertTrue(backupSync.contains("lastBackupFile.lastModify,"))
+        assertTrue(backupSync.contains("viewModel.restoreServer("))
         assertTrue(autoRestore.contains("}.onSuccess {"))
         assertTrue(
             autoRestore.contains(

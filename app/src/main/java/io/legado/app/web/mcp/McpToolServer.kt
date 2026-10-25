@@ -420,7 +420,7 @@ object McpToolServer {
                     if (existing.isEmpty()) {
                         return@withSaveLock ok("未找到可删除的书源")
                     }
-                    SourceHelp.deleteBookSources(existing)
+                    SourceHelp.deleteBookSources(existing, recordExcluded = true)
                     ok("已删除 ${existing.size} 个书源")
                 }
             } catch (error: CancellationException) {

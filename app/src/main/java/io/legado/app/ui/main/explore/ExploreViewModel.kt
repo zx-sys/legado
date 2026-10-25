@@ -19,7 +19,7 @@ class ExploreViewModel(application: Application) : BaseViewModel(application) {
 
     fun deleteSource(source: BookSourcePart) {
         execute {
-            SourceHelp.deleteBookSource(source.bookSourceUrl)
+            SourceHelp.deleteBookSource(source.bookSourceUrl, recordExcluded = true)
         }
     }
 

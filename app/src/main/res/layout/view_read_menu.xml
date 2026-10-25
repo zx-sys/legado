@@ -255,9 +255,9 @@
                 android:importantForAccessibility="no"
                 android:orientation="horizontal"
                 android:paddingStart="20dp"
+                android:paddingTop="8dp"
                 android:paddingEnd="20dp"
-                android:paddingTop="2dp"
-                android:paddingBottom="2dp">
+                android:paddingBottom="6dp">
 
                 <ImageView
                     android:id="@+id/iv_brightness_auto"
@@ -291,19 +291,17 @@
                 android:layout_height="wrap_content"
                 android:baselineAligned="false"
                 android:importantForAccessibility="no"
-                android:orientation="horizontal">
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:importantForAccessibility="no" />
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingTop="4dp"
+                android:paddingBottom="6dp">
 
                 <!--目录按钮-->
                 <LinearLayout
                     android:id="@+id/ll_catalog"
-                    android:layout_width="60dp"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:contentDescription="@string/chapter_list"
@@ -337,17 +335,12 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="2"
-                    android:importantForAccessibility="no" />
-
                 <!--调节按钮-->
                 <LinearLayout
                     android:id="@+id/ll_read_aloud"
-                    android:layout_width="60dp"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:contentDescription="@string/read_aloud"
@@ -381,17 +374,12 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:importantForAccessibility="no" />
-
                 <!--界面按钮-->
                 <LinearLayout
                     android:id="@+id/ll_font"
-                    android:layout_width="60dp"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:contentDescription="@string/interface_setting"
@@ -425,23 +413,12 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:importantForAccessibility="no" />
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:importantForAccessibility="no" />
-
                 <!--设置按钮-->
                 <LinearLayout
                     android:id="@+id/ll_setting"
-                    android:layout_width="60dp"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:contentDescription="@string/setting"
@@ -475,18 +452,11 @@
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <View
-                    android:id="@+id/memo_spacer"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="2"
-                    android:importantForAccessibility="no"
-                    android:visibility="gone" />
-
                 <LinearLayout
                     android:id="@+id/ll_memo"
-                    android:layout_width="60dp"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:background="?android:attr/selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:contentDescription="@string/book_memo"
@@ -519,12 +489,6 @@
                         android:textColor="@color/primaryText"
                         android:textSize="12sp" />
                 </LinearLayout>
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:importantForAccessibility="no" />
 
             </LinearLayout>
         </LinearLayout>

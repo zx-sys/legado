@@ -119,7 +119,7 @@ class ReadPaddingLinkBackupRestoreTest {
                 ReadBookConfig.saveNow()
             }
 
-            Backup.backupLocked(context, directory.path, uploadWebDav = false)
+            Backup.backupLocked(context, directory.path, uploadServer = false)
             val archive = File(directory, "backup.zip")
             ZipFile(archive).use { zip ->
                 val configs = zip.getInputStream(checkNotNull(zip.getEntry(ReadBookConfig.configFileName)))

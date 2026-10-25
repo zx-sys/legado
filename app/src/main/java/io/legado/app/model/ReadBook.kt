@@ -18,7 +18,6 @@ import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.data.entities.ReadRecord
 import io.legado.app.data.entities.updateSnapshot
 import io.legado.app.data.entities.saveWithCover
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.HighlightAnchor
 import io.legado.app.help.HighlightMatcher
 import io.legado.app.help.HighlightRuleMatcher
@@ -28,6 +27,7 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentSaveToken
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.isImage
+import io.legado.app.help.book.isInvalidChapterContent
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isPdf
 import io.legado.app.model.localBook.PdfFile
@@ -38,6 +38,7 @@ import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.globalExecutor
 import io.legado.app.model.localBook.TextFile
@@ -72,6 +73,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -213,7 +215,11 @@ object ReadBook : CoroutineScope by MainScope() {
 
     fun resetData(book: Book) {
         val positionAnchor = pendingHighlightAnchor
+        val previousBookUrl = ReadBook.book?.bookUrl
         releaseAndCancel()
+        if (previousBookUrl != null && previousBookUrl != book.bookUrl) {
+            ChapterSourceFallback.resetBook(previousBookUrl)
+        }
         synchronized(readRecordLock) {
             ReadBook.book = book
             resetReadRecord(book)
@@ -812,52 +818,11 @@ object ReadBook : CoroutineScope by MainScope() {
         nextTextChapter?.clearSearchResult()
     }
 
-    fun uploadProgress(toast: Boolean = false, successAction: (() -> Unit)? = null) {
-        book?.let {
-            launch(IO) {
-                AppWebDav.uploadBookProgress(it, toast) {
-                    successAction?.invoke()
-                }
-                ensureActive()
-                it.update()
-            }
-        }
-    }
-
-    /**
-     * 同步阅读进度
-     * 如果当前进度快于服务器进度或者没有进度进行上传，如果慢与服务器进度则执行传入动作
-     */
-    fun syncProgress(
-        newProgressAction: ((progress: BookProgress) -> Unit)? = null,
-        uploadSuccessAction: (() -> Unit)? = null,
-        syncSuccessAction: (() -> Unit)? = null
-    ) {
-        if (!AppConfig.syncBookProgress) return
+    fun uploadProgress() {
         val book = book ?: return
-        Coroutine.async {
-            AppWebDav.getBookProgress(book)
-        }.onError {
-            AppLog.put("拉取阅读进度失败", it)
-        }.onSuccess { progress ->
-            if (progress == null || progress.durChapterIndex < book.durChapterIndex ||
-                (progress.durChapterIndex == book.durChapterIndex
-                        && progress.durChapterPos < book.durChapterPos)
-            ) {
-                // 服务器没有进度或者进度比服务器快，上传现有进度
-                Coroutine.async {
-                    AppWebDav.uploadBookProgress(BookProgress(book), uploadSuccessAction)
-                    book.update()
-                }
-            } else if (progress.durChapterIndex > book.durChapterIndex ||
-                progress.durChapterPos > book.durChapterPos
-            ) {
-                // 进度比服务器慢，执行传入动作
-                newProgressAction?.invoke(progress)
-            } else {
-                syncSuccessAction?.invoke()
-            }
-        }
+        SyncManager.enqueueProgress(book, book.durChapterIndex, book.durChapterPos, book.durChapterTitle)
+        SyncManager.flushNow()
+        launch(IO) { book.update() }
     }
 
     private fun resetReadRecord(book: Book) {
@@ -1384,24 +1349,26 @@ object ReadBook : CoroutineScope by MainScope() {
             val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index) ?: return@async
             val contentToken = BookHelp.contentSaveToken(book, chapter)
             if (addLoading(index)) {
-                BookHelp.getContent(book, chapter)?.let {
-                    contentLoadFinish(
-                        book,
+                BookHelp.getContent(book, chapter)
+                    ?.takeUnless { AppConfig.autoFillChapterSource && isInvalidChapterContent(it) }
+                    ?.let {
+                        contentLoadFinish(
+                            book,
+                            chapter,
+                            it,
+                            upContent,
+                            resetPageOffset,
+                            readPositionVersion = readPositionVersion,
+                            contentToken = contentToken,
+                            success = success
+                        )
+                    } ?: download(
+                        downloadScope,
                         chapter,
-                        it,
-                        upContent,
                         resetPageOffset,
                         readPositionVersion = readPositionVersion,
-                        contentToken = contentToken,
-                        success = success
+                        success = success,
                     )
-                } ?: download(
-                    downloadScope,
-                    chapter,
-                    resetPageOffset,
-                    readPositionVersion = readPositionVersion,
-                    success = success,
-                )
             }
         }.onError {
             AppLog.put("加载正文出错\n${it.localizedMessage}")
@@ -1419,8 +1386,13 @@ object ReadBook : CoroutineScope by MainScope() {
         val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, index) ?: return@withContext
         val contentToken = BookHelp.contentSaveToken(book, chapter)
         if (addLoading(index)) {
+            var currentToken = contentToken
             try {
-                val content = BookHelp.getContent(book, chapter) ?: downloadAwait(chapter)
+                val content = BookHelp.getContent(book, chapter)
+                    ?.takeUnless { AppConfig.autoFillChapterSource && isInvalidChapterContent(it) }
+                    ?: downloadAwait(chapter)
+                // 自动补源会改写本章缓存并提升版本号，完成回调必须使用最新版本。
+                currentToken = BookHelp.contentSaveToken(book, chapter)
                 contentLoadFinishAwait(
                     book,
                     chapter,
@@ -1428,14 +1400,16 @@ object ReadBook : CoroutineScope by MainScope() {
                     upContent,
                     resetPageOffset,
                     readPositionVersion,
-                    contentToken,
+                    currentToken,
                 )
-                if (BookHelp.isContentSaveCurrent(contentToken)) success?.invoke()
+                if (BookHelp.isContentSaveCurrent(currentToken)) success?.invoke()
             } catch (e: Exception) {
                 AppLog.put("加载正文出错\n${e.localizedMessage}")
             } finally {
                 synchronized(this@ReadBook) {
-                    if (ReadBook.book?.bookUrl == book.bookUrl && BookHelp.isContentSaveCurrent(contentToken)) {
+                    if (ReadBook.book?.bookUrl == book.bookUrl &&
+                        BookHelp.isContentSaveCurrent(currentToken)
+                    ) {
                         removeLoading(index)
                     }
                 }
@@ -1832,36 +1806,71 @@ object ReadBook : CoroutineScope by MainScope() {
     }
 
     fun saveRead(pageChanged: Boolean = false) {
-        if (pendingPdfJump?.let { it.bookUrl == book?.bookUrl && it.chapterIndex == durChapterIndex } == true) return
-        if (hasPendingHighlightJump()) return
         val book = book ?: return
-        // The shared writer may still be queued when the reader switches books or pages.
+        if (!canSaveRead()) return
         val durChapterIndex = durChapterIndex
         val durChapterPos = durChapterPos
         val bookSource = bookSource
         val durTime = System.currentTimeMillis()
+        SyncManager.enqueueProgress(book, durChapterIndex, durChapterPos, book.durChapterTitle)
+        // The shared writer may still be queued when the reader switches books or pages.
         executor.execute {
             kotlin.runCatching {
-                book.lastCheckCount = 0
-                book.durChapterTime = durTime
-                val chapterChanged = book.durChapterIndex != durChapterIndex
-                book.durChapterIndex = durChapterIndex
-                book.durChapterPos = durChapterPos
-                if (!pageChanged || chapterChanged) {
-                    appDb.bookChapterDao.getChapter(book.bookUrl, durChapterIndex)?.let {
-                        book.durChapterTitle = it.getDisplayTitle(
-                            ContentProcessor.get(book.name, book.origin).getTitleReplaceRules(),
-                            book.getUseReplaceRule(),
-                            replaceBook = book.toReplaceBook()
-                        )
-                        SourceCallBack.callBackBook(SourceCallBack.SAVE_READ, bookSource, book, it, durTime.toString())
-                    }
-                }
-                book.update()
+                writeReadProgress(book, durChapterIndex, durChapterPos, bookSource, durTime, pageChanged)
             }.onFailure {
                 AppLog.put("保存书籍阅读进度信息出错\n$it", it)
             }
         }
+    }
+
+    /**
+     * 进程即将被移除时同步落库，避免异步写入还没执行就丢进度。
+     */
+    fun saveReadBlocking() {
+        val book = book ?: return
+        if (!canSaveRead()) return
+        val durChapterIndex = durChapterIndex
+        val durChapterPos = durChapterPos
+        val bookSource = bookSource
+        val durTime = System.currentTimeMillis()
+        runBlocking(IO) {
+            kotlin.runCatching {
+                writeReadProgress(book, durChapterIndex, durChapterPos, bookSource, durTime, false)
+            }.onFailure {
+                AppLog.put("保存书籍阅读进度信息出错\n$it", it)
+            }
+        }
+    }
+
+    private fun canSaveRead(): Boolean {
+        if (pendingPdfJump?.let { it.bookUrl == book?.bookUrl && it.chapterIndex == durChapterIndex } == true) return false
+        return !hasPendingHighlightJump()
+    }
+
+    private fun writeReadProgress(
+        book: Book,
+        durChapterIndex: Int,
+        durChapterPos: Int,
+        bookSource: BookSource?,
+        durTime: Long,
+        pageChanged: Boolean
+    ) {
+        book.lastCheckCount = 0
+        book.durChapterTime = durTime
+        val chapterChanged = book.durChapterIndex != durChapterIndex
+        book.durChapterIndex = durChapterIndex
+        book.durChapterPos = durChapterPos
+        if (!pageChanged || chapterChanged) {
+            appDb.bookChapterDao.getChapter(book.bookUrl, durChapterIndex)?.let {
+                book.durChapterTitle = it.getDisplayTitle(
+                    ContentProcessor.get(book.name, book.origin).getTitleReplaceRules(),
+                    book.getUseReplaceRule(),
+                    replaceBook = book.toReplaceBook()
+                )
+                SourceCallBack.callBackBook(SourceCallBack.SAVE_READ, bookSource, book, it, durTime.toString())
+            }
+        }
+        book.update()
     }
 
     /**
@@ -2194,8 +2203,6 @@ object ReadBook : CoroutineScope by MainScope() {
         fun upPageAnim(upRecorder: Boolean = false)
 
         fun notifyBookChanged()
-
-        fun sureNewProgress(progress: BookProgress)
 
         fun cancelSelect()
     }

@@ -72,7 +72,7 @@ object JsSourceUpsert {
                         SharedJsScope.remove(it.jsLib)
                     }
                     if (it.bookSourceUrl != source.bookSourceUrl) {
-                        SourceHelp.deleteBookSource(it.bookSourceUrl)
+                        SourceHelp.deleteBookSource(it.bookSourceUrl, recordExcluded = true)
                         concurrentRecordMap.remove(it.bookSourceUrl)
                     } else {
                         appDb.bookSourceDao.delete(it)

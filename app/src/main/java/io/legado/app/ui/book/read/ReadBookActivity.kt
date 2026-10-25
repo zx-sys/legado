@@ -45,7 +45,6 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.Bookmark
 import io.legado.app.data.entities.rule.ReviewRule
 import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.HighlightColors
 import io.legado.app.help.HighlightStyle
 import io.legado.app.help.HighlightStyles
@@ -61,6 +60,7 @@ import io.legado.app.help.book.isMobi
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadTipConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -102,7 +102,6 @@ import io.legado.app.ui.book.read.config.BgTextConfigDialog.Companion.UNDERLINE_
 import io.legado.app.ui.book.read.config.MoreConfigDialog
 import io.legado.app.ui.book.read.config.ReadAloudDialog
 import io.legado.app.ui.book.read.config.ReaderMenuConfigDialog
-import io.legado.app.help.tts.NeuralTtsModel
 import io.legado.app.ui.book.read.config.ReadStyleDialog
 import io.legado.app.ui.book.read.config.SpeakEngineDialog
 import io.legado.app.ui.book.read.config.TextSelectMenuConfigDialog
@@ -316,6 +315,14 @@ class ReadBookActivity : BaseReadBookActivity(),
         ReadAloudControls(binding.readAloudFloatBarContainer) { updateReadAloudFloatBar() }
     }
     private val restoreAloudFollowRunnable = Runnable { restoreAloudFollowOnVisiblePage() }
+    /** 滚动停下后把可见位置落库, 进程被强杀时最多丢几秒进度 */
+    private val saveScrollPositionRunnable = Runnable {
+        binding.readView.updateScrollReadPosition()
+        ReadBook.saveRead()
+        lastScrollSaveTime = System.currentTimeMillis()
+    }
+    private var lastScrollSaveTime = 0L
+    private var lastAloudSaveTime = 0L
     /** 最近一次朗读进度的章内字符位置; 供"回到朗读位置"在同章内即时跳转 */
     private var lastReadAloudChapterStart = -1
     private var lastReadAloudChapterIndex = -1
@@ -346,7 +353,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         NetworkChangedListener(this)
     }
     private var justInitData: Boolean = false
-    private var syncDialog: AlertDialog? = null
 
     @Suppress("DEPRECATION")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -482,13 +488,23 @@ class ReadBookActivity : BaseReadBookActivity(),
         registerReceiver(timeBatteryReceiver, timeBatteryReceiver.filter)
         binding.readView.upTime()
         updateReadAloudFloatBar()
+        SyncManager.requestPull()
+        binding.readView.post {
+            if (BaseReadAloudService.isRun) {
+                syncVisiblePageToReadAloud()
+            } else {
+                // 任务被移除时朗读已停, 清掉遗留的高亮
+                binding.readView.curPage.textPage.removePageAloudSpan()
+                binding.readView.curPage.invalidateContentView()
+            }
+        }
         screenOffTimerStart()
         // 网络监听，当从无网切换到网络环境时同步进度（注意注册的同时就会收到监听，因此界面激活时无需重复执行同步操作）
         networkChangedListener.register()
         networkChangedListener.onNetworkChanged = {
             // 当网络是可用状态且无需初始化时同步进度（初始化中已有同步进度逻辑）
-            if (AppConfig.syncBookProgressPlus && NetworkUtils.isAvailable() && !justInitData && ReadBook.inBookshelf) {
-                ReadBook.syncProgress({ progress -> sureNewProgress(progress) })
+            if (NetworkUtils.isAvailable() && !justInitData && ReadBook.inBookshelf) {
+                SyncManager.requestPull()
             }
         }
     }
@@ -520,17 +536,14 @@ class ReadBookActivity : BaseReadBookActivity(),
         unregisterReceiver(timeBatteryReceiver)
         upSystemUiVisibility()
         if (!BuildConfig.DEBUG && ReadBook.inBookshelf) {
-            if (AppConfig.syncBookProgressPlus) {
-                ReadBook.syncProgress()
-            } else {
-                ReadBook.uploadProgress()
-            }
+            ReadBook.uploadProgress()
         }
         if (!BuildConfig.DEBUG) {
             Backup.autoBack(this)
         }
         justInitData = false
         networkChangedListener.unRegister()
+        SyncManager.flushNow()
     }
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
@@ -601,14 +614,6 @@ class ReadBookActivity : BaseReadBookActivity(),
                     R.id.menu_del_h_tag -> item.isChecked = book.getDelTag(Book.hTag)
                 }
             }
-        }
-        lifecycleScope.launch {
-            val show = ReadBook.inBookshelf && withContext(IO) {
-                AppWebDav.isOk
-            }
-            menu.findItem(R.id.menu_get_progress)?.isVisible = show
-            menu.findItem(R.id.menu_cover_progress)?.isVisible = show
-            menu.findItem(R.id.menu_reader_more)?.isVisible = hasHiddenReaderItems(menu)
         }
         menu.findItem(R.id.menu_reader_more)?.isVisible = hasHiddenReaderItems(menu)
     }
@@ -936,16 +941,6 @@ class ReadBookActivity : BaseReadBookActivity(),
                     }
                     ReadBook.loadContent(false)
                 }
-            }
-
-            R.id.menu_get_progress -> ReadBook.book?.let {
-                viewModel.syncBookProgress(it) { progress ->
-                    sureSyncProgress(progress)
-                }
-            }
-
-            R.id.menu_cover_progress -> ReadBook.book?.let {
-                ReadBook.uploadProgress(true) { toastOnUi(R.string.upload_book_success) }
             }
 
             R.id.menu_same_title_removed -> {
@@ -1634,10 +1629,24 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     override fun onReadScroll(offset: Int) {
+        scheduleScrollPositionSave()
         if (BaseReadAloudService.isRun && !isAutoPage) {
+            // 朗读推进页面时也会走到这里, 只有手指拖动才算用户脱离跟随;
+            // 否则锁屏期间无法完成跟随恢复, 跨章后会只推进朗读而不动页面。
+            if (!binding.readView.isTouching) return
             ReadAloud.detachReadAloudFollow()
             aloudControls.onMovement(-offset * 100f / ChapterProvider.visibleHeight.coerceAtLeast(1))
             scheduleAloudFollowCheck()
+        }
+    }
+
+    private fun scheduleScrollPositionSave() {
+        val now = System.currentTimeMillis()
+        handler.removeCallbacks(saveScrollPositionRunnable)
+        if (now - lastScrollSaveTime >= 15_000) {
+            saveScrollPositionRunnable.run()
+        } else {
+            handler.postDelayed(saveScrollPositionRunnable, 1500)
         }
     }
 
@@ -1689,6 +1698,22 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     /**
+     * 解锁/回到前台时，如果仍处于“跟随朗读”状态，把可见页同步到当前朗读位置。
+     * 锁屏期间收不到进度事件，跨章后页面会停留在锁屏前的位置。
+     */
+    private fun syncVisiblePageToReadAloud() {
+        if (!BaseReadAloudService.isRun || !ReadAloud.followReadAloudPosition) return
+        if (!ReadBook.isLayoutAvailable) return
+        val chapterIndex = ReadAloud.readAloudChapterIndex
+        if (chapterIndex < 0) return
+        if (chapterIndex != ReadBook.durChapterIndex) {
+            backToSpeakingPosition()
+        } else if (ReadAloud.readAloudChapterStart >= 0) {
+            upTextChapterAloudSpan(ReadAloud.readAloudChapterStart)
+        }
+    }
+
+    /**
      * 回到朗读位置：恢复页面跟随朗读，并精确跳到当前朗读位置。
      * 同章内直接定位到已记录的朗读字符位置；跨章时打开朗读所在章节并定位到该字符位置。
      * 全程不打断当前朗读。
@@ -1735,7 +1760,8 @@ class ReadBookActivity : BaseReadBookActivity(),
             ReadBook.durChapterPos = chapterStart
             val pageIndex = ReadBook.durPageIndex
             val aloudSpanStart = chapterStart - textChapter.getReadLength(pageIndex)
-            textChapter.getPage(pageIndex)?.upPageAloudSpan(aloudSpanStart)
+            val page = textChapter.getPage(pageIndex)
+            page?.upPageAloudSpan(aloudSpanStart)
             upContent()
         }
     }
@@ -2451,12 +2477,32 @@ class ReadBookActivity : BaseReadBookActivity(),
 
 
     /**
+     * 停止后再次朗读：同一本书、同一章节时从上次朗读位置继续，避免回退一屏。
+     */
+    private fun savedReadAloudStartPos(): Int? {
+        val book = ReadBook.book ?: return null
+        val textChapter = ReadBook.curTextChapter ?: return null
+        if (AppConfig.readAloudLastBookUrl != book.bookUrl) return null
+        if (AppConfig.readAloudLastChapterIndex != ReadBook.durChapterIndex) return null
+        val position = AppConfig.readAloudLastPosition
+        if (position <= 0) return null
+        ReadBook.durChapterPos = position
+        val pageIndex = ReadBook.durPageIndex
+        if (pageIndex < 0) return null
+        return (position - textChapter.getReadLength(pageIndex)).coerceAtLeast(0)
+    }
+
+    /**
      * 朗读按钮
      */
     override fun onClickReadAloud() {
         autoPageStop()
-        if (ReadAloud.isNeuralTtsSelected && !NeuralTtsModel.isInstalled()) {
-            toastOnUi("请先下载本地语音包（约 159MB）")
+        val localEngine = io.legado.app.help.tts.parseTtsSelection(ReadAloud.ttsEngine)
+            ?.code?.let { io.legado.app.help.tts.RemoteTtsEngines.installedEngine(it) }
+        if (ReadAloud.isNeuralTtsSelected &&
+            (localEngine == null || !io.legado.app.help.tts.RemoteTtsEngines.isInstalled(localEngine))
+        ) {
+            toastOnUi("请先下载本地语音包")
             showDialogFragment<SpeakEngineDialog>()
             return
         }
@@ -2465,28 +2511,37 @@ class ReadBookActivity : BaseReadBookActivity(),
                 ReadAloud.upReadAloudClass()
                 val scrollPageAnim = ReadBook.pageAnim() == 3
                 if (scrollPageAnim) {
-                    val pos = binding.readView.getReadAloudPos()
-                    if (pos != null) {
-                        val (index, line) = pos
-                        if (ReadBook.durChapterIndex != index) {
-                            ReadBook.openChapter(index, line.chapterPosition, false) {
+                    val savedStart = savedReadAloudStartPos()
+                    if (savedStart != null) {
+                        ReadBook.readAloud(startPos = savedStart, rewindToSentenceStart = false)
+                    } else {
+                        val pos = binding.readView.getReadAloudPos()
+                        if (pos != null) {
+                            val (index, line) = pos
+                            if (ReadBook.durChapterIndex != index) {
+                                ReadBook.openChapter(index, line.chapterPosition, false) {
+                                    ReadBook.readAloud(
+                                        startPos = line.pagePosition,
+                                        rewindToSentenceStart = AppConfig.readAloudStartAtSentence
+                                    )
+                                }
+                            } else {
+                                ReadBook.durChapterPos = line.chapterPosition
                                 ReadBook.readAloud(
                                     startPos = line.pagePosition,
                                     rewindToSentenceStart = AppConfig.readAloudStartAtSentence
                                 )
                             }
                         } else {
-                            ReadBook.durChapterPos = line.chapterPosition
-                            ReadBook.readAloud(
-                                startPos = line.pagePosition,
-                                rewindToSentenceStart = AppConfig.readAloudStartAtSentence
-                            )
+                            ReadBook.readAloud(rewindToSentenceStart = AppConfig.readAloudStartAtSentence)
                         }
-                    } else {
-                        ReadBook.readAloud(rewindToSentenceStart = AppConfig.readAloudStartAtSentence)
                     }
                 } else {
-                    ReadBook.readAloud(rewindToSentenceStart = AppConfig.readAloudStartAtSentence)
+                    val savedStart = savedReadAloudStartPos()
+                    ReadBook.readAloud(
+                        startPos = savedStart ?: 0,
+                        rewindToSentenceStart = savedStart == null && AppConfig.readAloudStartAtSentence
+                    )
                 }
             }
 
@@ -2657,16 +2712,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         ReadBook.book?.let {
             it.tocUrl = tocRegex
             loadChapterList(it)
-        }
-    }
-
-    private fun sureSyncProgress(progress: BookProgress) {
-        alert(R.string.get_book_progress) {
-            setMessage(R.string.current_progress_exceeds_cloud)
-            okButton {
-                ReadBook.setProgress(progress)
-            }
-            noButton()
         }
     }
 
@@ -2934,24 +2979,8 @@ class ReadBookActivity : BaseReadBookActivity(),
         backupJob?.cancel()
         backupJob = lifecycleScope.launch(IO) {
             delay(300000)
-            ReadBook.book?.let {
-                AppWebDav.uploadBookProgress(it)
-                ensureActive()
-                it.update()
-                Backup.autoBack(this@ReadBookActivity)
-            }
-        }
-    }
-
-    override fun sureNewProgress(progress: BookProgress) {
-        syncDialog?.dismiss()
-        syncDialog = alert(R.string.get_book_progress) {
-            setMessage(R.string.cloud_progress_exceeds_current)
-            okButton {
-                ReadAloud.detachReadAloudFollow()
-                ReadBook.setProgress(progress)
-            }
-            noButton()
+            ReadBook.uploadProgress()
+            Backup.autoBack(this@ReadBookActivity)
         }
     }
 
@@ -3075,6 +3104,11 @@ class ReadBookActivity : BaseReadBookActivity(),
                 ) {
                     ReadBook.curTextChapter?.let { textChapter ->
                         ReadBook.durChapterPos = chapterStart
+                        val now = System.currentTimeMillis()
+                        if (now - lastAloudSaveTime >= 30_000) {
+                            lastAloudSaveTime = now
+                            ReadBook.saveRead()
+                        }
                         val pageIndex = ReadBook.durPageIndex
                         val aloudSpanStart = chapterStart - textChapter.getReadLength(pageIndex)
                         val page = textChapter.getPage(pageIndex)

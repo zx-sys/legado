@@ -140,7 +140,7 @@
 
 	function loginSuccess(){
 		// router.push('/');
-		window.location.href = API_BASE_URL+"/#/"
+		window.location.href = import.meta.env.BASE_URL + "#/"
 	}
 
 	onMounted(()=>{

@@ -7,6 +7,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.toBookSource
+import io.legado.app.help.source.BookSourceSync
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -53,12 +54,16 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
 
     fun del(sources: List<BookSourcePart>) {
         execute {
-            SourceHelp.deleteBookSourceParts(sources)
+            SourceHelp.deleteBookSourceParts(sources, recordExcluded = true)
         }
     }
 
     fun update(vararg bookSource: BookSource) {
-        execute { appDb.bookSourceDao.update(*bookSource) }
+        execute {
+            appDb.bookSourceDao.update(*bookSource)
+            BookSourceSync.clearServerDisabledUrls(bookSource.map { it.bookSourceUrl })
+            BookSourceSync.uploadSelectionInBackground()
+        }
     }
 
     fun move(sourceUrl: String, targetUrl: String, after: Boolean, onFinally: () -> Unit = {}) {
@@ -77,18 +82,24 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
     fun enable(enable: Boolean, items: List<BookSourcePart>) {
         execute {
             appDb.bookSourceDao.enable(enable, items)
+            BookSourceSync.clearServerDisabledUrls(items.map { it.bookSourceUrl })
+            BookSourceSync.uploadSelectionInBackground()
         }
     }
 
     fun enableSelection(sources: List<BookSourcePart>) {
         execute {
             appDb.bookSourceDao.enable(true, sources)
+            BookSourceSync.clearServerDisabledUrls(sources.map { it.bookSourceUrl })
+            BookSourceSync.uploadSelectionInBackground()
         }
     }
 
     fun disableSelection(sources: List<BookSourcePart>) {
         execute {
             appDb.bookSourceDao.enable(false, sources)
+            BookSourceSync.clearServerDisabledUrls(sources.map { it.bookSourceUrl })
+            BookSourceSync.uploadSelectionInBackground()
         }
     }
 

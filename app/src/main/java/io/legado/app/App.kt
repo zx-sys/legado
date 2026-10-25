@@ -25,14 +25,12 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
-import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.rule.BookInfoRule
 import io.legado.app.data.entities.rule.ContentRule
 import io.legado.app.data.entities.rule.ExploreRule
 import io.legado.app.data.entities.rule.SearchRule
 import io.legado.app.help.AppFreezeMonitor
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.CrashHandler
 import io.legado.app.help.DefaultData
 import io.legado.app.help.DispatchersMonitor
@@ -41,11 +39,13 @@ import io.legado.app.help.RuleBigDataHelp
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ResourceThemeGeneration
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
 import io.legado.app.help.config.ThemeConfig.applyDayNightInit
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.Cronet
+import io.legado.app.help.source.BookSourceSync
 import io.legado.app.help.http.ObsoleteUrlFactory
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.rhino.NativeBaseSource
@@ -92,6 +92,7 @@ class App : Application() {
             LogUtils.init(this@App)
             LogUtils.d("App", "onCreate")
             LogUtils.logDeviceInfo()
+            LocalConfig.cleanupRemovedPreferences()
             //预下载Cronet so
             if (AppConfig.isCronet) {
                 runCatching { Cronet.preDownload() }
@@ -104,9 +105,9 @@ class App : Application() {
                 .enableLogger(BuildConfig.DEBUG || AppConfig.recordLog)
                 .setLogger(EventLogger())
             DefaultData.upVersion()
-            DefaultData.importDefaultHttpTTS()
             DefaultData.removeUnusableBookSourcesIfNeeded()
             DefaultData.addNewDefaultBookSourcesIfNeeded()
+            BookSourceSync.syncInBackground()
             AppFreezeMonitor.init(this@App)
             DispatchersMonitor.init()
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))
@@ -137,10 +138,6 @@ class App : Application() {
             SourceHelp.adjustSortNumber()
             AutoTask.all()
             AutoTaskScheduler.refresh(this@App)
-            //同步阅读记录
-            if (AppConfig.syncBookProgress) {
-                AppWebDav.downloadAllBookProgress()
-            }
         }
     }
 
@@ -245,7 +242,6 @@ class App : Application() {
         RhinoScriptEngine.initialize()
         RhinoWrapFactory.register(BookSource::class.java, NativeBaseSource.factory)
         RhinoWrapFactory.register(RssSource::class.java, NativeBaseSource.factory)
-        RhinoWrapFactory.register(HttpTTS::class.java, NativeBaseSource.factory)
         RhinoWrapFactory.register(ExploreRule::class.java, ReadOnlyJavaObject.factory)
         RhinoWrapFactory.register(SearchRule::class.java, ReadOnlyJavaObject.factory)
         RhinoWrapFactory.register(BookInfoRule::class.java, ReadOnlyJavaObject.factory)

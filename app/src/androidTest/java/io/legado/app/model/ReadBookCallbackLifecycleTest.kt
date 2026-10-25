@@ -87,7 +87,6 @@ class ReadBookCallbackLifecycleTest {
         override fun contentLoadFinish() = Unit
         override fun upPageAnim(upRecorder: Boolean) = Unit
         override fun notifyBookChanged() = Unit
-        override fun sureNewProgress(progress: BookProgress) = Unit
         override fun cancelSelect() = Unit
     }
 }

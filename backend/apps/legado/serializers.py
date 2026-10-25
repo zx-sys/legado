@@ -1,3 +1,5 @@
+import json
+
 # -*- coding: utf-8 -*-
 from rest_framework import serializers
 
@@ -6,6 +8,7 @@ from apps.legado.models import (
     BackupItem,
     BackupRecord,
     BookSource,
+    FontPack,
     LegadoBook,
     LegadoBookmark,
     LegadoHighlight,
@@ -73,6 +76,12 @@ class LegadoBookSerializer(CustomModelSerializer):
     bookmark_count = serializers.SerializerMethodField()
     highlight_count = serializers.SerializerMethodField()
 
+    def get_bookmark_count(self, obj):
+        return obj.bookmarks.count()
+
+    def get_highlight_count(self, obj):
+        return obj.highlights.count()
+
     class Meta:
         model = LegadoBook
         fields = "__all__"
@@ -87,12 +96,38 @@ class UserConfigSerializer(CustomModelSerializer):
         fields = "__all__"
         read_only_fields = ("create_time", "update_time", "is_delete", "last_backup", "source_file")
 
+    def update(self, instance, validated_data):
+        # 内容被管理端修改时同步 raw_json, 避免 APP 读到旧的结构化配置
+        content = validated_data.get("content")
+        if content is not None:
+            try:
+                instance.raw_json = json.loads(content)
+            except (TypeError, ValueError):
+                instance.raw_json = None
+        return super().update(instance, validated_data)
+
 
 class BookSourceSerializer(CustomModelSerializer):
     class Meta:
         model = BookSource
         fields = "__all__"
         read_only_fields = ("create_time", "update_time", "is_delete")
+
+
+class FontPackSerializer(CustomModelSerializer):
+    class Meta:
+        model = FontPack
+        fields = "__all__"
+        read_only_fields = (
+            "create_time",
+            "update_time",
+            "is_delete",
+            "package_key",
+            "package_file_name",
+            "package_size",
+            "sha256",
+            "download_count",
+        )
 
 
 class TtsEngineSerializer(CustomModelSerializer):

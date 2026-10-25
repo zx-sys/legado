@@ -39,12 +39,6 @@
         app:showAsAction="never" />
 
     <item
-        android:id="@+id/menu_export_web_dav"
-        android:checkable="true"
-        android:title="@string/export_to_web_dav"
-        app:showAsAction="never" />
-
-    <item
         android:id="@+id/menu_export_no_chapter_name"
         android:checkable="true"
         android:title="@string/export_no_chapter_name"

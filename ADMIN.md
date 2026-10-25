@@ -19,7 +19,7 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 .venv\Scripts\python.exe manage.py migrate
 .venv\Scripts\python.exe manage.py init
-.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
+.venv\Scripts\python.exe manage.py runserver 0.0.0.0:9666
 ```
 
 `config.py` 只保留非敏感的默认配置，数据库密码、Redis 密码、OSS AccessKey 等敏感项从
@@ -35,7 +35,7 @@ npm install --registry=https://registry.npmmirror.com
 npm start
 ```
 
-开发地址默认 `http://localhost:8081`，接口默认连 `http://127.0.0.1:8000`。
+开发地址默认 `http://localhost:8081`，接口默认连 `http://127.0.0.1:9666`。
 生产可执行 `npm run build:backend`，静态文件会输出到 `backend/frontend/lyadmin`。
 
 ## 已内置的管理模块

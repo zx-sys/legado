@@ -69,11 +69,9 @@ internal fun selectedBackupFileNames(isEnabled: (String) -> Boolean): List<Strin
                 listOf(
                     "replaceRule.json",
                     "txtTocRule.json",
-                    "httpTTS.json",
                     "keyboardAssists.json",
                     "dictRule.json",
                     "autoTask.json",
-                    "servers.json",
                     DirectLinkUpload.ruleFileName,
                     BookCover.configFileName,
                 )
@@ -95,14 +93,6 @@ internal fun selectedBackupFileNames(isEnabled: (String) -> Boolean): List<Strin
         }
     }
 
-internal val lanTransferIgnoredPrefKeys = setOf(
-    PreferKey.remoteServerId,
-    PreferKey.webDavUrl,
-    PreferKey.webDavAccount,
-    PreferKey.webDavPassword,
-    PreferKey.webDavDir,
-)
-
 /**
  * 备份
  */
@@ -118,7 +108,7 @@ object Backup {
     private fun getNowZipFileName(): String {
         val backupDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             .format(Date(System.currentTimeMillis()))
-        val deviceName = AppConfig.webDavDeviceName
+        val deviceName = AppConfig.deviceName
         return if (deviceName?.isNotBlank() == true) {
             "backup${backupDate}-${deviceName}.zip"
         } else {
@@ -144,7 +134,7 @@ object Backup {
             if (AppConfig.autoBackup && shouldBackup()) {
                 withContext(IO) {
                     val uploadServer =
-                        AppConfig.autoBackupWebDav && BackupServer.isConfigured
+                        AppConfig.autoBackupServer && BackupServer.isConfigured
                     check(
                         backup(
                             context,
@@ -319,18 +309,9 @@ object Backup {
         writeListToJson(appDb.searchKeywordDao.all, "searchHistory.json", backupPath)
         writeListToJson(appDb.ruleSubDao.all, "sourceSub.json", backupPath)
         writeListToJson(appDb.txtTocRuleDao.all, "txtTocRule.json", backupPath)
-        writeListToJson(appDb.httpTTSDao.all, "httpTTS.json", backupPath)
         writeListToJson(appDb.keyboardAssistsDao.all, "keyboardAssists.json", backupPath)
         writeListToJson(appDb.dictRuleDao.all, "dictRule.json", backupPath)
         writeListToJson(appDb.autoTaskRuleDao.all(), "autoTask.json", backupPath)
-        GSON.toJson(appDb.serverDao.all).let { json ->
-            aes.runCatching {
-                encryptBase64(json)
-            }.getOrDefault(json).let {
-                FileUtils.createFileIfNotExist(backupPath + File.separator + "servers.json")
-                    .writeText(it)
-            }
-        }
         if (BackupConfig.cookieContentKey in enabledContentKeys) {
             val encryptedCookies = aes.encryptBase64(GSON.toJson(appDb.cookieDao.all))
             FileUtils.createFileIfNotExist(
@@ -373,26 +354,16 @@ object Backup {
         writePreferenceSnapshot(appCtx, backupPath, "config") {
             putInt("readRecordSort", LocalConfig.getInt("readRecordSort", 0))
             preferenceSnapshot.forEach { (key, value) ->
-                if (BackupConfig.keyIsNotIgnore(key) &&
-                    (!lanTransfer || key !in lanTransferIgnoredPrefKeys)
-                ) {
-                    when (key) {
-                        PreferKey.webDavPassword -> {
-                            putString(key, aes.runCatching {
-                                encryptBase64(value.toString())
-                            }.getOrDefault(value.toString()))
-                        }
-
-                        else -> when (value) {
-                            is Int -> putInt(key, value)
-                            is Boolean -> putBoolean(key, value)
-                            is Long -> putLong(key, value)
-                            is Float -> putFloat(key, value)
-                            is String -> putString(key, value)
-                            is Set<*> -> {
-                                @Suppress("UNCHECKED_CAST")
-                                putStringSet(key, value as Set<String>)
-                            }
+                if (BackupConfig.keyIsNotIgnore(key)) {
+                    when (value) {
+                        is Int -> putInt(key, value)
+                        is Boolean -> putBoolean(key, value)
+                        is Long -> putLong(key, value)
+                        is Float -> putFloat(key, value)
+                        is String -> putString(key, value)
+                        is Set<*> -> {
+                            @Suppress("UNCHECKED_CAST")
+                            putStringSet(key, value as Set<String>)
                         }
                     }
                 }
@@ -429,7 +400,7 @@ object Backup {
             }
         }
         if (lanTransfer) {
-            paths.removeAll(listOf("servers.json", DirectLinkUpload.ruleFileName))
+            paths.remove(DirectLinkUpload.ruleFileName)
         }
         for (i in 0 until paths.size) {
             paths[i] = backupPath + File.separator + paths[i]

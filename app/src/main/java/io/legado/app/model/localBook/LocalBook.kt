@@ -17,8 +17,6 @@ import io.legado.app.exception.EmptyFileException
 import io.legado.app.exception.NoBooksDirException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.exception.TocEmptyException
-import io.legado.app.help.AppWebDav
-import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.addType
@@ -26,7 +24,6 @@ import io.legado.app.help.book.archiveName
 import io.legado.app.help.book.cacheLocalUri
 import io.legado.app.help.book.getArchiveUri
 import io.legado.app.help.book.getLocalUri
-import io.legado.app.help.book.getRemoteUrl
 import io.legado.app.help.book.isArchive
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.isLocal
@@ -36,10 +33,7 @@ import io.legado.app.help.book.isUmd
 import io.legado.app.help.book.removeLocalUriCache
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.webdav.WebDav
-import io.legado.app.lib.webdav.WebDavException
 import io.legado.app.model.analyzeRule.AnalyzeUrl
-import io.legado.app.model.remote.RemoteBook
 import io.legado.app.utils.ArchiveUtils
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.FileUtils
@@ -54,7 +48,6 @@ import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.isDataUrl
 import io.legado.app.utils.printOnDebug
-import kotlinx.coroutines.runBlocking
 import org.apache.commons.text.StringEscapeUtils
 import splitties.init.appCtx
 import java.io.ByteArrayInputStream
@@ -82,11 +75,6 @@ internal fun isMissingLocalBookFile(
         !localFileExists
     }
 }
-
-internal fun findExactRemoteBook(
-    remoteBooks: List<RemoteBook>,
-    fileName: String,
-): RemoteBook? = remoteBooks.firstOrNull { !it.isDir && it.filename == fileName }
 
 internal fun resolveLocalBookOutputFile(root: File, relativePath: String): File {
     val canonicalRoot = root.canonicalFile
@@ -139,9 +127,6 @@ object LocalBook {
         val localArchiveUri = book.getArchiveUri()
         if (localArchiveUri != null) {
             restoreArchiveBookFile(book, localArchiveUri)
-            return getBookInputStream(book)
-        }
-        if (downloadRemoteBook(book)) {
             return getBookInputStream(book)
         }
         throw FileNotFoundException("${uri.path} 文件不存在").apply {
@@ -421,7 +406,6 @@ object LocalBook {
         } else {
             books.add(importFile(uri))
         }
-        autoUploadToWebDav(books)
         return books
     }
 
@@ -450,38 +434,7 @@ object LocalBook {
             throw firstError
                 ?: NoStackTraceException("ImportFiles Error:\nAll input files occur error")
         }
-        autoUploadToWebDav(importedBooks)
         return importedUris to importedBooks
-    }
-
-    /**
-     * 导入完成后自动把书籍文件补传到 WebDAV 的 books 目录。
-     *
-     * 官方只提供「书详情 → ⁝ → 上传 WebDav」这个**手动**入口，而「备份」只打包
-     * bookshelf.json 等 16 个 json/xml 元数据、**完全不含书文件本身**。
-     * 结果是 A 机新加的书，B 机通过备份同步后只有书架条目没有文件，
-     * 打开时只能提示「选择文件」。
-     *
-     * 这里在本地导入成功后自动补传一次。约束：
-     * - 受「导入后自动上传本地书」开关控制（AppConfig.webDavBookAutoUpload），**默认关闭**
-     * - 未配置 WebDAV 时直接跳过（defaultBookWebDav 为 null）
-     * - 只处理本地书（isLocal 对 localTag 与 webDavTag 都返回 true，
-     *   所以 upload 把 origin 改成 webDavTag 之后依然认作本地书，阅读不受影响）
-     * - 任何失败只记日志，绝不向上抛，不能影响导入本身
-     */
-    private fun autoUploadToWebDav(books: List<Book>) {
-        if (books.isEmpty()) return
-        if (!AppConfig.webDavBookAutoUpload) return
-        val bookWebDav = AppWebDav.defaultBookWebDav ?: return
-        Coroutine.async {
-            books.forEach { book ->
-                if (book.isLocal) {
-                    bookWebDav.upload(book)
-                }
-            }
-        }.onError {
-            AppLog.put("自动上传书籍到 WebDav 失败\n${it.localizedMessage}", it)
-        }
     }
 
     /**
@@ -640,57 +593,6 @@ object LocalBook {
             if (onLineBook.intro.isNullOrBlank()) localBook.intro else onLineBook.intro
         localBook.save()
         return localBook
-    }
-
-    // 下载 book 对应的远程文件并绑定本地路径
-    internal fun downloadRemoteBook(localBook: Book): Boolean {
-        val webDavUrl = localBook.getRemoteUrl()?.takeIf(String::isNotBlank)
-        if (webDavUrl == null && !AppConfig.webDavBookAutoRestore) return false
-        val defaultBookWebDav = if (webDavUrl == null) {
-            AppWebDav.defaultBookWebDav ?: return false
-        } else null
-        try {
-            AppConfig.defaultBookTreeUri
-                ?: throw NoBooksDirException()
-            val webdav = webDavUrl?.let { url ->
-                // 兼容旧版链接
-                kotlin.runCatching {
-                    WebDav.fromPath(url)
-                }.getOrElse {
-                    AppWebDav.authorization?.let { WebDav(url, it) }
-                        ?: throw WebDavException("Unexpected defaultBookWebDav")
-                }
-            } ?: defaultBookWebDav?.let { bookWebDav ->
-                val fileName = if (localBook.isArchive) {
-                    localBook.archiveName
-                } else {
-                    localBook.originName
-                }
-                val remoteBook = runBlocking {
-                    bookWebDav.getRemoteBookList(bookWebDav.rootBookUrl)
-                }.let { findExactRemoteBook(it, fileName) } ?: return false
-                WebDav(remoteBook.path, bookWebDav.authorization)
-            } ?: return false
-            val inputStream = runBlocking {
-                webdav.downloadInputStream()
-            }
-            inputStream.use {
-                if (localBook.isArchive) {
-                    val archiveUri = saveBookFile(it, localBook.archiveName)
-                    restoreArchiveBookFile(localBook, archiveUri)
-                } else {
-                    val fileUri = saveBookFile(it, localBook.originName)
-                    withParserCacheInvalidated(localBook) {
-                        localBook.cacheLocalUri(fileUri)
-                    }
-                }
-            }
-            return true
-        } catch (e: Exception) {
-            e.printOnDebug()
-            AppLog.put("自动下载webDav书籍失败", e)
-            return false
-        }
     }
 
 }

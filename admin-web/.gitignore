@@ -8,6 +8,8 @@ lerna-debug.log*
 
 node_modules
 dist
+legado
+/legado
 /dist
 dist-ssr
 dist.zip

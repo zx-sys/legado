@@ -307,7 +307,7 @@ class SharedFileImportTest {
             BackupConfig.sourceContentKey, BackupConfig.settingContentKey)
             .forEach { BackupConfig.ignoreConfig[it] = false }
         val output = File(directory, "backup").apply { mkdirs() }
-        Backup.backupLocked(context, output.path, uploadWebDav = false)
+        Backup.backupLocked(context, output.path, uploadServer = false)
         val archive = output.listFiles()!!.single { it.extension == "zip" }
         ZipFile(archive).use { zip ->
             listOf("bookshelf.json", "bookSource.json", "highlightRule.json", "config.xml")

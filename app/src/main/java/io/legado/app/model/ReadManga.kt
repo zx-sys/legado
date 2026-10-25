@@ -10,7 +10,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.ReadRecord
 import io.legado.app.data.entities.updateSnapshot
 import io.legado.app.data.entities.saveWithCover
-import io.legado.app.help.AppWebDav
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.help.ConcurrentRateLimiter
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
@@ -512,52 +512,11 @@ object ReadManga : CoroutineScope by MainScope() {
         }
     }
 
-    fun uploadProgress(successAction: (() -> Unit)? = null) {
-        book?.let {
-            launch(IO) {
-                AppWebDav.uploadBookProgress(it) {
-                    successAction?.invoke()
-                }
-                ensureActive()
-                it.update()
-            }
-        }
-    }
-
-    /**
-     * 同步阅读进度
-     * 如果当前进度快于服务器进度或者没有进度进行上传，如果慢与服务器进度则执行传入动作
-     */
-    fun syncProgress(
-        newProgressAction: ((progress: BookProgress) -> Unit)? = null,
-        uploadSuccessAction: (() -> Unit)? = null,
-        syncSuccessAction: (() -> Unit)? = null,
-    ) {
-        if (!AppConfig.syncBookProgress) return
+    fun uploadProgress() {
         val book = book ?: return
-        Coroutine.async {
-            AppWebDav.getBookProgress(book)
-        }.onError {
-            AppLog.put("拉取阅读进度失败", it)
-        }.onSuccess { progress ->
-            if (progress == null || progress.durChapterIndex < book.durChapterIndex ||
-                (progress.durChapterIndex == book.durChapterIndex
-                        && progress.durChapterPos < book.durChapterPos)
-            ) {
-                // 服务器没有进度或者进度比服务器快，上传现有进度
-                Coroutine.async {
-                    AppWebDav.uploadBookProgress(BookProgress(book), uploadSuccessAction)
-                    book.update()
-                }
-            } else if (progress.durChapterIndex > book.durChapterIndex ||
-                progress.durChapterPos > book.durChapterPos
-            ) {
-                // 进度比服务器慢，执行传入动作
-                newProgressAction?.invoke(progress)
-            } else {
-                syncSuccessAction?.invoke()
-            }
-        }
+        SyncManager.enqueueProgress(book, book.durChapterIndex, book.durChapterPos, book.durChapterTitle)
+        SyncManager.flushNow()
+        launch(IO) { book.update() }
     }
 
     fun setProgress(progress: BookProgress) {
@@ -660,7 +619,6 @@ object ReadManga : CoroutineScope by MainScope() {
     interface Callback {
         fun upContent()
         fun loadFail(msg: String, retry: Boolean = true)
-        fun sureNewProgress(progress: BookProgress)
         fun showLoading()
         fun startLoad()
     }

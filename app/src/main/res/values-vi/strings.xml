@@ -11,8 +11,6 @@
     <string name="menu_backup">Sao lưu</string>
     <string name="menu_restore">Khôi phục</string>
     <string name="menu_import_old">Nhập dữ liệu Legado cũ</string>
-    <string name="webdav_cache_backup">Sao lưu sách đệm ngoại tuyến</string>
-    <string name="webdav_cache_backup_s">Xuất ra bộ nhớ cục bộ và sao lưu vào thư mục exports trong thư mục Legado</string>
     <string name="backup_path">Đường dẫn sao lưu</string>
     <string name="select_backup_path">Vui lòng chọn đường dẫn sao lưu.</string>
     <string name="menu_import_old_version">Nhập dữ liệu phiên bản cũ</string>
@@ -107,8 +105,6 @@
     <string name="pt_auto_download">Tự động tải xuống</string>
     <string name="ps_auto_download">Tự động tải các chương mới nhất khi cập nhật sách</string>
     <string name="backup_restore">Sao lưu và khôi phục</string>
-    <string name="web_dav_set">Cài đặt WebDav</string>
-    <string name="web_dav_set_import_old">Cài đặt WebDav/Nhập dữ liệu cũ</string>
     <string name="backup">Sao lưu</string>
     <string name="restore">Khôi phục</string>
     <string name="backup_permission">Sao lưu cần quyền truy cập bộ nhớ</string>
@@ -605,12 +601,6 @@
     <string name="load_toc">Tải chương</string>
     <string name="load_info">Tải chi tiết sách</string>
     <string name="tts">TTS</string>
-    <string name="web_dav_pw">Mật khẩu WebDav</string>
-    <string name="web_dav_pw_s">Nhập mật khẩu WebDav của bạn</string>
-    <string name="web_dav_url_s">Nhập địa chỉ máy chủ của bạn</string>
-    <string name="web_dav_url">Địa chỉ máy chủ WebDav</string>
-    <string name="web_dav_account">Tài khoản WebDav</string>
-    <string name="web_dav_account_s">Nhập tài khoản WebDav của bạn</string>
     <string name="rss_source">Nguồn RSS</string>
     <string name="rss_source_edit">Sửa nguồn RSS</string>
     <string name="screen">Bộ lọc</string>
@@ -643,7 +633,6 @@
     <string name="auto_dark_mode">Tự động chuyển chế độ tối</string>
     <string name="auto_dark_mode_s">Theo chế độ tối của hệ thống</string>
     <string name="go_back">Quay lại</string>
-    <string name="tone_colour">Âm sắc đọc trực tuyến</string>
     <string name="select_count">(%1$d/%2$d)</string>
     <string name="show_rss">Hiển thị nguồn cấp RSS</string>
     <string name="service_stop">Dịch vụ đã dừng</string>
@@ -740,8 +729,7 @@
     <string name="text_bottom_justify">Văn bản căn dưới</string>
     <string name="auto_page_speed">Tốc độ tự động cuộn</string>
     <string name="sort_by_url">Sắp xếp theo URL</string>
-    <string name="backup_summary">Sao lưu cục bộ và WebDav đồng thời</string>
-    <string name="restore_summary">Khôi phục từ WebDAV trước, nhấn giữ để khôi phục từ bản sao lưu cục bộ</string>
+    <string name="restore_summary">Khôi phục từ bản sao lưu máy chủ trước; nhấn giữ để khôi phục từ zip cục bộ</string>
     <string name="import_old_summary">Chọn một thư mục sao lưu cũ</string>
     <string name="enabled">Đã bật</string>
     <string name="disabled">Đã tắt</string>
@@ -823,14 +811,7 @@
     <string name="header_footer">Đầu trang &amp; Chân trang</string>
     <string name="rule_subscription">Đăng ký quy tắc</string>
     <string name="rule_sub_empty_msg">Thêm địa chỉ nhập quy tắc do các quản trị viên cung cấp\nNhấn để nhập quy tắc sau khi thêm</string>
-    <string name="get_book_progress">Kéo tiến độ từ đám mây</string>
-    <string name="cover_book_progress">Ghi đè tiến độ trên đám mây</string>
-    <string name="current_progress_exceeds_cloud">Tiến độ hiện tại vượt quá tiến độ trên đám mây. Bạn có muốn đồng bộ không?</string>
-    <string name="cloud_progress_exceeds_current">Tiến độ trên đám mây vượt quá tiến độ hiện tại. Bạn có muốn đồng bộ không?</string>
     <string name="sync_book_progress_t">Đồng bộ tiến độ đọc</string>
-    <string name="sync_book_progress_s">Đồng bộ tiến độ đọc khi vào/ra giao diện đọc</string>
-    <string name="sync_book_progress_plus_t">Tăng cường đồng bộ</string>
-    <string name="sync_book_progress_plus_s">Đồng bộ lại tiến trình trên đám mây khi quay lại trang (tắt màn hình, trở lại từ nền, v.v.) hoặc khi mạng khả dụng. Sẽ yêu cầu xác nhận trước khi đồng bộ tiến trình mới.</string>
     <string name="sync_book_progress_success">Đồng bộ tiến độ thành công</string>
     <string name="create_bookmark_error">Không thể tạo dấu trang</string>
     <string name="single_url">URL đơn</string>
@@ -848,7 +829,6 @@
     <string name="copy_toc_url">Sao chép URL chương</string>
     <string name="export_folder">Thư mục xuất</string>
     <string name="export_charset">Mã hóa văn bản xuất</string>
-    <string name="export_to_web_dav">Xuất sang WebDav</string>
     <string name="reverse_content">Đảo ngược nội dung</string>
     <string name="debug">Gỡ lỗi</string>
     <string name="crash_log">Nhật ký sự cố</string>
@@ -1011,12 +991,9 @@
     <string name="auto_save_cookie">CookieJar</string>
     <string name="cookie">Xóa cookie</string>
     <string name="download_and_import_file">Nhập tệp sách trực tuyến</string>
-    <string name="upload_book_success">Tải lên thành công</string>
     <string name="upload_book_fail">Tải lên thất bại</string>
     <string name="download_book_success">Tải xuống thành công</string>
     <string name="download_book_fail">Tải xuống thất bại</string>
-    <string name="upload_to_remote">Tải lên</string>
-    <string name="add_remote_book">Sách từ xa</string>
     <string name="bitmap_cache_size_summary">Kích thước bộ đệm tối đa hiện tại %1$s MB</string>
     <string name="bitmap_cache_size">Kích thước bộ đệm bitmap</string>
     <string name="image_retain_number_summary">Giữ lại số chương đã đọc %s</string>
@@ -1025,7 +1002,6 @@
     <string name="error_decode_bitmap">Giải mã bitmap thất bại</string>
     <string name="error_image_url_empty">URL hình ảnh trống, kiểm tra quy tắc thay thế</string>
     <string name="variable_comment">Mô tả biến (variableComment)</string>
-    <string name="remote_book">Sách từ xa</string>
     <string name="reading_time_sort">Sắp xếp theo thời lượng đọc</string>
     <string name="last_read_time_sort">Sắp xếp theo thời gian đọc</string>
     <string name="reading_time_tag">Thời lượng đọc:</string>
@@ -1071,7 +1047,6 @@
     <string name="toggle_search_scope">Chuyển đổi</string>
     <string name="sure_clear_search_history">Bạn có chắc chắn muốn xóa tất cả lịch sử tìm kiếm không</string>
     <string name="no_anim_scroll_page">Vô hiệu hóa hoạt ảnh nhấp chuột cuộn</string>
-    <string name="webdav_device_name">Tên thiết bị</string>
     <string name="web_service_wake_lock">Khóa đánh thức dịch vụ web</string>
     <string name="web_service_wake_lock_summary">Khóa đánh thức được bật khi dịch vụ web được bật và một số điện thoại sẽ bị tắt khi khóa đánh thức được bật.</string>
     <string name="read_aloud_wake_lock">Khóa đánh thức dịch vụ đọc thành tiếng</string>
@@ -1089,7 +1064,6 @@
     <string name="same_title_removed">Xóa tiêu đề trùng lặp</string>
     <string name="update_book_fail">Cập nhật thất bại</string>
     <string name="notification_permission_rationale">Đọc cần gửi thông báo để hiển thị điều khiển đọc và tiến trình tải xuống</string>
-    <string name="webdav_after_local_restore_confirm">Nguồn sách webDav mới hơn nguồn cục bộ, có khôi phục không</string>
     <string name="c_whitelist">Danh sách trắng(contentWhitelist)</string>
     <string name="c_blacklist">Danh sách đen(contentBlacklist)</string>
     <string name="confirm">Xác nhận</string>
@@ -1106,7 +1080,6 @@
     <string name="import_dict_rule">Nhập quy tắc từ điển</string>
     <string name="keep_group">Giữ nhóm</string>
     <string name="server_config">Cấu hình máy chủ</string>
-    <string name="sure_upload">URL webDav từ xa đã tồn tại, tiếp tục?</string>
     <string name="unsupport_archivefile_entry">Không thể tìm thấy các tệp được hỗ trợ trong kho lưu trữ</string>
     <string name="no_books_dir">Không có vị trí lưu sách nào được đặt!</string>
     <string name="delete_alert">Xóa cảnh báo</string>
@@ -1126,7 +1099,6 @@
     <string name="set_local_password_summary">Mật khẩu cục bộ được sử dụng để mã hóa và giải mã thông tin nhạy cảm của bản sao lưu, nếu cần đồng bộ hóa giữa các thiết bị khác nhau, mật khẩu cục bộ phải nhất quán.</string>
     <string name="only_latest_backup_t">Chỉ giữ bản sao lưu mới nhất</string>
     <string name="only_latest_backup_s">Sao lưu cục bộ chỉ giữ tệp sao lưu mới nhất</string>
-    <string name="webdav_application_authorization_error">Không thể ủy quyền ứng dụng WebDav</string>
     <string name="load_word_count">Tải số từ</string>
     <string name="replace_exclude_scope">Phạm vi loại trừ, tên sách tùy chọn hoặc URL nguồn sách</string>
     <string name="format_js_rule">Quy tắc định dạng (formatJs)</string>

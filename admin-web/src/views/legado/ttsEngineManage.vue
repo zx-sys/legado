@@ -52,7 +52,6 @@
             <el-form-item label="类型">
               <el-select v-model="form.engine_type" style="width:100%">
                 <el-option label="sherpa-onnx" value="sherpa_onnx" />
-                <el-option label="HTTP TTS" value="http" />
                 <el-option label="系统 TTS" value="system" />
                 <el-option label="其他" value="other" />
               </el-select>

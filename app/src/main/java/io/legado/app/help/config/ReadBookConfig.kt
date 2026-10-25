@@ -35,6 +35,7 @@ import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
 import io.legado.app.utils.resizeAndRecycle
+import io.legado.app.help.sync.SyncManager
 import splitties.init.appCtx
 import java.io.File
 import androidx.core.graphics.drawable.toDrawable
@@ -309,6 +310,10 @@ object ReadBookConfig {
     fun save() {
         Coroutine.async {
             saveNow()
+            runCatching {
+                SyncManager.enqueueConfig("read_config", File(configFilePath).readText())
+                SyncManager.enqueueConfig("share_read_config", File(shareConfigFilePath).readText())
+            }.onFailure { it.printOnDebug() }
         }
     }
 

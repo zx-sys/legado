@@ -20,6 +20,8 @@ import io.legado.app.constant.PageAnim
 import io.legado.app.data.entities.BookProgress
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.sync.ServerSync
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
@@ -828,10 +830,16 @@ class ReadView(context: Context, attrs: AttributeSet) :
             9 -> callBack.changeReplaceRuleState()
             10 -> callBack.openChapterList()
             11 -> callBack.openSearchActivity(null)
-            12 -> ReadBook.syncProgress(
-                { progress -> callBack.sureNewProgress(progress) },
-                { context.longToastOnUi(context.getString(R.string.upload_book_success)) },
-                { context.longToastOnUi(context.getString(R.string.sync_book_progress_success)) })
+            12 -> {
+                if (ServerSync.isConfigured) {
+                    ReadBook.uploadProgress()
+                    SyncManager.pullAsync {
+                        context.longToastOnUi(context.getString(R.string.sync_book_progress_success))
+                    }
+                } else {
+                    context.longToastOnUi(context.getString(R.string.backup_server_not_configured))
+                }
+            }
 
             13 -> {
                 if (BaseReadAloudService.isPlay()) {
@@ -1252,6 +1260,5 @@ class ReadView(context: Context, attrs: AttributeSet) :
         fun setReplacePreview(enabled: Boolean)
         fun openSearchActivity(searchWord: String?)
         fun upSystemUiVisibility()
-        fun sureNewProgress(progress: BookProgress)
     }
 }

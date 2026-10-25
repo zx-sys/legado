@@ -92,8 +92,6 @@ java.refreshBookInfo()
 java.refreshBookToc()
 //刷新书籍正文内容
 java.refreshContent()
-//清除tts源的缓存，仅限tts源的登录界面
-java.clearTtsCache()
 //刷新发现，仅限发现按钮
 java.refreshExplore()
 ```
@@ -121,7 +119,7 @@ java.showBrowser(url, html, null, JSON.stringify({
 initUrl() //重新解析url,可以用于登录检测js登录后重新解析url重新访问
 getHeaderMap().putAll(source.getHeaderMap(true)) //重新设置登录头
 getStrResponse( jsStr: String? = null, sourceRegex: String? = null) //返回访问结果,文本类型,书源内部重新登录后可调用此方法重新返回结果
-getResponse(): Response //返回访问结果,网络朗读引擎采用的是这个,调用登录后在调用这方法可以重新访问,参考阿里云登录检测
+getResponse(): Response //返回访问结果,调用登录后可重新访问
 ```
 
 ### [AnalyzeRule](https://github.com/LegadoTeam/legado/blob/master/app/src/main/java/io/legado/app/model/analyzeRule/AnalyzeRule.kt) 部分函数

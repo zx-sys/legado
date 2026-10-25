@@ -60,7 +60,7 @@ ALLOW_FRONTEND = True #是否关闭前端API访问
 LOGIN_ERROR_RETRY_TIMES = 5 #登录错误次数限制，0表示不限制
 LOGIN_ERROR_RETRY_TIMEOUT = 60 #登录错误次数过期时间，单位秒
 FRONTEND_API_LIST = ['/api/app/','/api/xcx/','/api/h5/']#微服务前端接口前缀
-DOMAIN_HOST = "http://192.168.110.245:8000"#控制图片上传后保存所使用到的url前缀
+DOMAIN_HOST = "http://127.0.0.1:9666"#控制图片上传后保存所使用到的url前缀
 
 #自定义接口权限
 CUSTOM_PERMISSION_CAHCE = True #是否启用权限缓存，增强性能

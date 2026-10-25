@@ -1,7 +1,6 @@
 package io.legado.app
 
 import io.legado.app.data.entities.Book
-import io.legado.app.service.buildHttpTtsCacheFileName
 import io.legado.app.ui.book.info.normalizeWebFileName
 import io.legado.app.ui.widget.image.coverBitmapCacheKey
 import io.legado.app.ui.widget.image.normalizeCoverText
@@ -199,55 +198,6 @@ class RuntimeMediaStabilityTest {
         assertTrue(upCover.contains("BookCover.load(this, path, sourceOrigin = sourceOrigin)"))
         assertTrue(upCover.contains("BookCover.loadBlur(this, path, sourceOrigin = sourceOrigin)"))
         assertFalse(upCover.contains("AudioPlay.bookSource?.bookSourceUrl"))
-    }
-
-    @Test
-    fun httpTtsCacheKeyTracksSessionInputs() {
-        val base = buildHttpTtsCacheFileName(
-            "chapter",
-            "https://tts.example",
-            10,
-            "voice=a",
-            "Authorization: token-a",
-            "content",
-        )
-        assertEquals(
-            base,
-            buildHttpTtsCacheFileName(
-                "chapter",
-                "https://tts.example",
-                10,
-                "voice=a",
-                "Authorization: token-a",
-                "content",
-            )
-        )
-        assertNotEquals(
-            base,
-            buildHttpTtsCacheFileName(
-                "chapter",
-                "https://tts.example",
-                10,
-                "voice=b",
-                "Authorization: token-a",
-                "content",
-            )
-        )
-        assertNotEquals(
-            base,
-            buildHttpTtsCacheFileName(
-                "chapter",
-                "https://tts.example",
-                10,
-                "voice=a",
-                "Authorization: token-b",
-                "content",
-            )
-        )
-        assertNotEquals(
-            buildHttpTtsCacheFileName("chapter", "url", 10, "a", "b-|-c", "content"),
-            buildHttpTtsCacheFileName("chapter", "url", 10, "a-|-b", "c", "content"),
-        )
     }
 
     @Test

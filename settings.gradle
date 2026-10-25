@@ -39,7 +39,7 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         maven {
-            url = 'file:///D:/apache-maven-3.9.12/repository'
+            url = new File(settingsDir, 'third_party/maven').toURI()
             content {
                 includeModule("org.htmlunit", "htmlunit-core-js")
             }

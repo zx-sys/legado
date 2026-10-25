@@ -5,6 +5,7 @@ package io.legado.app.ui.main
 import android.graphics.Rect
 import android.graphics.drawable.StateListDrawable
 import android.os.Bundle
+import android.text.InputType
 import android.text.format.DateUtils
 import android.view.MenuItem
 import android.view.ViewGroup
@@ -24,12 +25,12 @@ import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.AppConst.appInfo
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityMainBinding
 import io.legado.app.databinding.DialogEditTextBinding
-import io.legado.app.help.AppWebDav
 import io.legado.app.help.storage.BackupServer
 import io.legado.app.help.BottomBarSkinManager
 import io.legado.app.help.SourceSharePassphrase
@@ -39,6 +40,8 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.sync.ServerSync
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.help.update.isIgnoredAppUpdate
 import io.legado.app.lib.dialogs.alert
@@ -49,7 +52,6 @@ import io.legado.app.ui.about.UpdateDialog
 import io.legado.app.ui.autoTask.ImportAutoTaskDialog
 import io.legado.app.ui.association.ImportBookSourceDialog
 import io.legado.app.ui.association.ImportDictRuleDialog
-import io.legado.app.ui.association.ImportHttpTtsDialog
 import io.legado.app.ui.association.ImportReplaceRuleDialog
 import io.legado.app.ui.association.ImportRssSourceDialog
 import io.legado.app.ui.association.ImportTxtTocRuleDialog
@@ -60,6 +62,7 @@ import io.legado.app.ui.main.explore.ExploreFragment
 import io.legado.app.ui.main.my.MyFragment
 import io.legado.app.ui.main.rss.RssFragment
 import io.legado.app.ui.widget.dialog.TextDialog
+import io.legado.app.ui.widget.dialog.WaitDialog
 import io.legado.app.ui.widget.text.BadgeView
 import io.legado.app.utils.clearClip
 import io.legado.app.utils.dpToPx
@@ -68,6 +71,7 @@ import io.legado.app.utils.isCreated
 import io.legado.app.utils.imeHeight
 import io.legado.app.utils.navigationBarHeight
 import io.legado.app.utils.observeEvent
+import io.legado.app.utils.putPrefString
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.showDialogFragment
@@ -77,6 +81,7 @@ import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import splitties.init.appCtx
 import splitties.views.bottomPadding
 import kotlin.coroutines.resume
 import kotlin.time.Duration.Companion.hours
@@ -118,6 +123,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     private var onUpBooksBadgeView: BadgeView? = null
     private var lastPassphraseText: String? = null
     private var pendingPassphraseRead = false
+    private val waitDialog by lazy { WaitDialog(this) }
+    private var syncPollJob: kotlinx.coroutines.Job? = null
     private var passphraseReadGeneration = 0
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
@@ -155,8 +162,11 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             if (!privacyPolicy()) return@launch
             //版本更新
             upVersion()
-            //设置本地密码
-            setLocalPassword()
+            //绑定手机号(恢复备份期间不把旧数据推回服务器)
+            SyncManager.beginStartupQuiet()
+            bindAccountIfNeeded()
+            //启动时先拉云端进度/记录/配置(独立作用域, 恢复备份触发的重建不会打断)
+            SyncManager.pullAsync(applyConfigs = true) { SyncManager.endStartupQuiet() }
             notifyAppCrash()
             //备份同步
             backupSync()
@@ -174,9 +184,6 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     viewModel.upAllBookToc()
                 }
             }
-            binding.viewPagerMain.postDelayed(3000) {
-                viewModel.postLoad()
-            }
         }
     }
 
@@ -188,9 +195,20 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
         ) {
             scheduleSourceSharePassphraseRead(500)
         }
+        if (ServerSync.isConfigured) {
+            syncPollJob?.cancel()
+            syncPollJob = lifecycleScope.launch {
+                while (true) {
+                    kotlinx.coroutines.delay(60_000)
+                    SyncManager.pull(applyConfigs = false)
+                }
+            }
+        }
     }
 
     override fun onPause() {
+        syncPollJob?.cancel()
+        SyncManager.flushNow()
         super.onPause()
         pendingPassphraseRead = false
         passphraseReadGeneration++
@@ -350,30 +368,120 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     /**
-     * 设置本地密码
+     * 首次启动绑定手机号：已有账号自动恢复最新备份，新手机号创建账号并上传初始备份。
+     * 本地密码改为在备份设置里按需设置。
      */
-    private suspend fun setLocalPassword() = suspendCancellableCoroutine sc@{ block ->
-        if (LocalConfig.password != null) {
-            block.resume(null)
-            return@sc
+    private suspend fun bindAccountIfNeeded() {
+        if (LocalConfig.accountBindPrompted) return
+        if (BackupServer.phone.isNotEmpty()) {
+            LocalConfig.accountBindPrompted = true
+            return
         }
-        alert(R.string.set_local_password, R.string.set_local_password_summary) {
-            val editTextBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = "password"
+        if (!BackupServer.serverUrlConfigured) return
+        while (true) {
+            val input = promptBindPhone()
+            if (input == null) {
+                LocalConfig.accountBindPrompted = true
+                return
             }
-            customView {
-                editTextBinding.root
+            val phone = normalizePhone(input)
+            if (phone == null) {
+                toastOnUi(R.string.bind_account_invalid)
+                continue
             }
-            onDismiss {
-                block.resume(null)
+            appCtx.putPrefString(PreferKey.backupPhone, phone)
+            val error = bindAccount(phone)
+            LocalConfig.accountBindPrompted = true
+            if (error == null) return
+            if (!confirmBindRetry(error)) return
+        }
+    }
+
+    private suspend fun promptBindPhone(): String? = suspendCancellableCoroutine { cont ->
+        var finished = false
+        fun finish(value: String?) {
+            if (finished) return
+            finished = true
+            cont.resume(value)
+        }
+        val editTextBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
+            editView.hint = getString(R.string.bind_account_phone_hint)
+            editView.inputType = InputType.TYPE_CLASS_PHONE
+            editView.setText(BackupServer.phone)
+        }
+        alert(R.string.bind_account_title, R.string.bind_account_summary) {
+            customView { editTextBinding.root }
+            okButton { finish(editTextBinding.editView.text?.toString()?.trim()) }
+            cancelButton { finish(null) }
+            onDismiss { finish(null) }
+        }
+    }
+
+    private suspend fun confirmBindRetry(message: String): Boolean =
+        suspendCancellableCoroutine { cont ->
+            var finished = false
+            fun finish(value: Boolean) {
+                if (finished) return
+                finished = true
+                cont.resume(value)
             }
-            okButton {
-                LocalConfig.password = editTextBinding.editView.text.toString()
-            }
-            cancelButton {
-                LocalConfig.password = ""
+            alert(getString(R.string.bind_account_failed), message) {
+                okButton { finish(true) }
+                cancelButton { finish(false) }
+                onDismiss { finish(false) }
             }
         }
+
+    private fun normalizePhone(raw: String): String? {
+        val phone = raw.replace(Regex("[\\s\\-()]"), "")
+        return phone.takeIf { Regex("^\\+?\\d{6,20}$").matches(it) }
+    }
+
+    /** @return null 表示绑定完成，否则为可展示的错误信息 */
+    private suspend fun bindAccount(phone: String): String? {
+        val account = runCatching { BackupServer.checkAccount(phone) }
+            .getOrElse { return "${getString(R.string.bind_account_check_failed)}\n${it.localizedMessage}" }
+        if (account.exists) {
+            val latest = account.latestBackup
+            if (latest == null) {
+                toastOnUi(R.string.bind_account_bound)
+                return null
+            }
+            waitDialog.setText(R.string.bind_account_restoring).show()
+            val result = withContext(IO) { runCatching { BackupServer.restore(latest) } }
+            waitDialog.dismiss()
+            result.exceptionOrNull()?.let {
+                return "${getString(R.string.bind_account_restore_failed)}\n${it.localizedMessage}"
+            }
+            LocalConfig.lastBackup = maxOf(LocalConfig.lastBackup, latest.createdMillis)
+            return null
+        }
+        val bound = runCatching { BackupServer.bindAccount(phone) }
+            .getOrElse { return "${getString(R.string.bind_account_create_failed)}\n${it.localizedMessage}" }
+        if (!bound.created) {
+            toastOnUi(R.string.bind_account_bound)
+            return null
+        }
+        waitDialog.setText(R.string.bind_account_uploading).show()
+        val upload = withContext(IO) {
+            runCatching {
+                Backup.backupLocked(
+                    appCtx,
+                    AppConfig.backupPath,
+                    uploadServer = true,
+                    trigger = "auto"
+                )
+            }
+        }
+        waitDialog.dismiss()
+        upload.exceptionOrNull()?.let { error ->
+            // 退出时还有自动备份兜底, 不打断绑定
+            AppLog.put("上传初始备份失败\n${error.localizedMessage}", error)
+            toastOnUi(R.string.bind_account_created_backup_later)
+            return null
+        }
+        toastOnUi(R.string.bind_account_created)
+        return null
     }
 
     private fun notifyAppCrash() {
@@ -403,32 +511,13 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                 } ?: return@launch
                 val backupTime = serverBackup.createdMillis
                 if (backupTime - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
-                    alert(R.string.restore, R.string.webdav_after_local_restore_confirm) {
+                    alert(R.string.restore, R.string.backup_after_local_restore_confirm) {
                         cancelButton {
                             LocalConfig.lastBackup = maxOf(LocalConfig.lastBackup, backupTime)
                         }
                         okButton {
                             viewModel.restoreServer(serverBackup, backupTime)
                         }
-                    }
-                }
-                return@launch
-            }
-            val lastBackupFile =
-                withContext(IO) { AppWebDav.lastBackUp().getOrNull() } ?: return@launch
-            if (lastBackupFile.lastModify - LocalConfig.lastBackup > DateUtils.MINUTE_IN_MILLIS) {
-                alert(R.string.restore, R.string.webdav_after_local_restore_confirm) {
-                    cancelButton {
-                        LocalConfig.lastBackup = maxOf(
-                            LocalConfig.lastBackup,
-                            lastBackupFile.lastModify,
-                        )
-                    }
-                    okButton {
-                        viewModel.restoreWebDav(
-                            lastBackupFile.displayName,
-                            lastBackupFile.lastModify,
-                        )
                     }
                 }
             }
@@ -598,9 +687,6 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
 
                         SourceSharePassphrase.Type.TOC_RULE ->
                             showDialogFragment(ImportTxtTocRuleDialog(value.url))
-
-                        SourceSharePassphrase.Type.TTS_RULE ->
-                            showDialogFragment(ImportHttpTtsDialog(value.url))
 
                         SourceSharePassphrase.Type.AUTO_TASK ->
                             showDialogFragment(ImportAutoTaskDialog(value.url))
