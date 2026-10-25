@@ -14,6 +14,7 @@ import io.legado.app.help.book.isOnLineTxt
 import io.legado.app.help.book.matchChapterSource
 import io.legado.app.help.book.planFallbackSourceUrls
 import io.legado.app.help.book.shouldRetryFallback
+import io.legado.app.help.book.shouldShowFallbackMessage
 import io.legado.app.help.book.stripDuplicateChapterTitle
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.source.SuppressSourceNavigation
@@ -125,8 +126,17 @@ object ChapterSourceFallback {
             )
             if (candidates.isEmpty()) return@withLock null
 
-            val foreground = ReadBook.book?.bookUrl == book.bookUrl
-            if (foreground) ReadBook.upMsg(appCtx.getString(R.string.auto_fill_chapter_source_loading))
+            val showLoadingMessage = shouldShowFallbackMessage(
+                currentBookUrl = ReadBook.book?.bookUrl,
+                currentChapterIndex = ReadBook.durChapterIndex,
+                currentTextChapterIndex = ReadBook.curTextChapter?.chapter?.index,
+                currentTextChapterCompleted = ReadBook.curTextChapter?.isCompleted == true,
+                bookUrl = book.bookUrl,
+                chapterIndex = chapter.index,
+            )
+            if (showLoadingMessage) {
+                ReadBook.upMsg(appCtx.getString(R.string.auto_fill_chapter_source_loading))
+            }
             try {
                 withTimeoutOrNull(TOTAL_TIMEOUT_MS) {
                     for (origin in candidates) {
@@ -161,7 +171,7 @@ object ChapterSourceFallback {
                     null
                 }
             } finally {
-                if (foreground) ReadBook.upMsg(null)
+                if (showLoadingMessage) ReadBook.upMsg(null)
             }
         }
     }

@@ -499,6 +499,11 @@ class FastScroller : LinearLayout {
         View.inflate(context, R.layout.view_fastscroller, this)
         clipChildren = false
         orientation = HORIZONTAL
+        val extraTouchWidth =
+            resources.getDimensionPixelSize(R.dimen.fastscroll_scrollbar_extra_touch_width)
+        val edgeInset =
+            resources.getDimensionPixelSize(R.dimen.fastscroll_scrollbar_edge_inset)
+        setPadding(extraTouchWidth, 0, edgeInset, 0)
         mBubbleView = findViewById(R.id.fastscroll_bubble)
         mHandleView = findViewById(R.id.fastscroll_handle)
         mTrackView = findViewById(R.id.fastscroll_track)

@@ -34,6 +34,10 @@
     <dimen name="fastscroll_scrollbar_margin_bottom">8dp</dimen>
     <dimen name="fastscroll_scrollbar_padding_start">8dp</dimen>
     <dimen name="fastscroll_scrollbar_padding_end">8dp</dimen>
+    <!-- 透明触控区：向列表内侧扩展，不改变可视条宽度 -->
+    <dimen name="fastscroll_scrollbar_extra_touch_width">20dp</dimen>
+    <!-- 可视条整体向内缩，避免贴屏幕边缘 -->
+    <dimen name="fastscroll_scrollbar_edge_inset">4dp</dimen>
 
     <dimen name="fixed_height_bottom_padding">8dp</dimen>
 </resources>

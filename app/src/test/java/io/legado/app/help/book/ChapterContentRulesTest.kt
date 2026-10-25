@@ -113,4 +113,102 @@ class ChapterContentRulesTest {
             stripDuplicateChapterTitle("第10章 河西铁骑，冲锋！", "第10章 河西铁骑，冲锋！"),
         )
     }
+
+    @Test
+    fun `fallback message is only shown for the unfinished chapter being read`() {
+        assertTrue(
+            shouldShowFallbackMessage(
+                currentBookUrl = "book",
+                currentChapterIndex = 10,
+                currentTextChapterIndex = null,
+                currentTextChapterCompleted = false,
+                bookUrl = "book",
+                chapterIndex = 10,
+            )
+        )
+        assertTrue(
+            shouldShowFallbackMessage(
+                currentBookUrl = "book",
+                currentChapterIndex = 10,
+                currentTextChapterIndex = 10,
+                currentTextChapterCompleted = false,
+                bookUrl = "book",
+                chapterIndex = 10,
+            )
+        )
+    }
+
+    @Test
+    fun `fallback message never interrupts a loaded chapter or another book`() {
+        assertFalse(
+            shouldShowFallbackMessage(
+                currentBookUrl = "book",
+                currentChapterIndex = 10,
+                currentTextChapterIndex = 10,
+                currentTextChapterCompleted = true,
+                bookUrl = "book",
+                chapterIndex = 10,
+            )
+        )
+        assertFalse(
+            shouldShowFallbackMessage(
+                currentBookUrl = "book",
+                currentChapterIndex = 10,
+                currentTextChapterIndex = null,
+                currentTextChapterCompleted = false,
+                bookUrl = "book",
+                chapterIndex = 200,
+            )
+        )
+        assertFalse(
+            shouldShowFallbackMessage(
+                currentBookUrl = "other",
+                currentChapterIndex = 10,
+                currentTextChapterIndex = null,
+                currentTextChapterCompleted = false,
+                bookUrl = "book",
+                chapterIndex = 10,
+            )
+        )
+    }
+
+    @Test
+    fun `failure placeholder does not replace a loaded current chapter`() {
+        assertTrue(
+            shouldKeepLoadedChapterOnFailure(
+                chapterIndex = 10,
+                durChapterIndex = 10,
+                currentTextChapterIndex = 10,
+                currentTextChapterCompleted = true,
+            )
+        )
+    }
+
+    @Test
+    fun `failure placeholder still applies when nothing is loaded`() {
+        assertFalse(
+            shouldKeepLoadedChapterOnFailure(
+                chapterIndex = 10,
+                durChapterIndex = 10,
+                currentTextChapterIndex = null,
+                currentTextChapterCompleted = false,
+            )
+        )
+        assertFalse(
+            shouldKeepLoadedChapterOnFailure(
+                chapterIndex = 10,
+                durChapterIndex = 10,
+                currentTextChapterIndex = 10,
+                currentTextChapterCompleted = false,
+            )
+        )
+        assertFalse(
+            shouldKeepLoadedChapterOnFailure(
+                chapterIndex = 11,
+                durChapterIndex = 10,
+                currentTextChapterIndex = 11,
+                currentTextChapterCompleted = true,
+            )
+        )
+    }
 }

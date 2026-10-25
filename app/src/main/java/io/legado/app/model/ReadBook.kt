@@ -28,6 +28,7 @@ import io.legado.app.help.book.ContentSaveToken
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isInvalidChapterContent
+import io.legado.app.help.book.shouldKeepLoadedChapterOnFailure
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isPdf
 import io.legado.app.model.localBook.PdfFile
@@ -1516,6 +1517,16 @@ object ReadBook : CoroutineScope by MainScope() {
         if (canceled || chapter.index !in durChapterIndex - 1..durChapterIndex + 1) {
             return
         }
+        if (content.isContentLoadFailurePlaceholder() &&
+            shouldKeepLoadedChapterOnFailure(
+                chapterIndex = chapter.index,
+                durChapterIndex = durChapterIndex,
+                currentTextChapterIndex = curTextChapter?.chapter?.index,
+                currentTextChapterCompleted = curTextChapter?.isCompleted == true,
+            )
+        ) {
+            return
+        }
         // Restoring visual follow during layout must not create a new speech session.
         val updateReadAloud = BaseReadAloudService.shouldSyncSpeechNavigation()
         val shouldResetPageOffset = resetPageOffset &&
@@ -1649,6 +1660,16 @@ object ReadBook : CoroutineScope by MainScope() {
             if (this.book?.bookUrl != book.bookUrl || !BookHelp.isContentSaveCurrent(contentToken)) return
             removeLoading(chapter.index)
             if (chapter.index !in durChapterIndex - 1..durChapterIndex + 1) return
+        }
+        if (content.isContentLoadFailurePlaceholder() &&
+            shouldKeepLoadedChapterOnFailure(
+                chapterIndex = chapter.index,
+                durChapterIndex = durChapterIndex,
+                currentTextChapterIndex = curTextChapter?.chapter?.index,
+                currentTextChapterCompleted = curTextChapter?.isCompleted == true,
+            )
+        ) {
+            return
         }
         // Restoring visual follow during layout must not create a new speech session.
         val updateReadAloud = BaseReadAloudService.shouldSyncSpeechNavigation()

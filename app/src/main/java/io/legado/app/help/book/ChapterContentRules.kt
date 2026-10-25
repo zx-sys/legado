@@ -122,3 +122,28 @@ internal fun stripDuplicateChapterTitle(content: String, chapterTitle: String): 
         .trimStart { it.isWhitespace() || it == '\u3000' }
     return rest.ifBlank { content }
 }
+
+internal fun shouldShowFallbackMessage(
+    currentBookUrl: String?,
+    currentChapterIndex: Int,
+    currentTextChapterIndex: Int?,
+    currentTextChapterCompleted: Boolean,
+    bookUrl: String,
+    chapterIndex: Int,
+): Boolean {
+    if (currentBookUrl != bookUrl) return false
+    if (currentChapterIndex != chapterIndex) return false
+    if (currentTextChapterIndex == null || currentTextChapterIndex != chapterIndex) return true
+    return !currentTextChapterCompleted
+}
+
+internal fun shouldKeepLoadedChapterOnFailure(
+    chapterIndex: Int,
+    durChapterIndex: Int,
+    currentTextChapterIndex: Int?,
+    currentTextChapterCompleted: Boolean,
+): Boolean {
+    if (chapterIndex != durChapterIndex) return false
+    if (currentTextChapterIndex != chapterIndex) return false
+    return currentTextChapterCompleted
+}
