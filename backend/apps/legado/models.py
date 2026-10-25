@@ -108,15 +108,26 @@ class LegadoBook(BaseModel):
     name = models.CharField(max_length=255, verbose_name="书名")
     author = models.CharField(max_length=255, blank=True, default="", verbose_name="作者")
     book_url = models.CharField(max_length=700, blank=True, default="", verbose_name="书籍URL")
+    toc_url = models.CharField(max_length=700, blank=True, default="", verbose_name="目录URL")
     origin = models.CharField(max_length=1024, blank=True, default="", verbose_name="书源")
     origin_name = models.CharField(max_length=255, blank=True, default="", verbose_name="书源名称")
-    kind = models.CharField(max_length=255, blank=True, default="", verbose_name="分类")
+    kind = models.CharField(max_length=512, blank=True, default="", verbose_name="分类")
+    custom_tag = models.CharField(max_length=512, blank=True, default="", verbose_name="自定义分类")
     group = models.CharField(max_length=255, blank=True, default="", verbose_name="分组")
     cover_url = models.CharField(max_length=1024, blank=True, default="", verbose_name="封面")
+    custom_cover_url = models.CharField(
+        max_length=1024, blank=True, default="", verbose_name="自定义封面"
+    )
     intro = models.TextField(blank=True, default="", verbose_name="简介")
+    custom_intro = models.TextField(blank=True, default="", verbose_name="自定义简介")
+    charset = models.CharField(max_length=64, blank=True, default="", verbose_name="字符集")
+    type = models.IntegerField(default=0, verbose_name="书籍类型")
+    word_count = models.CharField(max_length=64, blank=True, default="", verbose_name="字数")
+    variable = models.TextField(blank=True, default="", verbose_name="书籍变量")
     latest_chapter_title = models.CharField(
         max_length=512, blank=True, default="", verbose_name="最新章节"
     )
+    latest_chapter_time = models.BigIntegerField(default=0, verbose_name="最新章节时间")
     dur_chapter_index = models.IntegerField(default=0, verbose_name="当前章节")
     dur_chapter_pos = models.IntegerField(default=0, verbose_name="章节位置")
     dur_chapter_title = models.CharField(
@@ -131,6 +142,9 @@ class LegadoBook(BaseModel):
     last_chapter_title = models.CharField(
         max_length=512, blank=True, default="", verbose_name="最后阅读章节名"
     )
+    sync_updated_at = models.BigIntegerField(default=0, db_index=True, verbose_name="元数据更新时间")
+    removed = models.BooleanField(default=False, db_index=True, verbose_name="已从书架删除")
+    removed_at = models.BigIntegerField(default=0, verbose_name="删除时间")
 
     class Meta:
         db_table = table_prefix + "legado_book"
@@ -144,12 +158,39 @@ class LegadoBook(BaseModel):
         return self.name
 
 
+class LegadoBookGroup(BaseModel):
+    user = models.ForeignKey(
+        LegadoUser, on_delete=models.CASCADE, related_name="book_groups", verbose_name="用户"
+    )
+    name = models.CharField(max_length=255, verbose_name="分组名称")
+    cover = models.CharField(max_length=1024, blank=True, default="", verbose_name="封面")
+    order = models.IntegerField(default=0, verbose_name="排序")
+    book_sort = models.IntegerField(default=-1, verbose_name="书籍排序")
+    enable_refresh = models.BooleanField(default=True, verbose_name="允许刷新")
+    show = models.BooleanField(default=True, verbose_name="显示")
+    only_update_read = models.BooleanField(default=False, verbose_name="只更新已读")
+    sync_updated_at = models.BigIntegerField(default=0, db_index=True, verbose_name="更新时间")
+    removed = models.BooleanField(default=False, db_index=True, verbose_name="已删除")
+    removed_at = models.BigIntegerField(default=0, verbose_name="删除时间")
+
+    class Meta:
+        db_table = table_prefix + "legado_book_group"
+        verbose_name = "Legado 书架分组"
+        verbose_name_plural = verbose_name
+        unique_together = (("user", "name"),)
+        ordering = ("order", "create_time")
+
+    def __str__(self):
+        return self.name
+
+
 class UserConfig(BaseModel):
     CONFIG_TYPE_CHOICES = (
         ("read_config", "阅读排版"),
         ("share_read_config", "分享排版"),
         ("theme_config", "主题配置"),
         ("app_config", "应用设置"),
+        ("app_settings", "应用设置项"),
         ("video_config", "视频设置"),
         ("book_source_config", "书源选择"),
     )

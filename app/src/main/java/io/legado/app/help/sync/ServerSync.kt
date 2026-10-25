@@ -39,14 +39,62 @@ data class SyncConfig(
     @SerializedName("updatedAt") val updatedAt: Long,
 )
 
+data class SyncBook(
+    @SerializedName("bookUrl") val bookUrl: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("author") val author: String = "",
+    @SerializedName("tocUrl") val tocUrl: String = "",
+    @SerializedName("origin") val origin: String = "",
+    @SerializedName("originName") val originName: String = "",
+    @SerializedName("kind") val kind: String = "",
+    @SerializedName("customTag") val customTag: String = "",
+    @SerializedName("coverUrl") val coverUrl: String = "",
+    @SerializedName("customCoverUrl") val customCoverUrl: String = "",
+    @SerializedName("intro") val intro: String = "",
+    @SerializedName("customIntro") val customIntro: String = "",
+    @SerializedName("charset") val charset: String = "",
+    @SerializedName("type") val type: Int = 0,
+    @SerializedName("groupName") val groupName: String = "",
+    @SerializedName("latestChapterTitle") val latestChapterTitle: String = "",
+    @SerializedName("latestChapterTime") val latestChapterTime: Long = 0,
+    @SerializedName("totalChapterNum") val totalChapterNum: Int = 0,
+    @SerializedName("wordCount") val wordCount: String = "",
+    @SerializedName("variable") val variable: String = "",
+    @SerializedName("removed") val removed: Boolean = false,
+    @SerializedName("updatedAt") val updatedAt: Long = 0L,
+)
+
+data class SyncGroup(
+    @SerializedName("name") val name: String,
+    @SerializedName("cover") val cover: String = "",
+    @SerializedName("order") val order: Int = 0,
+    @SerializedName("bookSort") val bookSort: Int = -1,
+    @SerializedName("enableRefresh") val enableRefresh: Boolean = true,
+    @SerializedName("show") val show: Boolean = true,
+    @SerializedName("onlyUpdateRead") val onlyUpdateRead: Boolean = false,
+    @SerializedName("removed") val removed: Boolean = false,
+    @SerializedName("updatedAt") val updatedAt: Long = 0L,
+)
+
+data class SyncSetting(
+    @SerializedName("key") val key: String,
+    @SerializedName("value") val value: String,
+    @SerializedName("updatedAt") val updatedAt: Long = 0L,
+)
+
 data class SyncPayload(
     @SerializedName("progress") val progress: List<SyncProgress> = emptyList(),
     @SerializedName("records") val records: List<SyncRecord> = emptyList(),
     @SerializedName("configs") val configs: List<SyncConfig> = emptyList(),
+    @SerializedName("books") val books: List<SyncBook> = emptyList(),
+    @SerializedName("groups") val groups: List<SyncGroup> = emptyList(),
+    @SerializedName("settings") val settings: List<SyncSetting> = emptyList(),
+    @SerializedName("device") val device: String = "",
     @SerializedName("serverTime") val serverTime: Long = 0L,
 ) {
     val isEmpty: Boolean
-        get() = progress.isEmpty() && records.isEmpty() && configs.isEmpty()
+        get() = progress.isEmpty() && records.isEmpty() && configs.isEmpty() &&
+                books.isEmpty() && groups.isEmpty() && settings.isEmpty()
 }
 
 object ServerSync {

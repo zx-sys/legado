@@ -20,6 +20,7 @@ import io.legado.app.help.book.isImage
 import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
@@ -476,9 +477,13 @@ data class Book(
         } else {
             appDb.bookDao.insert(this)
         }
+        SyncManager.enqueueBook(this)
     }
 
     fun delete() {
+        if (type and BookType.notShelf == 0) {
+            SyncManager.enqueueBook(this, removed = true)
+        }
         if (ReadBook.book?.bookUrl == bookUrl) {
             ReadBook.book = null
         }

@@ -20,20 +20,15 @@ from utils.middleware import JwtAuthMiddleware
 from channels.routing import ProtocolTypeRouter, URLRouter
 from django.urls import re_path
 
+from apps.legado.ws import LegadoSyncConsumer
 from mysystem.views.wsmessage import NotificationConsumer
 
 websocket_urlpatterns = [
-    re_path(r'^ws/msg/$', NotificationConsumer.as_asgi()),
+    re_path(r'^ws/msg/$', JwtAuthMiddleware(NotificationConsumer.as_asgi())),
+    re_path(r'^ws/legado/sync/$', LegadoSyncConsumer.as_asgi()),
 ]
 
-# application = get_asgi_application()
-
 application = ProtocolTypeRouter({
-  "http": get_asgi_application(),# 也可以不需要此项，普通的HTTP请求不需要我们手动在这里添加，框架会自动加载
-  "websocket": JwtAuthMiddleware(
-        # 多个url合并一起使用，多个子路由列表相加:a+b
-        URLRouter(
-            websocket_urlpatterns
-        )
-    ),
+    "http": get_asgi_application(),
+    "websocket": URLRouter(websocket_urlpatterns),
 })

@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.legado.models import Backup, FontPack, LegadoUser, TtsEngine, UserConfig
-from apps.legado.services import backup_service, sync_service
+from apps.legado.services import backup_service, realtime, sync_service
 
 logger = logging.getLogger(__name__)
 
@@ -352,4 +352,12 @@ class SyncView(NoAuthAPIView):
         user, error = get_user(request)
         if error:
             return error
-        return Response(sync_service.apply_sync(user, request.data or {}))
+        data = request.data or {}
+        result = sync_service.apply_sync(user, data)
+        kinds = [
+            kind
+            for kind in ("books", "groups", "settings", "progress", "records", "configs")
+            if data.get(kind)
+        ]
+        realtime.notify_sync(user.phone, kinds, str(data.get("device") or ""))
+        return Response(result)

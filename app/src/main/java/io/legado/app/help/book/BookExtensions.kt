@@ -10,6 +10,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookSourceType
 import io.legado.app.constant.BookType
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.BaseBook
 import io.legado.app.data.entities.Book
@@ -242,6 +243,7 @@ fun Book.sync(currentBook: Book, toc: List<BookChapter>) {
 
 fun Book.update() {
     appDb.bookDao.updatePreservingCustomCoverUrl(this)
+    SyncManager.enqueueBook(this)
 }
 
 fun Book.savePreservingCustomCoverUrl() {
@@ -250,6 +252,7 @@ fun Book.savePreservingCustomCoverUrl() {
     } else {
         appDb.bookDao.insert(this)
     }
+    SyncManager.enqueueBook(this)
 }
 
 fun Book.primaryStr(): String {

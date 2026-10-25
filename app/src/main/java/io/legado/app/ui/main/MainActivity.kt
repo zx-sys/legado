@@ -42,6 +42,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.sync.ServerSync
 import io.legado.app.help.sync.SyncManager
+import io.legado.app.help.sync.SyncSocket
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.help.update.isIgnoredAppUpdate
 import io.legado.app.lib.dialogs.alert
@@ -166,7 +167,10 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             SyncManager.beginStartupQuiet()
             bindAccountIfNeeded()
             //启动时先拉云端进度/记录/配置(独立作用域, 恢复备份触发的重建不会打断)
-            SyncManager.pullAsync(applyConfigs = true) { SyncManager.endStartupQuiet() }
+            SyncManager.pullAsync(applyConfigs = true) {
+                SyncManager.endStartupQuiet()
+                SyncManager.bootstrap()
+            }
             notifyAppCrash()
             //备份同步
             backupSync()
@@ -196,6 +200,8 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             scheduleSourceSharePassphraseRead(500)
         }
         if (ServerSync.isConfigured) {
+            SyncSocket.ensureStarted()
+            SyncManager.bootstrap()
             syncPollJob?.cancel()
             syncPollJob = lifecycleScope.launch {
                 while (true) {

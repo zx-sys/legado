@@ -6,6 +6,7 @@ import androidx.lifecycle.MutableLiveData
 import io.legado.app.base.BaseViewModel
 import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.data.entities.Book
 import io.legado.app.model.ReadBook
 import io.legado.app.model.ReadManga
@@ -61,6 +62,7 @@ class BookInfoEditViewModel(application: Application) : BaseViewModel(applicatio
                 }
             }
             this@BookInfoEditViewModel.book = book
+            SyncManager.enqueueBook(book)
         }.onSuccess {
             saved.value = true
         }.onError {

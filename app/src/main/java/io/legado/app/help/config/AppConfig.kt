@@ -9,6 +9,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.data.appDb
 import io.legado.app.help.book.ResourceThemeGeneration
 import io.legado.app.help.tts.RemoteTtsEngines
+import io.legado.app.help.sync.SettingsSync
 import io.legado.app.help.tts.TtsSelection
 import io.legado.app.utils.GSON
 import io.legado.app.utils.canvasrecorder.CanvasRecorderFactory
@@ -160,6 +161,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             PreferKey.recordHttpLog -> recordHttpLog =
                 appCtx.getPrefBoolean(PreferKey.recordHttpLog)
 
+        }
+        if (key != null) {
+            SettingsSync.onLocalChanged(key)
         }
     }
 

@@ -9,6 +9,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.TocRule
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.exception.TocEmptyException
 import io.legado.app.help.book.ContentProcessor
@@ -183,6 +184,7 @@ object BookChapterList {
                 )
         currentCoroutineContext().ensureActive()
         upChapterInfo(list, book)
+        SyncManager.enqueueBook(book)
     }
 
     private suspend fun analyzeChapterList(

@@ -128,6 +128,15 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE name = :name and author = :author")
     fun getBook(name: String, author: String): Book?
 
+    @Query("update books set syncTime = :ts where bookUrl = :bookUrl")
+    fun updateSyncTime(bookUrl: String, ts: Long)
+
+    @Query("update books set `group` = `group` - :groupId where `group` & :groupId > 0")
+    fun clearGroup(groupId: Long)
+
+    @Query("select * from books where syncTime = 0 and type & ${BookType.notShelf} = 0")
+    fun getUnsyncedBooks(): List<Book>
+
     @Query("""select distinct bs.* from books, book_sources bs 
         where origin == bookSourceUrl and origin not like '${BookType.localTag}%'""")
     fun getAllUseBookSource(): List<BookSource>

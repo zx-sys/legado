@@ -210,6 +210,22 @@ CHANNEL_LAYERS = {
     },
 }
 
+if not USE_LOCAL_CACHE and locals().get("REDIS_URL"):
+    from urllib.parse import urlparse
+
+    _channel_url = urlparse(str(REDIS_URL).rstrip("/"))
+    _channel_db = _channel_url.path.strip("/") or str(locals().get("REDIS_DB", 0))
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.pubsub.RedisPubSubChannelLayer",
+            "CONFIG": {
+                "hosts": [
+                    f"{_channel_url.scheme}://{_channel_url.netloc}/{_channel_db}"
+                ]
+            },
+        }
+    }
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 

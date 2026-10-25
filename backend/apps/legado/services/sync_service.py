@@ -5,10 +5,16 @@ import logging
 import threading
 import time
 
-from apps.legado.models import LegadoBook, UserConfig
+from apps.legado.models import LegadoBook, LegadoBookGroup, UserConfig
 from apps.legado.services import hot_data
 
 logger = logging.getLogger(__name__)
+
+SETTINGS_CONFIG_TYPE = "app_settings"
+SETTINGS_SOURCE_FILE = "appSettings.json"
+BUILTIN_GROUP_NAMES = {
+    "全部", "本地", "音频", "网络未分组", "本地未分组", "视频", "更新失败",
+}
 
 CONFIG_SOURCE_FILES = {
     "read_config": "readConfig.json",
@@ -20,6 +26,8 @@ CONFIG_SOURCE_FILES = {
 CONFIG_JSON_TYPES = {"read_config", "share_read_config", "theme_config"}
 MAX_CONFIG_BYTES = 2 * 1024 * 1024
 MAX_ITEMS_PER_KIND = 2000
+MAX_SETTINGS = 5000
+MAX_SETTING_BYTES = 64 * 1024
 
 FLUSH_INTERVAL = 30
 
@@ -107,6 +115,105 @@ def normalize_configs(rows) -> list[dict]:
     return result
 
 
+def _bool(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _text(value, limit: int = 255) -> str:
+    return str(value or "").strip()[:limit]
+
+
+def normalize_books(rows) -> list[dict]:
+    result = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        book_url = _text(row.get("bookUrl"), 700)
+        name = _text(row.get("name"))
+        if not book_url or not name:
+            continue
+        result.append(
+            {
+                "bookUrl": book_url,
+                "name": name,
+                "author": _text(row.get("author")),
+                "tocUrl": _text(row.get("tocUrl"), 700),
+                "origin": _text(row.get("origin"), 1024),
+                "originName": _text(row.get("originName")),
+                "kind": _text(row.get("kind"), 512),
+                "customTag": _text(row.get("customTag"), 512),
+                "coverUrl": _text(row.get("coverUrl"), 1024),
+                "customCoverUrl": _text(row.get("customCoverUrl"), 1024),
+                "intro": _text(row.get("intro"), 20000),
+                "customIntro": _text(row.get("customIntro"), 20000),
+                "charset": _text(row.get("charset"), 64),
+                "type": _int(row.get("type")),
+                "groupName": _text(row.get("groupName")),
+                "latestChapterTitle": _text(row.get("latestChapterTitle"), 512),
+                "latestChapterTime": _int(row.get("latestChapterTime")),
+                "totalChapterNum": _int(row.get("totalChapterNum")),
+                "wordCount": _text(row.get("wordCount")),
+                "variable": _text(row.get("variable"), 20000),
+                "removed": _bool(row.get("removed")),
+                "updatedAt": min(_int(row.get("updatedAt")) or now_ms(), now_ms()),
+            }
+        )
+        if len(result) >= MAX_ITEMS_PER_KIND:
+            break
+    return result
+
+
+def normalize_groups(rows) -> list[dict]:
+    result = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        name = _text(row.get("name"))
+        if not name or name in BUILTIN_GROUP_NAMES:
+            continue
+        result.append(
+            {
+                "name": name,
+                "cover": _text(row.get("cover"), 1024),
+                "order": _int(row.get("order")),
+                "bookSort": _int(row.get("bookSort"), -1),
+                "enableRefresh": _bool(row.get("enableRefresh")),
+                "show": _bool(row.get("show")),
+                "onlyUpdateRead": _bool(row.get("onlyUpdateRead")),
+                "removed": _bool(row.get("removed")),
+                "updatedAt": min(_int(row.get("updatedAt")) or now_ms(), now_ms()),
+            }
+        )
+        if len(result) >= MAX_ITEMS_PER_KIND:
+            break
+    return result
+
+
+def normalize_settings(rows) -> list[dict]:
+    result = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        key = _text(row.get("key"), 128)
+        value = row.get("value")
+        if not key or not isinstance(value, str):
+            continue
+        if len(value.encode("utf-8")) > MAX_SETTING_BYTES:
+            continue
+        result.append(
+            {
+                "key": key,
+                "value": value,
+                "updatedAt": min(_int(row.get("updatedAt")) or now_ms(), now_ms()),
+            }
+        )
+        if len(result) >= MAX_SETTINGS:
+            break
+    return result
+
+
 def _record_field(row: dict) -> str:
     return f"{row['bookName']}::{row['author']}"
 
@@ -146,6 +253,80 @@ def _read_redis(phone: str, since: int) -> dict | None:
     except Exception as exc:
         logger.warning("read sync from redis failed: %s", exc)
         return None
+
+
+def _book_payload(book: LegadoBook) -> dict:
+    return {
+        "bookUrl": book.book_url or "",
+        "name": book.name,
+        "author": book.author or "",
+        "tocUrl": book.toc_url or "",
+        "origin": book.origin or "",
+        "originName": book.origin_name or "",
+        "kind": book.kind or "",
+        "customTag": book.custom_tag or "",
+        "coverUrl": book.cover_url or "",
+        "customCoverUrl": book.custom_cover_url or "",
+        "intro": book.intro or "",
+        "customIntro": book.custom_intro or "",
+        "charset": book.charset or "",
+        "type": int(book.type or 0),
+        "groupName": book.group or "",
+        "latestChapterTitle": book.latest_chapter_title or "",
+        "latestChapterTime": int(book.latest_chapter_time or 0),
+        "totalChapterNum": int(book.total_chapter_num or 0),
+        "wordCount": book.word_count or "",
+        "variable": book.variable or "",
+        "removed": bool(book.removed),
+        "updatedAt": int(book.sync_updated_at or 0),
+    }
+
+
+def _group_payload(group: LegadoBookGroup) -> dict:
+    return {
+        "name": group.name,
+        "cover": group.cover or "",
+        "order": int(group.order or 0),
+        "bookSort": int(group.book_sort if group.book_sort is not None else -1),
+        "enableRefresh": bool(group.enable_refresh),
+        "show": bool(group.show),
+        "onlyUpdateRead": bool(group.only_update_read),
+        "removed": bool(group.removed),
+        "updatedAt": int(group.sync_updated_at or 0),
+    }
+
+
+def _settings_map(user) -> dict:
+    config = UserConfig.objects.filter(user=user, config_type=SETTINGS_CONFIG_TYPE).first()
+    if not config or not isinstance(config.raw_json, dict):
+        return {}
+    return config.raw_json
+
+
+def _read_books_groups_settings(user, since: int) -> dict:
+    books = [
+        _book_payload(book)
+        for book in LegadoBook.objects.filter(
+            user=user, sync_updated_at__gt=since
+        ).order_by("sync_updated_at")[:MAX_ITEMS_PER_KIND]
+    ]
+    groups = [
+        _group_payload(group)
+        for group in LegadoBookGroup.objects.filter(
+            user=user, sync_updated_at__gt=since
+        ).order_by("sync_updated_at")[:MAX_ITEMS_PER_KIND]
+    ]
+    settings = []
+    for key, item in _settings_map(user).items():
+        if not isinstance(item, dict):
+            continue
+        ts = int(item.get("updatedAt") or 0)
+        if ts <= since:
+            continue
+        settings.append(
+            {"key": key, "value": str(item.get("value") or ""), "updatedAt": ts}
+        )
+    return {"books": books, "groups": groups, "settings": settings}
 
 
 def _read_mysql(user, since: int) -> dict:
@@ -194,7 +375,9 @@ def _read_mysql(user, since: int) -> dict:
         configs.append(
             {"type": config.config_type, "content": config.content, "updatedAt": ts}
         )
-    return {"progress": progress, "records": records, "configs": configs}
+    payload = {"progress": progress, "records": records, "configs": configs}
+    payload.update(_read_books_groups_settings(user, since))
+    return payload
 
 
 def get_sync(user, since: int = 0) -> dict:
@@ -202,6 +385,8 @@ def get_sync(user, since: int = 0) -> dict:
     payload = _read_redis(user.phone, since)
     if payload is None:
         payload = _read_mysql(user, since)
+    else:
+        payload.update(_read_books_groups_settings(user, since))
     payload["serverTime"] = now_ms()
     return payload
 
@@ -304,15 +489,141 @@ def _merge_mysql(user, payload: dict) -> dict:
     return server_newer
 
 
+def _apply_book_meta(book: LegadoBook, row: dict) -> None:
+    book.book_url = row["bookUrl"] or book.book_url
+    book.toc_url = row["tocUrl"]
+    book.origin = row["origin"]
+    book.origin_name = row["originName"]
+    book.kind = row["kind"]
+    book.custom_tag = row["customTag"]
+    book.group = row["groupName"]
+    book.cover_url = row["coverUrl"]
+    book.custom_cover_url = row["customCoverUrl"]
+    book.intro = row["intro"]
+    book.custom_intro = row["customIntro"]
+    book.charset = row["charset"]
+    book.type = row["type"]
+    book.word_count = row["wordCount"]
+    book.variable = row["variable"]
+    book.latest_chapter_title = row["latestChapterTitle"]
+    book.latest_chapter_time = row["latestChapterTime"]
+    book.total_chapter_num = row["totalChapterNum"]
+
+
+def _merge_books(user, rows: list[dict]) -> list[dict]:
+    newer = []
+    for row in rows:
+        book = LegadoBook.objects.filter(
+            user=user, name=row["name"], author=row["author"]
+        ).first()
+        if book is None and row["bookUrl"]:
+            book = LegadoBook.objects.filter(user=user, book_url=row["bookUrl"]).first()
+        if book is None:
+            book = LegadoBook(user=user, name=row["name"], author=row["author"])
+        current_ts = int(book.sync_updated_at or 0)
+        if current_ts > row["updatedAt"]:
+            newer.append(_book_payload(book))
+            continue
+        if row["removed"]:
+            book.removed = True
+            book.removed_at = row["updatedAt"]
+            book.sync_updated_at = row["updatedAt"]
+            book.save(
+                update_fields=["removed", "removed_at", "sync_updated_at", "update_time"]
+            )
+            continue
+        if book.removed and row["updatedAt"] <= int(book.removed_at or 0):
+            # 旧设备补推不能复活已删除的书
+            newer.append(_book_payload(book))
+            continue
+        _apply_book_meta(book, row)
+        book.removed = False
+        book.removed_at = 0
+        book.sync_updated_at = row["updatedAt"]
+        book.save()
+    return newer
+
+
+def _merge_groups(user, rows: list[dict]) -> list[dict]:
+    newer = []
+    for row in rows:
+        group = LegadoBookGroup.objects.filter(user=user, name=row["name"]).first()
+        if group is None:
+            group = LegadoBookGroup(user=user, name=row["name"])
+        current_ts = int(group.sync_updated_at or 0)
+        if current_ts > row["updatedAt"]:
+            newer.append(_group_payload(group))
+            continue
+        if row["removed"]:
+            group.removed = True
+            group.removed_at = row["updatedAt"]
+            group.sync_updated_at = row["updatedAt"]
+            group.save(
+                update_fields=["removed", "removed_at", "sync_updated_at", "update_time"]
+            )
+            continue
+        if group.removed and row["updatedAt"] <= int(group.removed_at or 0):
+            newer.append(_group_payload(group))
+            continue
+        group.cover = row["cover"]
+        group.order = row["order"]
+        group.book_sort = row["bookSort"]
+        group.enable_refresh = row["enableRefresh"]
+        group.show = row["show"]
+        group.only_update_read = row["onlyUpdateRead"]
+        group.removed = False
+        group.removed_at = 0
+        group.sync_updated_at = row["updatedAt"]
+        group.save()
+    return newer
+
+
+def _merge_settings(user, rows: list[dict]) -> list[dict]:
+    data = _settings_map(user)
+    newer = []
+    changed = False
+    for row in rows:
+        current = data.get(row["key"])
+        current_ts = int(current.get("updatedAt") or 0) if isinstance(current, dict) else 0
+        if current_ts > row["updatedAt"]:
+            newer.append(
+                {
+                    "key": row["key"],
+                    "value": str(current.get("value") or ""),
+                    "updatedAt": current_ts,
+                }
+            )
+            continue
+        data[row["key"]] = {"value": row["value"], "updatedAt": row["updatedAt"]}
+        changed = True
+    if changed:
+        UserConfig.objects.update_or_create(
+            user=user,
+            config_type=SETTINGS_CONFIG_TYPE,
+            defaults={
+                "source_file": SETTINGS_SOURCE_FILE,
+                "content": json.dumps(data, ensure_ascii=False),
+                "raw_json": data,
+            },
+        )
+    return newer
+
+
 def apply_sync(user, payload: dict) -> dict:
     payload = {
         "progress": normalize_progress(payload.get("progress")),
         "records": normalize_records(payload.get("records")),
         "configs": normalize_configs(payload.get("configs")),
+        "books": normalize_books(payload.get("books")),
+        "groups": normalize_groups(payload.get("groups")),
+        "settings": normalize_settings(payload.get("settings")),
     }
     server_newer = _merge_redis(user.phone, payload)
     if server_newer is None:
         server_newer = _merge_mysql(user, payload)
+    server_newer["books"] = _merge_books(user, payload["books"])
+    server_newer["groups"] = _merge_groups(user, payload["groups"])
+    server_newer["settings"] = _merge_settings(user, payload["settings"])
     server_newer["serverTime"] = now_ms()
     return server_newer
 
@@ -336,10 +647,12 @@ def _apply_book_progress(book: LegadoBook, row: dict) -> None:
     book.dur_chapter_pos = row["chapterPos"]
     book.dur_chapter_title = row["chapterTitle"]
     book.dur_chapter_time = row["updatedAt"]
+    if not book.removed:
+        book.sync_updated_at = max(int(book.sync_updated_at or 0), row["updatedAt"])
     book.save(
         update_fields=[
             "book_url", "dur_chapter_index", "dur_chapter_pos",
-            "dur_chapter_title", "dur_chapter_time", "update_time",
+            "dur_chapter_title", "dur_chapter_time", "sync_updated_at", "update_time",
         ]
     )
 
@@ -350,10 +663,12 @@ def _apply_book_record(book: LegadoBook, row: dict) -> None:
     book.last_chapter_index = row["lastChapterIndex"]
     book.last_chapter_pos = row["lastChapterPos"]
     book.last_chapter_title = row["lastChapterTitle"]
+    if not book.removed:
+        book.sync_updated_at = max(int(book.sync_updated_at or 0), row["updatedAt"])
     book.save(
         update_fields=[
             "read_time", "last_read_time", "last_chapter_index",
-            "last_chapter_pos", "last_chapter_title", "update_time",
+            "last_chapter_pos", "last_chapter_title", "sync_updated_at", "update_time",
         ]
     )
 

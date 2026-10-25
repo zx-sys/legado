@@ -116,6 +116,17 @@ object BackupServer {
             }
         }
 
+    internal val wsUrl: String
+        get() {
+            val raw = rawServerUrl.trimEnd('/')
+            if (raw.isEmpty()) throw NoStackTraceException("请先填写备份服务器地址")
+            val uri = java.net.URI(raw)
+            val scheme = if (uri.scheme.equals("https", true)) "wss" else "ws"
+            val path = uri.path.orEmpty()
+            val prefix = path.substringBefore("/api/", "")
+            return "$scheme://${uri.authority}$prefix/ws/legado/sync/"
+        }
+
     private fun deviceName(): String {
         return AppConfig.deviceName?.takeIf { it.isNotBlank() }
             ?: "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}".trim()

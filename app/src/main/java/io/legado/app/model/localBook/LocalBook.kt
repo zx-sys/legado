@@ -10,6 +10,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookType
 import io.legado.app.data.appDb
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -288,6 +289,7 @@ object LocalBook {
                 // Only confirmed shared copies opt into preserving both colliding books.
                 book.name = "$name (${suffix++})"
             }
+            SyncManager.enqueueBook(book)
         } else {
             withParserCacheInvalidated(book) {
                 deleteBook(book, false)
