@@ -37,6 +37,7 @@ import io.legado.app.lib.theme.buttonDisabledColor
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.lib.theme.primaryTextColor
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.service.BaseReadAloudService
@@ -579,7 +580,9 @@ class ReadMenu @JvmOverloads constructor(
         //朗读
         llReadAloud.setOnClickListener {
             runMenuOut {
-                if (BaseReadAloudService.isRun) {
+                if (BaseReadAloudService.isRun &&
+                    ReadAloud.isReadingBook(ReadBook.book?.bookUrl)
+                ) {
                     callBack.showReadAloudDialog()
                 } else {
                     callBack.onClickReadAloud()
@@ -588,7 +591,11 @@ class ReadMenu @JvmOverloads constructor(
         }
         llReadAloud.onLongClick {
             runMenuOut {
-                callBack.showReadAloudDialog()
+                if (ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) {
+                    callBack.showReadAloudDialog()
+                } else {
+                    callBack.onClickReadAloud()
+                }
             }
         }
         //界面

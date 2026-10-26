@@ -30,12 +30,10 @@ import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.ImageProvider
 import io.legado.app.model.CacheBook
-import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.SourceCallBack
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.webBook.WebBook
-import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.searchContent.SearchResult
 import io.legado.app.ui.book.searchContent.ContentSearchAnchorException
@@ -684,9 +682,7 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
 
     override fun onCleared() {
         super.onCleared()
-        if (BaseReadAloudService.isRun && BaseReadAloudService.pause) {
-            ReadAloud.stop(context)
-        }
+        // 离开阅读页不再停止朗读: 暂停态由 App 内悬浮球/通知继续控制。
     }
 
 }

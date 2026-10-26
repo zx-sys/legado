@@ -130,6 +130,7 @@ import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.highlight.HighlightRuleActivity
 import io.legado.app.ui.highlight.edit.HighlightRuleEditDialog
 import io.legado.app.ui.login.SourceLoginActivity
+import io.legado.app.ui.readaloud.ReadAloudFloatBallManager
 import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.replace.edit.ReplaceEditActivity
 import io.legado.app.ui.widget.PopupAction
@@ -407,11 +408,6 @@ class ReadBookActivity : BaseReadBookActivity(),
                 restoreLastBookProcess()
                 return@addCallback
             }
-            if (BaseReadAloudService.isPlay()) {
-                ReadAloud.pause(this@ReadBookActivity)
-                toastOnUi(R.string.read_aloud_pause)
-                return@addCallback
-            }
             if (isAutoPage) {
                 autoPageStop()
                 return@addCallback
@@ -443,6 +439,10 @@ class ReadBookActivity : BaseReadBookActivity(),
         resetBookmarkObserver()
         resetReviewSummaryState()
         viewModel.initData(intent)
+        updateReadAloudFloatBar()
+        if (ReadAloud.isReadingBook(ReadBook.book?.bookUrl) && ReadBook.curTextChapter != null) {
+            handleReturnToReadAloudPosition()
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -1462,7 +1462,10 @@ class ReadBookActivity : BaseReadBookActivity(),
         if (!AppConfig.volumeKeyPage) {
             return false
         }
-        if (!AppConfig.volumeKeyPageOnPlay && BaseReadAloudService.isPlay()) {
+        if (!AppConfig.volumeKeyPageOnPlay &&
+            ReadAloud.isReadingBook(ReadBook.book?.bookUrl) &&
+            BaseReadAloudService.isPlay()
+        ) {
             return false
         }
         handleKeyPage(direction, longPress)
@@ -1531,9 +1534,23 @@ class ReadBookActivity : BaseReadBookActivity(),
                 intent.removeExtra("readAloud")
                 ReadBook.readAloud()
             }
+            handleReturnToReadAloudPosition()
+            updateReadAloudFloatBar()
             loadStates = true
             loadReviewSummaryIfNeeded()
         }
+    }
+
+    /**
+     * 从通知/悬浮球打开朗读会话书时，内容加载完成后精确定位到当前朗读位置。
+     */
+    private fun handleReturnToReadAloudPosition() {
+        if (!intent.getBooleanExtra(ReadAloud.EXTRA_RETURN_TO_POSITION, false)) return
+        intent.removeExtra(ReadAloud.EXTRA_RETURN_TO_POSITION)
+        if (!ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) return
+        lastReadAloudChapterIndex = -1
+        lastReadAloudChapterStart = -1
+        backToSpeakingPosition()
     }
 
     /**
@@ -1630,7 +1647,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun onReadScroll(offset: Int) {
         scheduleScrollPositionSave()
-        if (BaseReadAloudService.isRun && !isAutoPage) {
+        if (ReadAloud.isReadingBook(ReadBook.book?.bookUrl) && !isAutoPage) {
             // 朗读推进页面时也会走到这里, 只有手指拖动才算用户脱离跟随;
             // 否则锁屏期间无法完成跟随恢复, 跨章后会只推进朗读而不动页面。
             if (!binding.readView.isTouching) return
@@ -1662,7 +1679,8 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     private fun restoreAloudFollowOnVisiblePage() {
-        if (!BaseReadAloudService.isRun || ReadAloud.followReadAloudPosition ||
+        if (!ReadAloud.isReadingBook(ReadBook.book?.bookUrl) ||
+            ReadAloud.followReadAloudPosition ||
             !getPrefBoolean(PreferKey.readAloudControlsRealtime, true)
         ) return
         val chapterStart = ReadAloud.readAloudChapterStart
@@ -1702,7 +1720,9 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 锁屏期间收不到进度事件，跨章后页面会停留在锁屏前的位置。
      */
     private fun syncVisiblePageToReadAloud() {
-        if (!BaseReadAloudService.isRun || !ReadAloud.followReadAloudPosition) return
+        if (!ReadAloud.isReadingBook(ReadBook.book?.bookUrl) ||
+            !ReadAloud.followReadAloudPosition
+        ) return
         if (!ReadBook.isLayoutAvailable) return
         val chapterIndex = ReadAloud.readAloudChapterIndex
         if (chapterIndex < 0) return
@@ -1719,7 +1739,9 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 全程不打断当前朗读。
      */
     override fun backToSpeakingPosition() {
-        if (!BaseReadAloudService.isRun) return
+        if (!BaseReadAloudService.isRun ||
+            !ReadAloud.isReadingBook(ReadBook.book?.bookUrl)
+        ) return
         val speakingChapterIndex = ReadAloud.readAloudChapterIndex
         // 优先用观察到的进度; 回退到服务里存活的朗读位置(Activity 重建后进度事件可能尚未到达)
         val chapterStart = lastReadAloudChapterStart.takeIf {
@@ -1779,7 +1801,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         if (!book.isAudio) {
             viewModel.changeTo(book, toc, onSuccess)
         } else {
-            ReadAloud.stop(this)
+            if (ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) {
+                ReadAloud.stop(this)
+            }
             lifecycleScope.launch {
                 withContext(IO) {
                     ReadBook.book?.migrateTo(book, toc)
@@ -1808,7 +1832,9 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun showActionMenu() {
         when {
-            BaseReadAloudService.isRun -> showReadAloudDialog()
+            BaseReadAloudService.isRun &&
+                ReadAloud.isReadingBook(ReadBook.book?.bookUrl) -> showReadAloudDialog()
+
             isAutoPage -> showDialogFragment<AutoReadDialog>()
             isShowingSearchResult -> binding.searchMenu.runMenuIn()
             else -> binding.readMenu.runMenuIn()
@@ -1819,6 +1845,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 显示朗读菜单
      */
     override fun showReadAloudDialog() {
+        if (!ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) return
         showDialogFragment<ReadAloudDialog>()
     }
 
@@ -1826,7 +1853,9 @@ class ReadBookActivity : BaseReadBookActivity(),
      * 自动翻页
      */
     override fun autoPage() {
-        ReadAloud.stop(this)
+        if (ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) {
+            ReadAloud.stop(this)
+        }
         if (isAutoPage) {
             autoPageStop()
         } else {
@@ -2506,9 +2535,13 @@ class ReadBookActivity : BaseReadBookActivity(),
             showDialogFragment<SpeakEngineDialog>()
             return
         }
+        val runningForBook = BaseReadAloudService.isRun &&
+            ReadAloud.isReadingBook(ReadBook.book?.bookUrl)
         when {
-            !BaseReadAloudService.isRun -> {
-                ReadAloud.upReadAloudClass()
+            !runningForBook -> {
+                if (!BaseReadAloudService.isRun) {
+                    ReadAloud.upReadAloudClass()
+                }
                 val scrollPageAnim = ReadBook.pageAnim() == 3
                 if (scrollPageAnim) {
                     val savedStart = savedReadAloudStartPos()
@@ -2729,6 +2762,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun onMenuShow() {
         binding.readView.autoPager.pause()
+        ReadAloudFloatBallManager.setReaderMenuVisible(true)
         updateReadAloudFloatBar(menuShowing = true)
     }
 
@@ -2736,6 +2770,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         binding.readView.autoPager.resume()
         aloudControls.reveal()
         updateReadAloudFloatBar(menuHiding = true)
+        ReadAloudFloatBallManager.setReaderMenuVisible(false)
     }
 
     private fun updateReadAloudFloatBar(
@@ -2747,7 +2782,9 @@ class ReadBookActivity : BaseReadBookActivity(),
             menuHiding -> bottomDialog > 0 || binding.searchMenu.bottomMenuVisible
             else -> menuLayoutIsVisible
         }
-        aloudControls.update(menuVisible)
+        // 切书时 ReadBook.book 可能还在上一本书, 优先用本次 Intent 的目标书判断。
+        val bookUrl = intent.getStringExtra("bookUrl") ?: ReadBook.book?.bookUrl
+        aloudControls.update(menuVisible, bookUrl)
     }
 
     override fun onLayoutPageCompleted(index: Int, page: TextPage) {
@@ -3076,7 +3113,9 @@ class ReadBookActivity : BaseReadBookActivity(),
             updateReadAloudFloatBar()
         }
         observeEvent<Int>(EventBus.ALOUD_STATE) {
-            if (it == Status.STOP || it == Status.PAUSE) {
+            if ((it == Status.STOP || it == Status.PAUSE) &&
+                ReadAloud.isReadingBook(ReadBook.book?.bookUrl)
+            ) {
                 ReadBook.curTextChapter?.let { textChapter ->
                     val page = textChapter.getPageByReadPos(ReadBook.durChapterPos)
                     if (page != null) {
@@ -3091,6 +3130,9 @@ class ReadBookActivity : BaseReadBookActivity(),
             updateReadAloudFloatBar()
         }
         observeEventSticky<Int>(EventBus.TTS_PROGRESS) { chapterStart ->
+            if (!ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) {
+                return@observeEventSticky
+            }
             lastReadAloudChapterStart = chapterStart
             lastReadAloudChapterIndex = ReadAloud.readAloudChapterIndex
             if (!ReadAloud.followReadAloudPosition) {

@@ -7,6 +7,7 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.IntentAction
+import io.legado.app.data.entities.Book
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.tts.RemoteTtsEngines
 import io.legado.app.help.tts.parseTtsSelection
@@ -28,7 +29,18 @@ internal fun resolveReadAloudEngineName(
 }
 
 object ReadAloud {
-    val ttsEngine get() = ReadBook.book?.getTtsEngine() ?: AppConfig.ttsEngine
+    const val EXTRA_RETURN_TO_POSITION = "readAloudReturnToPosition"
+
+    val ttsEngine get() = AppConfig.ttsEngine
+
+    /** 正在朗读的会话书；与当前阅读书可能不同 */
+    val readAloudBook: Book?
+        get() = ReadAloudSession.book
+
+    val readAloudBookUrl: String?
+        get() = ReadAloudSession.bookUrl
+
+    fun isReadingBook(bookUrl: String?): Boolean = ReadAloudSession.isReadingBook(bookUrl)
 
     val isNeuralTtsSelected: Boolean
         get() = parseTtsSelection(ttsEngine)?.let {
@@ -82,6 +94,7 @@ object ReadAloud {
         }
         val intent = Intent(context, aloudClass)
         intent.action = IntentAction.play
+        intent.putExtra("bookUrl", ReadBook.book?.bookUrl)
         intent.putExtra("play", play)
         intent.putExtra("pageIndex", pageIndex)
         intent.putExtra("startPos", startPos)
@@ -102,6 +115,7 @@ object ReadAloud {
         startPos: Int = 0
     ) {
         val bundle = Bundle().apply {
+            putString("bookUrl", ReadBook.book?.bookUrl)
             putBoolean("play", play)
             putInt("pageIndex", pageIndex)
             putInt("startPos", startPos)

@@ -24,7 +24,8 @@ class ReadControlVisualStateTest {
         val clickBlock = source.substringAfter("llReadAloud.setOnClickListener")
             .substringBefore("llReadAloud.onLongClick")
 
-        assertTrue(clickBlock.contains("if (BaseReadAloudService.isRun)"))
+        assertTrue(clickBlock.contains("if (BaseReadAloudService.isRun &&"))
+        assertTrue(clickBlock.contains("ReadAloud.isReadingBook(ReadBook.book?.bookUrl)"))
         assertTrue(clickBlock.contains("callBack.showReadAloudDialog()"))
         assertTrue(clickBlock.contains("else"))
         assertTrue(clickBlock.contains("callBack.onClickReadAloud()"))

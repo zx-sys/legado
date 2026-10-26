@@ -23,6 +23,11 @@ import io.legado.app.help.http.SSLHelper
 import io.legado.app.help.http.StrResponse
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.SourceVerificationHelp
+import io.legado.app.help.source.HEADLESS_VERIFICATION_DELAY_MS
+import io.legado.app.help.source.SOURCE_VERIFICATION_RETRY_MESSAGE
+import io.legado.app.help.source.isLoginPageHtml
+import io.legado.app.help.source.isVerificationChallengeHtml
+import io.legado.app.service.CacheBookService
 import io.legado.app.help.source.shouldSuppressSourceNavigation
 import io.legado.app.help.source.VerificationResult
 import io.legado.app.help.source.getSourceType
@@ -419,6 +424,11 @@ interface JsExtensions : JsEncodeUtils {
 
     fun startBrowserAwait(url: String, title: String, refetchAfterSuccess: Boolean, html: String?): StrResponse {
         rhinoContext.ensureActive()
+        // 先尝试隐藏 WebView 自动过验证，批量缓存时不弹可见浏览器
+        tryHeadlessVerification(url)?.let { return it }
+        if (CacheBookService.isRun) {
+            throw NoStackTraceException(SOURCE_VERIFICATION_RETRY_MESSAGE)
+        }
         if (!canOpenSourceUi()) throw NoStackTraceException("已阻止当前操作中的书源网页跳转")
         return when (val result = SourceVerificationHelp.getVerificationResult(
             getSource(), url, title, true, refetchAfterSuccess, html, context
@@ -434,6 +444,35 @@ interface JsExtensions : JsEncodeUtils {
                 coroutineContext = context
             ).getStrResponse(useWebView = false)
         }
+    }
+
+    /**
+     * 用后台 WebView 尝试自动完成网页验证。
+     * 成功时返回渲染后的页面，并把 WebView Cookie 同步到 CookieStore。
+     */
+    private fun tryHeadlessVerification(url: String): StrResponse? {
+        if (isMainThread) return null
+        val source = getSource() ?: return null
+        val body = runBlocking(context) {
+            kotlin.runCatching {
+                BackstageWebView(
+                    url = url,
+                    tag = source.getKey(),
+                    headerMap = source.getHeaderMap(true),
+                    delayTime = HEADLESS_VERIFICATION_DELAY_MS,
+                ).getStrResponse().body
+            }.onFailure {
+                rhinoContextOrNull?.ensureActive()
+                AppLog.putDebug("后台WebView验证失败: ${it.localizedMessage}")
+            }.getOrNull()
+        } ?: return null
+        if (isVerificationChallengeHtml(body) || isLoginPageHtml(body)) {
+            return null
+        }
+        android.webkit.CookieManager.getInstance().getCookie(url)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { CookieStore.setCookie(source.getKey(), it) }
+        return StrResponse(url, body)
     }
 
     /**

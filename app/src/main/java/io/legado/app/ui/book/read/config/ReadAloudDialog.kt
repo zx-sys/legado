@@ -118,6 +118,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
             SpeakEngineDialog().show(childFragmentManager, "speakEngineDialog")
         }
         tvPre.setOnClickListener {
+            if (!ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) return@setOnClickListener
             if (ReadAloud.followReadAloudPosition) {
                 ReadAloud.prevChapter(requireContext())
             } else {
@@ -125,6 +126,7 @@ class ReadAloudDialog : BaseDialogFragment(R.layout.dialog_read_aloud),
             }
         }
         tvNext.setOnClickListener {
+            if (!ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) return@setOnClickListener
             if (ReadAloud.followReadAloudPosition) {
                 ReadAloud.nextChapter(requireContext())
             } else {

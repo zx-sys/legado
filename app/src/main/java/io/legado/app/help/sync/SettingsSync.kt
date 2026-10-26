@@ -50,6 +50,7 @@ object SettingsSync {
         "color", "bgImage", "remoteFonts", "remoteTts", "bookSourceCatalog",
         "bookSourceExcluded", "bookSourceServer", "bookSourceSelection",
         "bookSourceLast", "readAloudLast", "readAloudControlsX", "readAloudControlsY",
+        "readAloudBall",
     )
 
     private val prefs: SharedPreferences

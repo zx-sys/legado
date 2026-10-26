@@ -16,6 +16,7 @@ import io.legado.app.help.HighlightRuleMatcher
 import io.legado.app.help.HighlightStyle
 import io.legado.app.help.book.isOnLineTxt
 import io.legado.app.help.config.AppConfig
+import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.isForBook
 import io.legado.app.service.BaseReadAloudService
@@ -137,6 +138,7 @@ class ContentTextView(context: Context, attrs: AttributeSet?) : View(context, at
         val start = BaseReadAloudService.readAloudChapterStart
         if (start < 0) return
         val chapter = textPage.getTextChapter()
+        if (!ReadAloud.isReadingBook(chapter.chapter.bookUrl)) return
         if (chapter.chapter.index != BaseReadAloudService.readAloudChapterIndex) return
         textPage.upPageAloudSpan(start - chapter.getReadLength(textPage.index))
     }

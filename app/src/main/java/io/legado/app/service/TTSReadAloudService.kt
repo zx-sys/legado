@@ -116,7 +116,12 @@ class TTSReadAloudService : BaseReadAloudService() {
         if (!requestFocus()) return
         if (contentList.isEmpty()) {
             AppLog.putDebug("朗读列表为空")
-            ReadBook.readAloud()
+            if (ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) {
+                ReadBook.readAloud()
+            } else {
+                AppLog.putDebug("会话书与当前阅读书不一致, 跳过重启")
+                pauseReadAloud()
+            }
             return
         }
         super.play()
@@ -311,7 +316,9 @@ class TTSReadAloudService : BaseReadAloudService() {
             val moves = pendingSpeechPageMoves(pageIndex, targetPageIndex)
             repeat(moves) {
                 pageIndex++
-                ReadBook.moveToNextPage(syncReadAloudFollow = true)
+                if (ReadAloud.isReadingBook(ReadBook.book?.bookUrl)) {
+                    ReadBook.moveToNextPage(syncReadAloudFollow = true)
+                }
             }
             return moves > 0
         }

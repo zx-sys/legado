@@ -8,6 +8,9 @@
 Legado 是一款免费的 Android 平台开源小说阅读器。
 </div>
 
+> **分叉项目注意**：本仓库不是上游 Legado 的简单镜像。阅读习惯（翻页/字体/排版）与朗读引擎是全局的，WebDAV 和在线 TTS 已移除，备份与数据同步以本仓库后端为准。
+> 合并上游代码前请先读 [AGENTS.md](AGENTS.md) 和 [docs/FORK_DECISIONS.md](docs/FORK_DECISIONS.md)。
+
 # Sponsor
 
 > 感谢 [PiPio 中转站](https://pipio.io/offer/miaogongzi) 对项目的赞助支持。

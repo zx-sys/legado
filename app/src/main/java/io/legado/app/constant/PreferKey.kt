@@ -67,6 +67,8 @@ object PreferKey {
     const val readAloudControlsThreshold = "readAloudControlsThreshold"
     const val readAloudControlsX = "readAloudControlsX"
     const val readAloudControlsY = "readAloudControlsY"
+    const val readAloudBallX = "readAloudBallX"
+    const val readAloudBallY = "readAloudBallY"
     const val ttsEngine = "appTtsEngine"
     const val ttsFollowSys = "ttsFollowSys"
     const val ttsSpeechRate = "ttsSpeechRate"

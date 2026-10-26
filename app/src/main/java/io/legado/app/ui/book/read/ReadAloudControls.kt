@@ -23,6 +23,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.ReadAloud
+import io.legado.app.model.ReadBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.defaultSharedPreferences
@@ -77,17 +78,19 @@ class ReadAloudControls(
         }
     }
 
-    fun update(menuVisible: Boolean) {
+    fun update(menuVisible: Boolean, bookUrl: String? = ReadBook.book?.bookUrl) {
         this.menuVisible = menuVisible
         val following = ReadAloud.followReadAloudPosition
-        val isRun = BaseReadAloudService.isRun
+        val isRun = BaseReadAloudService.isRun &&
+            ReadAloud.isReadingBook(bookUrl)
         if (isRun != running || following && !wasFollowing) {
             hidden = false
             movement = 0f
         }
         running = isRun
         wasFollowing = following
-        val showPause = following && prefs.getBoolean(PreferKey.readAloudControlsPause, true)
+        // 播放/暂停统一由 App 内悬浮球控制；页内浮条只在脱离跟随时提供位置操作。
+        val showPause = false
         val shouldShow = ReadAloudBarVisibility.shouldShow(
             isRun, following, menuVisible, showPause,
             prefs.getBoolean(PreferKey.readAloudControlsPosition, true),
@@ -171,7 +174,8 @@ class ReadAloudControls(
     }
 
     fun onMovement(percentOfPage: Float) {
-        if (!BaseReadAloudService.isRun || ReadAloud.followReadAloudPosition || menuVisible || hidden ||
+        if (!ReadAloud.isReadingBook(ReadBook.book?.bookUrl) || ReadAloud.followReadAloudPosition ||
+            menuVisible || hidden ||
             !prefs.getBoolean(PreferKey.readAloudControlsAutoHide, false) || percentOfPage <= 0f
         ) return
         movement += percentOfPage

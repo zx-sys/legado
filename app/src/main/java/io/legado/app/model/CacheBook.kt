@@ -12,7 +12,9 @@ import io.legado.app.exception.ConcurrentException
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentSaveToken
 import io.legado.app.help.book.isInvalidChapterContent
+import io.legado.app.help.book.manualBatchDelayMs
 import io.legado.app.help.book.refreshBookResources
+import io.legado.app.help.book.VERIFICATION_RETRY_DELAY_MS
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.CompositeCoroutine
@@ -202,9 +204,13 @@ object CacheBook {
 
         internal val downloads = ChapterDownloadState()
         private val resourceRefreshMutex = Mutex()
+        private val manualPaceSemaphore = Semaphore(1)
         private val tasks = CompositeCoroutine()
         @Volatile private var isStopped = false
         @Volatile private var isLoading = false
+
+        /** 本次手动批量已处理的章节下标，用于前几章全速、之后限速。 */
+        private val manualPacedIndexes = HashSet<Int>()
 
         val waitCount get() = downloads.waitCount
         val onDownloadCount get() = downloads.runningCount
@@ -221,6 +227,7 @@ object CacheBook {
         fun stop() {
             isStopped = true
             isLoading = false
+            manualPacedIndexes.clear()
             downloads.stopManual()
             tasks.clear()
             onFinally()
@@ -230,6 +237,7 @@ object CacheBook {
             synchronized(CacheBook) {
                 val model = cacheBookMap.getOrPut(book.bookUrl) { this }
                 model.isStopped = false
+                model.manualPacedIndexes.clear()
                 model.downloads.enqueue(start..end, refreshResources)
                 model.isLoading = false
             }
@@ -239,6 +247,7 @@ object CacheBook {
         private fun onFinally() {
             synchronized(CacheBook) {
                 if (!isLoading && downloads.isIdle) {
+                    manualPacedIndexes.clear()
                     cacheBookMap.remove(book.bookUrl, this)
                 }
             }
@@ -332,10 +341,17 @@ object CacheBook {
             }
             if (chapter == null) return onFinally()
             val ticket = downloads.claimManual(index) ?: return
+            val paceDelay = synchronized(this) {
+                manualPacedIndexes.add(index)
+                manualBatchDelayMs(manualPacedIndexes.size - 1)
+            }
             var contentToken = BookHelp.contentSaveToken(requestBook, chapter)
             val refreshingResources = needsResourceRefresh(requestBook, chapter)
             startManual(scope, context, listOf(ticket)) {
+                val slowPace = paceDelay > 0
+                if (slowPace) manualPaceSemaphore.acquire()
                 try {
+                    if (slowPace) delay(paceDelay)
                     val content = if (refreshingResources) {
                         resourceRefreshMutex.withLock {
                             refreshBookResources(source, requestBook, listOf(chapter), onPublished = { accepted ->
@@ -367,7 +383,11 @@ object CacheBook {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    delay(1000)
+                    val message = e.localizedMessage.orEmpty()
+                    val verificationBlocked = message.contains("书源验证") ||
+                        message.contains("Cloudflare验证") ||
+                        message.contains("验证未通过")
+                    if (!verificationBlocked) delay(1_000L)
                     val fallback = if (refreshingResources) {
                         null
                     } else {
@@ -377,12 +397,17 @@ object CacheBook {
                         contentToken = BookHelp.contentSaveToken(requestBook, chapter)
                         onSuccess(ticket, requestBook, chapter, fallback,
                             notifyReader = true, contentToken = contentToken)
-                    } else if (onError(ticket, requestBook, chapter, e, contentToken) &&
-                        !refreshingResources
-                    ) {
-                        downloadFinish(requestBook, chapter, "获取正文失败\n${e.localizedMessage}",
-                            contentToken = contentToken)
+                    } else {
+                        if (verificationBlocked) delay(VERIFICATION_RETRY_DELAY_MS)
+                        if (onError(ticket, requestBook, chapter, e, contentToken) &&
+                            !refreshingResources
+                        ) {
+                            downloadFinish(requestBook, chapter, "获取正文失败\n${e.localizedMessage}",
+                                contentToken = contentToken)
+                        }
                     }
+                } finally {
+                    if (slowPace) manualPaceSemaphore.release()
                 }
             }
         }

@@ -20,7 +20,7 @@ class BackgroundCoverSourceContractTest {
         assertTrue(audioCover.contains("book?.getCoverSourceOrigin()"))
 
         val readAloud = source("app/src/main/java/io/legado/app/service/BaseReadAloudService.kt")
-        val readAloudCover = readAloud.substringAfter("val book = ReadBook.book")
+        val readAloudCover = readAloud.substringAfter("private fun loadCover(")
             .substringBefore(".submit()")
         assertTrue(readAloudCover.contains("book?.getDisplayCover()"))
         assertTrue(readAloudCover.contains("book?.getCoverSourceOrigin()"))

@@ -255,7 +255,7 @@
     "exploreUrl": "玄幻奇幻::/fenlei/xuanhuan/{{page}}/\n武侠仙侠::/fenlei/wuxia/{{page}}/\n都市言情::/fenlei/dushi/{{page}}/\n历史军事::/fenlei/lishi/{{page}}/\n网游竞技::/fenlei/wangyou/{{page}}/\n科幻灵异::/fenlei/kehuan/{{page}}/\n女生频道::/fenlei/nvsheng/{{page}}/",
     "header": "{\"User-Agent\":\"Mozilla/5.0 (Linux; Android 9) Mobile Safari/537.36\"}",
     "lastUpdateTime": "1783508921109",
-    "loginCheckJs": "var src = result.body();\nif (src.match(/Just a moment|Checking your browser|Performing security verification|Verifying you are human/)) {\n    cookie.removeCookie(source.bookSourceUrl);\n    var url = result.url();\n    java.startBrowserAwait(url, \"Cloudflare验证\");\n    result = java.connect(url);\n}\nresult;",
+    "loginCheckJs": "var isCf = function (r) {\n    return r && /Just a moment|Checking your browser|Performing security verification|Verifying you are human/.test(r.body());\n};\nif (isCf(result)) {\n    var url = result.url();\n    java.startBrowserAwait(url, \"Cloudflare验证\");\n    result = java.connect(url);\n    if (isCf(result)) {\n        throw new Error(\"Cloudflare验证未通过\");\n    }\n}\nresult;",
     "respondTime": 180000,
     "ruleBookInfo": {
       "author": "class.fix@tag.p.0@text##.*者：##",

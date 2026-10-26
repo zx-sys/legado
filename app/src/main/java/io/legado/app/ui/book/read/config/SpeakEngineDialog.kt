@@ -23,7 +23,6 @@ import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.ReadAloud
-import io.legado.app.model.ReadBook
 import io.legado.app.ui.tts.RemoteTtsDialog
 import io.legado.app.ui.tts.TtsVoiceDialog
 import io.legado.app.utils.GSON
@@ -85,18 +84,10 @@ class SpeakEngineDialog() : BaseDialogFragment(R.layout.dialog_recycler_view),
     }
 
     private fun initFooter() = binding.run {
-        tvFooterLeft.setText(R.string.book)
-        tvFooterLeft.visible()
-        tvFooterLeft.setOnClickListener {
-            ReadBook.book?.setTtsEngine(ttsEngine)
-            callBack?.upSpeakEngineSummary()
-            ReadAloud.upReadAloudClass()
-            dismissAllowingStateLoss()
-        }
+        tvFooterLeft.visible(false)
         tvOk.setText(R.string.general)
         tvOk.visible()
         tvOk.setOnClickListener {
-            ReadBook.book?.setTtsEngine(null)
             AppConfig.ttsEngine = ttsEngine
             callBack?.upSpeakEngineSummary()
             ReadAloud.upReadAloudClass()

@@ -163,6 +163,11 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             if (!privacyPolicy()) return@launch
             //版本更新
             upVersion()
+            // 首次安装/升级后强制全量拉一次, 确保阅读/朗读配置全部应用
+            if (LocalConfig.configSyncVersion < 1) {
+                LocalConfig.syncCursor = 0
+                LocalConfig.configSyncVersion = 1
+            }
             //绑定手机号(恢复备份期间不把旧数据推回服务器)
             SyncManager.beginStartupQuiet()
             bindAccountIfNeeded()

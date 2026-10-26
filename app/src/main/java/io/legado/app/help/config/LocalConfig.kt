@@ -7,6 +7,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getBoolean
 import io.legado.app.utils.putBoolean
+import io.legado.app.utils.putInt
 import io.legado.app.utils.putLong
 import io.legado.app.utils.putString
 import io.legado.app.utils.remove
@@ -77,6 +78,13 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
         get() = getLong("lastBackup", 0)
         set(value) {
             putLong("lastBackup", value)
+        }
+
+    /** 配置同步结构版本: 升级后强制全量拉一次, 应用新的配置项 */
+    var configSyncVersion: Int
+        get() = getInt("configSyncVersion", 0)
+        set(value) {
+            putInt("configSyncVersion", value)
         }
 
     /** 服务器同步游标(毫秒时间戳), 用于只拉取比上次更新的数据 */

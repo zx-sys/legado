@@ -35,10 +35,15 @@ import io.legado.app.constant.NotificationId
 import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Status
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookSource
 import io.legado.app.help.MediaHelp
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.getBookSource
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.readSimulating
+import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.glide.ImageLoader
@@ -46,11 +51,14 @@ import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
 import io.legado.app.model.CacheBook
 import io.legado.app.model.ReadAloud
+import io.legado.app.model.ReadAloudProgressSaver
+import io.legado.app.model.ReadAloudSession
 import io.legado.app.model.ReadBook
 import io.legado.app.receiver.MediaButtonReceiver
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.read.page.entities.TextChapter
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
+import io.legado.app.ui.readaloud.ReadAloudNavigator
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.activityPendingIntent
 import io.legado.app.utils.broadcastPendingIntent
@@ -258,8 +266,11 @@ abstract class BaseReadAloudService : BaseService(),
         if (AppConfig.ttsTimer > 0) {
             toastOnUi("朗读定时 ${AppConfig.ttsTimer} 分钟")
         }
+        loadCover(sessionBook() ?: ReadBook.book)
+    }
+
+    private fun loadCover(book: Book?, notify: Boolean = true) {
         execute {
-            val book = ReadBook.book
             ImageLoader
                 .loadBitmap(
                     this@BaseReadAloudService,
@@ -271,10 +282,62 @@ abstract class BaseReadAloudService : BaseService(),
         }.onSuccess {
             if (it.width > 16 && it.height > 16) {
                 cover = it
-                upReadAloudNotification()
+                if (notify) upReadAloudNotification()
             }
         }
     }
+
+    private fun sessionBook(): Book? = ReadAloudSession.book ?: ReadBook.book
+
+    private fun readerSynced(): Boolean {
+        val sessionBookUrl = ReadAloudSession.bookUrl ?: return true
+        return sessionBookUrl == ReadBook.book?.bookUrl
+    }
+
+    private fun sessionChapterCount(): Int {
+        return if (readerSynced()) {
+            ReadBook.simulatedChapterSize
+        } else {
+            ReadAloudSession.chapterCount
+        }
+    }
+
+    private fun sessionSource(): BookSource? {
+        return if (readerSynced()) {
+            ReadBook.bookSource
+        } else {
+            ReadAloudSession.book?.getBookSource()
+        }
+    }
+
+    private fun saveSessionProgress(flush: Boolean = false, force: Boolean = false) {
+        val bookUrl = ReadAloudSession.bookUrl ?: return
+        val chapterIndex = speechChapterIndex()
+        val chapterPos = readAloudChapterStart
+        if (chapterIndex < 0 || chapterPos < 0) return
+        ReadAloudProgressSaver.save(
+            bookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            chapterPos = chapterPos,
+            chapterTitle = ReadAloudSession.chapterTitle,
+            flush = flush,
+            force = force,
+        )
+    }
+
+    private fun saveSessionProgressBlocking() {
+        val bookUrl = ReadAloudSession.bookUrl ?: return
+        val chapterIndex = speechChapterIndex()
+        val chapterPos = readAloudChapterStart
+        if (chapterIndex < 0 || chapterPos < 0) return
+        ReadAloudProgressSaver.saveBlocking(
+            bookUrl = bookUrl,
+            chapterIndex = chapterIndex,
+            chapterPos = chapterPos,
+            chapterTitle = ReadAloudSession.chapterTitle,
+        )
+    }
+
 
     fun observeLiveBus() {
         observeEvent<Bundle>(EventBus.READ_ALOUD_PLAY) {
@@ -305,14 +368,18 @@ abstract class BaseReadAloudService : BaseService(),
      * 避免这次朗读的进度整段丢失。
      */
     private fun saveBookProgressBeforeRemoval() {
-        if (followReadAloudPosition) {
-            val chapterIndex = speechChapterIndex()
-            if (chapterIndex >= 0 && readAloudChapterStart >= 0) {
-                ReadBook.durChapterIndex = chapterIndex
-                ReadBook.durChapterPos = readAloudChapterStart
+        if (readerSynced()) {
+            if (followReadAloudPosition) {
+                val chapterIndex = speechChapterIndex()
+                if (chapterIndex >= 0 && readAloudChapterStart >= 0) {
+                    ReadBook.durChapterIndex = chapterIndex
+                    ReadBook.durChapterPos = readAloudChapterStart
+                }
             }
+            runCatching { ReadBook.saveReadBlocking() }
+        } else {
+            saveSessionProgressBlocking()
         }
-        runCatching { ReadBook.saveReadBlocking() }
     }
 
     override fun onDestroy() {
@@ -321,6 +388,10 @@ abstract class BaseReadAloudService : BaseService(),
         chapterTransitionJob?.cancel()
         chapterLoadRetryJob?.cancel()
         saveLastReadAloudPosition()
+        if (!readerSynced()) {
+            // 游标会在下面被重置, 必须先把会话进度提交出去。
+            saveSessionProgress(flush = true, force = true)
+        }
         super.onDestroy()
         restoreReadAloudFollow()
         updateReadAloudChapterIndex(-1)
@@ -342,7 +413,13 @@ abstract class BaseReadAloudService : BaseService(),
         notificationManager.cancel(NotificationId.ReadAloudService)
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_STOPPED)
         mediaSessionCompat.release()
-        ReadBook.uploadProgress()
+        if (readerSynced()) {
+            ReadBook.uploadProgress()
+        }
+        // 若停止过程中已有新朗读服务启动(isRun 被置回 true), 不要清掉新会话。
+        if (!isRun) {
+            ReadAloudSession.clear()
+        }
         unregisterPhoneStateListener(phoneStateListener)
         upNotificationJob?.invokeOnCompletion {
             notificationManager.cancel(NotificationId.ReadAloudService)
@@ -390,8 +467,24 @@ abstract class BaseReadAloudService : BaseService(),
         playStop()
         restoreReadAloudFollow()
         readAloudJob = execute(executeContext = IO) {
+            val book = ReadBook.book ?: return@execute
             val textChapter = ReadBook.curTextChapter ?: return@execute
             if (!textChapter.isCompleted) return@execute
+            val oldBookUrl = ReadAloudSession.bookUrl
+            val newBookUrl = book.bookUrl
+            if (oldBookUrl != null && oldBookUrl != newBookUrl) {
+                ReadAloudProgressSaver.saveBlocking(
+                    bookUrl = oldBookUrl,
+                    chapterIndex = readAloudChapterIndex,
+                    chapterPos = readAloudChapterStart,
+                    chapterTitle = ReadAloudSession.chapterTitle,
+                )
+            }
+            val chapterCount = if (book.readSimulating()) {
+                book.simulatedTotalChapterNum()
+            } else {
+                appDb.bookChapterDao.getChapterCount(book.bookUrl)
+            }.takeIf { it > 0 } ?: ReadBook.simulatedChapterSize
             val readAloudByPage = getPrefBoolean(PreferKey.readAloudByPage)
             val contentList = textChapter.getNeedReadAloud(0, readAloudByPage, 0)
                 .split("\n")
@@ -422,6 +515,8 @@ abstract class BaseReadAloudService : BaseService(),
             ensureActive()
             withContext(Main.immediate) {
                 if (generation != readAloudGeneration.get()) return@withContext
+                ReadAloudSession.bind(book, chapterCount)
+                ReadAloudSession.chapterTitle = textChapter.title
                 this@BaseReadAloudService.pageIndex = prepared.pageIndex
                 this@BaseReadAloudService.textChapter = prepared.textChapter
                 this@BaseReadAloudService.readAloudNumber = prepared.readAloudNumber
@@ -432,6 +527,9 @@ abstract class BaseReadAloudService : BaseService(),
                 BaseReadAloudService.readAloudChapterStart = prepared.readAloudChapterStart
                 this@BaseReadAloudService.paragraphStartPos = prepared.paragraphStartPos
                 if (prepared.consumedToLast) this@BaseReadAloudService.toLast = false
+                if (oldBookUrl != null && oldBookUrl != newBookUrl) {
+                    loadCover(book)
+                }
                 if (play) play() else pageChanged = true
             }
         }.onError(Main) {
@@ -472,16 +570,20 @@ abstract class BaseReadAloudService : BaseService(),
         upReadAloudNotification()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PAUSED)
         postEvent(EventBus.ALOUD_STATE, Status.PAUSE)
-        ReadBook.uploadProgress()
+        if (readerSynced()) {
+            ReadBook.uploadProgress()
+        } else {
+            saveSessionProgress(flush = true, force = true)
+        }
         doDs()
     }
 
     private fun saveLastReadAloudPosition() {
-        val book = ReadBook.book ?: return
+        val bookUrl = ReadAloudSession.bookUrl ?: ReadBook.book?.bookUrl ?: return
         val chapterIndex = speechChapterIndex()
         val position = readAloudChapterStart
         if (chapterIndex >= 0 && position >= 0) {
-            AppConfig.readAloudLastBookUrl = book.bookUrl
+            AppConfig.readAloudLastBookUrl = bookUrl
             AppConfig.readAloudLastChapterIndex = chapterIndex
             AppConfig.readAloudLastPosition = position
         }
@@ -507,6 +609,9 @@ abstract class BaseReadAloudService : BaseService(),
     fun upTtsProgress(progress: Int) {
         readAloudChapterStart = progress
         postEvent(EventBus.TTS_PROGRESS, progress)
+        if (!readerSynced()) {
+            saveSessionProgress()
+        }
     }
 
     private fun prevP() {
@@ -524,14 +629,21 @@ abstract class BaseReadAloudService : BaseService(),
                 }
                 if (readAloudNumber < it.getReadLength(pageIndex)) {
                     pageIndex--
-                    ReadBook.moveToPrevPage(syncReadAloudFollow = true)
+                    if (readerSynced()) {
+                        ReadBook.moveToPrevPage(syncReadAloudFollow = true)
+                    }
                 }
             }
             upTtsProgress(readAloudNumber)
             play()
         } else {
-            toLast = true
-            ReadBook.moveToPrevChapter(true, syncReadAloudFollow = true)
+            if (readerSynced()) {
+                toLast = true
+                ReadBook.moveToPrevChapter(true, syncReadAloudFollow = true)
+            } else {
+                toLast = false
+                loadSpeechChapterOnly(speechChapterIndex() - 1, startPaused = pause)
+            }
         }
     }
 
@@ -550,7 +662,9 @@ abstract class BaseReadAloudService : BaseService(),
                     && readAloudNumber >= it.getReadLength(pageIndex + 1)
                 ) {
                     pageIndex++
-                    ReadBook.moveToNextPage(syncReadAloudFollow = true)
+                    if (readerSynced()) {
+                        ReadBook.moveToNextPage(syncReadAloudFollow = true)
+                    }
                 }
             }
             upTtsProgress(readAloudNumber)
@@ -718,12 +832,15 @@ abstract class BaseReadAloudService : BaseService(),
 
             else -> getString(R.string.read_aloud_t)
         }
-        nTitle += ": ${ReadBook.book?.name}"
+        nTitle += ": ${sessionBook()?.name}"
         val metadata = MediaMetadataCompat.Builder()
             .putBitmap(MediaMetadataCompat.METADATA_KEY_ART, cover)
-            .putText(MediaMetadataCompat.METADATA_KEY_TITLE, ReadBook.curTextChapter?.title ?: "null")
+            .putText(
+                MediaMetadataCompat.METADATA_KEY_TITLE,
+                textChapter?.title ?: ReadAloudSession.chapterTitle ?: "null"
+            )
             .putText(MediaMetadataCompat.METADATA_KEY_ARTIST, nTitle)
-            .putText(MediaMetadataCompat.METADATA_KEY_ALBUM, ReadBook.book?.author ?: "null")
+            .putText(MediaMetadataCompat.METADATA_KEY_ALBUM, sessionBook()?.author ?: "null")
 //            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, nowSpeak.toLong())
             .build()
         mediaSessionCompat.setMetadata(metadata)
@@ -798,10 +915,13 @@ abstract class BaseReadAloudService : BaseService(),
 
             else -> getString(R.string.read_aloud_t)
         }
-        nTitle += ": ${ReadBook.book?.name}"
-        var nSubtitle = ReadBook.curTextChapter?.title
+        nTitle += ": ${sessionBook()?.name}"
+        var nSubtitle = textChapter?.title ?: ReadAloudSession.chapterTitle
         if (nSubtitle.isNullOrBlank())
             nSubtitle = getString(R.string.read_aloud_s)
+        val contentIntent = ReadAloudNavigator.sessionIntent(this)
+            ?.let { activityPendingIntent(it, "activity") }
+            ?: activityPendingIntent<ReadBookActivity>("activity")
         val builder = NotificationCompat
             .Builder(this, AppConst.channelIdReadAloud)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -813,9 +933,7 @@ abstract class BaseReadAloudService : BaseService(),
             .setOnlyAlertOnce(true)
             .setContentTitle(nTitle)
             .setContentText(nSubtitle)
-            .setContentIntent(
-                activityPendingIntent<ReadBookActivity>("activity")
-            )
+            .setContentIntent(contentIntent)
             .setVibrate(null)
             .setSound(null)
             .setLights(0, 0, 0)
@@ -884,7 +1002,7 @@ abstract class BaseReadAloudService : BaseService(),
         toLast = false
         val wasPaused = pause
         if (!wasPaused) resumeReadAloudInternal()
-        if (shouldSyncSpeechNavigation()) {
+        if (readerSynced() && shouldSyncSpeechNavigation()) {
             ReadBook.moveToPrevChapter(true, toLast = false, syncReadAloudFollow = true)
         } else {
             loadSpeechChapterOnly(speechChapterIndex() - 1, startPaused = wasPaused)
@@ -892,7 +1010,9 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     open fun nextChapter(auto: Boolean = false) {
-        ReadBook.upReadTime()
+        if (readerSynced()) {
+            ReadBook.upReadTime()
+        }
         if (auto) {
             chapterStopTimer.onChapterCompleted()?.let { stopResult ->
                 chapterToStop = stopResult.remaining
@@ -904,25 +1024,35 @@ abstract class BaseReadAloudService : BaseService(),
                 upReadAloudNotification()
             }
         }
-        AppLog.putDebug("${ReadBook.curTextChapter?.chapter?.title} 朗读结束跳转下一章并朗读")
+        AppLog.putDebug(
+            "${textChapter?.chapter?.title ?: ReadAloudSession.chapterTitle} 朗读结束跳转下一章并朗读"
+        )
         val wasPaused = pause
         if (!wasPaused) resumeReadAloudInternal()
         val nextSpeechIndex = speechChapterIndex() + 1
-        val hasNextChapter = nextSpeechIndex < ReadBook.simulatedChapterSize
-        val visibleSyncMoved = ReadBook.moveToNextChapter(true, syncReadAloudFollow = true)
-        when (nextChapterDecision(
-            hasNextSpeechChapter = hasNextChapter,
-            visibleSyncMoved = visibleSyncMoved
-        )) {
-            SpeechFollowState.NextChapterDecision.ContinueWithVisibleSync -> {
-                ensureSpeechChapterContinues(ReadBook.durChapterIndex)
-            }
+        val hasNextChapter = nextSpeechIndex < sessionChapterCount()
+        if (readerSynced()) {
+            val visibleSyncMoved = ReadBook.moveToNextChapter(true, syncReadAloudFollow = true)
+            when (nextChapterDecision(
+                hasNextSpeechChapter = hasNextChapter,
+                visibleSyncMoved = visibleSyncMoved
+            )) {
+                SpeechFollowState.NextChapterDecision.ContinueWithVisibleSync -> {
+                    ensureSpeechChapterContinues(ReadBook.durChapterIndex)
+                }
 
-            SpeechFollowState.NextChapterDecision.ContinueSpeechOnly -> {
+                SpeechFollowState.NextChapterDecision.ContinueSpeechOnly -> {
+                    loadSpeechChapterOnly(nextSpeechIndex, startPaused = wasPaused)
+                }
+
+                SpeechFollowState.NextChapterDecision.Stop -> stopSelf()
+            }
+        } else {
+            if (hasNextChapter) {
                 loadSpeechChapterOnly(nextSpeechIndex, startPaused = wasPaused)
+            } else {
+                stopSelf()
             }
-
-            SpeechFollowState.NextChapterDecision.Stop -> stopSelf()
         }
     }
 
@@ -944,7 +1074,7 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     private fun speechChapterIndex(): Int {
-        return textChapter?.chapter?.index ?: ReadBook.durChapterIndex
+        return textChapter?.chapter?.index ?: readAloudChapterIndex
     }
 
     private fun loadSpeechChapterOnly(
@@ -952,13 +1082,13 @@ abstract class BaseReadAloudService : BaseService(),
         attempt: Int = 0,
         startPaused: Boolean = false
     ) {
-        if (chapterIndex !in 0..<ReadBook.simulatedChapterSize) return
+        if (chapterIndex !in 0..<sessionChapterCount()) return
         execute(executeContext = IO) {
-            val book = ReadBook.book ?: return@execute false
+            val book = sessionBook() ?: return@execute false
             val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, chapterIndex)
                 ?: return@execute false
             val content = BookHelp.getContent(book, chapter)
-                ?: ReadBook.bookSource?.let { source ->
+                ?: sessionSource()?.let { source ->
                     CacheBook.getOrCreate(source, book).downloadAwait(chapter)
                 }
                 ?: "加载正文失败\n${if (book.isLocal) "无内容" else "没有书源"}"
@@ -974,12 +1104,15 @@ abstract class BaseReadAloudService : BaseService(),
                 chapter,
                 displayTitle,
                 contents,
-                ReadBook.simulatedChapterSize
+                sessionChapterCount()
             )
             for (page in nextTextChapter.layoutChannel) {
                 if (page.index > 0) continue
             }
             textChapter = nextTextChapter
+            if (ReadAloudSession.isReadingBook(book.bookUrl)) {
+                ReadAloudSession.chapterTitle = nextTextChapter.title
+            }
             updateReadAloudChapterIndex(chapter.index)
             readAloudChapterStart = 0
             pageIndex = 0
@@ -994,6 +1127,9 @@ abstract class BaseReadAloudService : BaseService(),
             chapterLoadRetryJob?.cancel()
             if (canContinue) {
                 upTtsProgress(0)
+                if (!readerSynced()) {
+                    saveSessionProgress(flush = true, force = true)
+                }
                 if (!startPaused) play()
             } else {
                 stopSelf()

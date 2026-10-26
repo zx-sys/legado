@@ -23,7 +23,7 @@ class ReadAloudFollowPositionRegressionTest {
         val readBookKt = readProjectFile("src/main/java/io/legado/app/model/ReadBook.kt")
         val serviceKt = readProjectFile("src/main/java/io/legado/app/service/BaseReadAloudService.kt")
 
-        assertTrue(readBookKt.contains("if (updateReadAloud && BaseReadAloudService.isRun && it.isCompleted)"))
+        assertTrue(readBookKt.contains("if (updateReadAloud && ReadAloud.isReadingBook(it.chapter.bookUrl) && it.isCompleted)"))
         assertTrue(readBookKt.contains("if (!syncReadAloudFollow)"))
         assertTrue(readBookKt.contains("curPageChanged(syncReadAloudFollow = syncReadAloudFollow)"))
         assertTrue(serviceKt.contains("fun shouldSyncSpeechNavigation(): Boolean"))
@@ -47,10 +47,10 @@ class ReadAloudFollowPositionRegressionTest {
     fun detachedPreviousChapterMovesOnlyTheSpeechCursor() {
         val serviceKt = readProjectFile("src/main/java/io/legado/app/service/BaseReadAloudService.kt")
 
-        assertTrue(serviceKt.contains("if (shouldSyncSpeechNavigation())"))
-        assertTrue(serviceKt.contains("loadSpeechChapterOnly(speechChapterIndex() - 1)"))
+        assertTrue(serviceKt.contains("if (readerSynced() && shouldSyncSpeechNavigation())"))
+        assertTrue(serviceKt.contains("loadSpeechChapterOnly(speechChapterIndex() - 1, startPaused ="))
         assertTrue(serviceKt.contains("val nextSpeechIndex = speechChapterIndex() + 1"))
-        assertTrue(serviceKt.contains("loadSpeechChapterOnly(nextSpeechIndex)"))
+        assertTrue(serviceKt.contains("loadSpeechChapterOnly(nextSpeechIndex, startPaused = wasPaused)"))
     }
 
     @Test

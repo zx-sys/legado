@@ -55,6 +55,7 @@ import io.legado.app.lib.theme.WallpaperTheme
 import io.legado.app.model.BookCover
 import io.legado.app.model.AutoTask
 import io.legado.app.service.AutoTaskScheduler
+import io.legado.app.ui.readaloud.ReadAloudFloatBallManager
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.defaultSharedPreferences
@@ -86,6 +87,7 @@ class App : Application() {
         WallpaperTheme.syncWithPreferences(this)
         applyDayNightInit(this)
         registerActivityLifecycleCallbacks(LifecycleHelp)
+        ReadAloudFloatBallManager.init(this)
         defaultSharedPreferences.registerOnSharedPreferenceChangeListener(AppConfig)
         initRhino()
         Coroutine.async {
