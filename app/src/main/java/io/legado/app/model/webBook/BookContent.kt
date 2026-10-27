@@ -10,7 +10,14 @@ import io.legado.app.data.entities.rule.ContentRule
 import io.legado.app.exception.ContentEmptyException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.CONTENT_CALL_TIMEOUT_MS
 import io.legado.app.help.book.CONTENT_READ_TIMEOUT_MS
+import io.legado.app.help.book.MAX_PAGINATION_PAGES
+import io.legado.app.help.book.PAGINATED_PAGE_CONCURRENCY
+import io.legado.app.help.book.PageLink
+import io.legado.app.help.book.pageBaseUrl
+import io.legado.app.help.book.paginationLinks
+import io.legado.app.help.book.planParallelPages
 import io.legado.app.help.ConcurrentRateLimiter
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.BatchContentContext
@@ -26,8 +33,12 @@ import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.mapAsync
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import org.apache.commons.text.StringEscapeUtils
 import splitties.init.appCtx
+import java.util.ArrayDeque
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isOnLineTxt
 import io.legado.app.help.book.isVideo
@@ -47,11 +58,17 @@ object BookContent {
         redirectUrl: String,
         body: String?,
         nextChapterUrl: String?,
-        needSave: Boolean = true
+        needSave: Boolean = true,
+        contentDeadline: Long? = null,
+        pageGate: Semaphore? = null,
     ): String {
         body ?: throw NoStackTraceException(
             appCtx.getString(R.string.error_get_web_content, baseUrl)
         )
+        val deadline = contentDeadline
+        if (deadline != null && System.currentTimeMillis() >= deadline) {
+            throw NoStackTraceException("正文获取超时")
+        }
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
         Debug.log(bookSource.bookSourceUrl, body, state = 40)
         val mNextChapterUrl = if (nextChapterUrl.isNullOrEmpty()) {
@@ -76,35 +93,63 @@ object BookContent {
         contentList.add(contentData.first)
         if (contentData.second.size == 1) {
             val webJs = contentRule.webJs
-            var nextUrl = contentData.second[0]
-            while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
-                if (!mNextChapterUrl.isNullOrEmpty()
-                    && NetworkUtils.getAbsoluteURL(redirectUrl, nextUrl)
-                    == NetworkUtils.getAbsoluteURL(redirectUrl, mNextChapterUrl)
-                ) break
-                nextUrlList.add(nextUrl)
-                currentCoroutineContext().ensureActive()
-                val analyzeUrl = AnalyzeUrl(
-                    mUrl = nextUrl,
-                    source = bookSource,
-                    ruleData = book,
-                    readTimeout = CONTENT_READ_TIMEOUT_MS,
-                    coroutineContext = currentCoroutineContext()
+            val nextUrl = contentData.second[0]
+            val pageBase = pageBaseUrl(redirectUrl)
+            val parallelPages = pageBase?.let {
+                planParallelPages(body, redirectUrl, nextUrl, mNextChapterUrl)
+            }.orEmpty()
+            if (parallelPages.size >= 2 && pageBase != null) {
+                val pages = fetchParallelPages(
+                    book = book,
+                    bookSource = bookSource,
+                    bookChapter = bookChapter,
+                    contentRule = contentRule,
+                    pageBase = pageBase,
+                    initialLinks = parallelPages,
+                    webJs = webJs,
+                    nextChapterUrl = mNextChapterUrl,
+                    deadline = deadline,
+                    pageGate = pageGate,
                 )
-                val res = analyzeUrl.getStrResponseAwait(jsStr = webJs) //控制并发访问
-                res.body?.let { nextBody ->
-                    contentData = analyzeContent(
-                        book, nextUrl, res.url, nextBody, contentRule,
-                        bookChapter, bookSource, mNextChapterUrl,
-                        printLog = false
+                contentList.addAll(pages)
+                Debug.log(bookSource.bookSourceUrl, "◇并行解析正文,总页数:${pages.size + 1}")
+            } else {
+                var next = nextUrl
+                while (next.isNotEmpty() && !nextUrlList.contains(next)) {
+                    if (!mNextChapterUrl.isNullOrEmpty()
+                        && NetworkUtils.getAbsoluteURL(redirectUrl, next)
+                        == NetworkUtils.getAbsoluteURL(redirectUrl, mNextChapterUrl)
+                    ) break
+                    if (deadline != null && System.currentTimeMillis() >= deadline) {
+                        throw NoStackTraceException("正文分页获取超时")
+                    }
+                    nextUrlList.add(next)
+                    currentCoroutineContext().ensureActive()
+                    val analyzeUrl = AnalyzeUrl(
+                        mUrl = next,
+                        source = bookSource,
+                        ruleData = book,
+                        readTimeout = CONTENT_READ_TIMEOUT_MS,
+                        callTimeout = CONTENT_CALL_TIMEOUT_MS,
+                        coroutineContext = currentCoroutineContext()
                     )
-                    nextUrl =
-                        if (contentData.second.isNotEmpty()) contentData.second[0] else ""
-                    contentList.add(contentData.first)
-                    Debug.log(bookSource.bookSourceUrl, "第${contentList.size}页完成")
+                    val res = withPageGate(pageGate) {
+                        analyzeUrl.getStrResponseAwait(jsStr = webJs)
+                    } //控制并发访问
+                    res.body?.let { nextBody ->
+                        contentData = analyzeContent(
+                            book, next, res.url, nextBody, contentRule,
+                            bookChapter, bookSource, mNextChapterUrl,
+                            printLog = false
+                        )
+                        next =
+                            if (contentData.second.isNotEmpty()) contentData.second[0] else ""
+                        contentList.add(contentData.first)
+                        Debug.log(bookSource.bookSourceUrl, "第${contentList.size}页完成")
+                    }
                 }
+                Debug.log(bookSource.bookSourceUrl, "◇本章总页数:${nextUrlList.size}")
             }
-            Debug.log(bookSource.bookSourceUrl, "◇本章总页数:${nextUrlList.size}")
         } else if (contentData.second.size > 1) {
             Debug.log(bookSource.bookSourceUrl, "◇并发解析正文,总页数:${contentData.second.size}")
             flow {
@@ -117,9 +162,12 @@ object BookContent {
                     source = bookSource,
                     ruleData = book,
                     readTimeout = CONTENT_READ_TIMEOUT_MS,
+                    callTimeout = CONTENT_CALL_TIMEOUT_MS,
                     coroutineContext = currentCoroutineContext()
                 )
-                val res = analyzeUrl.getStrResponseAwait() //控制并发访问
+                val res = withPageGate(pageGate) {
+                    analyzeUrl.getStrResponseAwait()
+                } //控制并发访问
                 analyzeContent(
                     book, urlStr, res.url, res.body!!, contentRule,
                     bookChapter, bookSource, mNextChapterUrl,
@@ -219,6 +267,93 @@ object BookContent {
             )
         }
         return contentStr
+    }
+
+    private suspend fun <T> withPageGate(gate: Semaphore?, block: suspend () -> T): T {
+        return if (gate == null) block() else gate.withPermit { block() }
+    }
+
+    /**
+     * 当前页已经列出后续分页时，按轮并发抓取；每轮从已抓页面继续发现新页号，
+     * 直到没有新页。返回第 2 页开始的正文，按页号排序。
+     */
+    private suspend fun fetchParallelPages(
+        book: Book,
+        bookSource: BookSource,
+        bookChapter: BookChapter,
+        contentRule: ContentRule,
+        pageBase: String,
+        initialLinks: List<PageLink>,
+        webJs: String?,
+        nextChapterUrl: String?,
+        deadline: Long?,
+        pageGate: Semaphore?,
+    ): List<String> {
+        val pageContents = sortedMapOf<Int, String>()
+        val queued = linkedSetOf<Int>()
+        val pending = ArrayDeque<PageLink>()
+        initialLinks.forEach {
+            if (queued.add(it.page)) pending.add(it)
+        }
+        var maxPage = initialLinks.maxOf { it.page }
+        while (pending.isNotEmpty()) {
+            if (deadline != null && System.currentTimeMillis() >= deadline) {
+                throw NoStackTraceException("正文分页获取超时")
+            }
+            currentCoroutineContext().ensureActive()
+            val links = ArrayList<PageLink>(PAGINATED_PAGE_CONCURRENCY)
+            while (links.size < PAGINATED_PAGE_CONCURRENCY && pending.isNotEmpty()) {
+                links.add(pending.removeFirst())
+            }
+            val fetched = flow {
+                links.forEach { emit(it) }
+            }.mapAsync(PAGINATED_PAGE_CONCURRENCY) { link ->
+                val analyzeUrl = AnalyzeUrl(
+                    mUrl = link.url,
+                    baseUrl = book.tocUrl,
+                    source = bookSource,
+                    ruleData = book,
+                    chapter = bookChapter.copy(),
+                    readTimeout = CONTENT_READ_TIMEOUT_MS,
+                    callTimeout = CONTENT_CALL_TIMEOUT_MS,
+                    coroutineContext = currentCoroutineContext()
+                )
+                val res = withPageGate(pageGate) {
+                    analyzeUrl.getStrResponseAwait(jsStr = webJs)
+                }
+                val pageBody = res.body
+                    ?: throw NoStackTraceException("正文分页为空:${link.url}")
+                val pageContent = analyzeContent(
+                    book, link.url, res.url, pageBody, contentRule,
+                    bookChapter.copy(), bookSource, nextChapterUrl,
+                    getNextPageUrl = false,
+                    printLog = false
+                ).first
+                Triple(
+                    link.page,
+                    pageContent,
+                    paginationLinks(pageBody, res.url, pageBase, nextChapterUrl),
+                )
+            }.toList()
+            for ((page, content, more) in fetched) {
+                pageContents[page] = content
+                if (page > maxPage) maxPage = page
+                for (link in more) {
+                    // 分页条一次只向前展示几页，拒绝异常的大页号，避免把无关链接当正文。
+                    if (link.page <= MAX_PAGINATION_PAGES &&
+                        link.page <= maxPage + PAGINATED_PAGE_CONCURRENCY &&
+                        queued.add(link.page)
+                    ) {
+                        pending.add(link)
+                    }
+                }
+            }
+        }
+        val missing = (2..maxPage).filter { it !in pageContents }
+        if (missing.isNotEmpty()) {
+            throw NoStackTraceException("正文分页不完整:${missing.joinToString()}")
+        }
+        return (2..maxPage).map { pageContents.getValue(it) }
     }
 
     @Throws(Exception::class)

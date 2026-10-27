@@ -28,6 +28,7 @@ import io.legado.app.utils.BitmapUtils
 import io.legado.app.utils.UrlUtil
 import io.legado.app.utils.createFileIfNotExist
 import io.legado.app.utils.exists
+import io.legado.app.utils.GSON
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getFile
 import io.legado.app.utils.isContentScheme
@@ -257,7 +258,11 @@ object BookHelp {
                 fileName,
             ) {
                 if (content.isNotEmpty()) {
-                    writeText(book, bookChapter, token.folderName, fileName, content)
+                    writeText(
+                        book, bookChapter, token.folderName, fileName, content,
+                        sourceUrl = bookSource.bookSourceUrl,
+                        sourceName = bookSource.bookSourceName,
+                    )
                 }
                 if (saveChapterMetadata) {
                     appDb.bookChapterDao.updateContentMetadata(
@@ -285,12 +290,18 @@ object BookHelp {
         bookChapter: BookChapter,
         content: String,
         saveChapterMetadata: Boolean = false,
+        sourceUrl: String? = null,
+        sourceName: String? = null,
     ) {
         if (content.isEmpty()) return
         val folderName = book.getFolderName()
         val fileName = bookChapter.getFileName()
         contentSaveFence.replace(contentSaveKey(book, bookChapter), fileName) {
-            writeText(book, bookChapter, folderName, fileName, content)
+            writeText(
+                book, bookChapter, folderName, fileName, content,
+                sourceUrl = sourceUrl,
+                sourceName = sourceName,
+            )
             if (saveChapterMetadata) {
                 appDb.bookChapterDao.updateContentMetadata(
                     bookChapter.bookUrl,
@@ -454,6 +465,8 @@ object BookHelp {
         folderName: String,
         fileName: String,
         content: String,
+        sourceUrl: String? = null,
+        sourceName: String? = null,
     ) {
         //保存文本
         FileUtils.createFileIfNotExist(
@@ -464,10 +477,41 @@ object BookHelp {
         ).writeText(content)
         // A fresh download or a manual edit replaces the reversed cache.
         File(downloadDir.getFile(cacheFolderName, folderName, fileName).path + ".reversed").delete()
+        if (!sourceUrl.isNullOrBlank()) {
+            writeSourceInfo(book, bookChapter, folderName, fileName, sourceUrl, sourceName)
+        }
         if (book.isOnLineTxt && AppConfig.tocCountWords) {
             val wordCount = StringUtils.wordCountFormat(content.length)
             bookChapter.wordCount = wordCount
             appDb.bookChapterDao.upWordCount(bookChapter.bookUrl, bookChapter.url, wordCount)
+        }
+    }
+
+    private fun writeSourceInfo(
+        book: Book,
+        bookChapter: BookChapter,
+        folderName: String,
+        fileName: String,
+        sourceUrl: String,
+        sourceName: String?,
+    ) {
+        runCatching {
+            val info = linkedMapOf<String, Any?>(
+                "sourceUrl" to sourceUrl,
+                "sourceName" to sourceName.orEmpty(),
+                "bookOrigin" to book.origin,
+                "chapterUrl" to bookChapter.url,
+                "chapterAbsoluteUrl" to bookChapter.getAbsoluteURL(),
+                "savedAt" to System.currentTimeMillis(),
+            )
+            FileUtils.createFileIfNotExist(
+                downloadDir,
+                cacheFolderName,
+                folderName,
+                "$fileName.source",
+            ).writeText(GSON.toJson(info))
+        }.onFailure {
+            AppLog.put("保存章节来源信息失败 ${book.name} ${bookChapter.title}", it)
         }
     }
 
@@ -762,6 +806,7 @@ object BookHelp {
                 fileName,
             ).delete()
             File(downloadDir.getFile(cacheFolderName, folderName, fileName).path + ".reversed").delete()
+            File(downloadDir.getFile(cacheFolderName, folderName, fileName).path + ".source").delete()
         }
     }
 

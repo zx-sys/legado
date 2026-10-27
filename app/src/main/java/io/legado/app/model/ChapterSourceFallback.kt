@@ -6,6 +6,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
+import io.legado.app.help.book.BatchContentGate
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ChapterSourceMatch
 import io.legado.app.help.book.isInvalidChapterContent
@@ -48,12 +49,23 @@ object ChapterSourceFallback {
     private const val SOURCE_TIMEOUT_MS = 90_000L
     private const val TOTAL_TIMEOUT_MS = 180_000L
     private const val CHAPTER_COOLDOWN_MS = 10 * 60 * 1000L
+    private const val TOC_TTL_MS = 30 * 60 * 1000L
+    private const val REMEMBERED_FAILURE_LIMIT = 2
+
+    private data class SourceToc(
+        val book: Book,
+        val chapters: List<BookChapter>,
+        val fetchedAt: Long,
+    )
 
     private val bookLocks = ConcurrentHashMap<String, Mutex>()
     private val rememberedSources = ConcurrentHashMap<String, String>()
+    private val rememberedFailures = ConcurrentHashMap<String, Int>()
     private val failedSources = ConcurrentHashMap<String, MutableSet<String>>()
     private val lastAttempts = ConcurrentHashMap<String, Long>()
     private val inFlight = ConcurrentHashMap<String, CompletableDeferred<String?>>()
+    private val tocCache = ConcurrentHashMap<String, SourceToc>()
+    private val tocLocks = ConcurrentHashMap<String, Mutex>()
 
     /**
      * 返回从其他书源补全的正文，已写入原书本章缓存；无法补全时返回 null。
@@ -97,9 +109,12 @@ object ChapterSourceFallback {
         if (bookUrl.isBlank()) return
         bookLocks.remove(bookUrl)
         rememberedSources.remove(bookUrl)
+        rememberedFailures.remove(bookUrl)
         failedSources.remove(bookUrl)
         val prefix = "$bookUrl#"
         lastAttempts.keys.filter { it.startsWith(prefix) }.forEach(lastAttempts::remove)
+        tocCache.keys.filter { it.startsWith(prefix) }.forEach(tocCache::remove)
+        tocLocks.keys.filter { it.startsWith(prefix) }.forEach(tocLocks::remove)
     }
 
     private suspend fun runFallback(
@@ -175,6 +190,8 @@ object ChapterSourceFallback {
                                 chapter,
                                 content,
                                 saveChapterMetadata = false,
+                                sourceUrl = source.bookSourceUrl,
+                                sourceName = source.bookSourceName,
                             )
                             runCatching {
                                 BookHelp.saveImages(source, book, chapter, content, 1)
@@ -203,23 +220,20 @@ object ChapterSourceFallback {
     ): String? {
         try {
             return withTimeout(SOURCE_TIMEOUT_MS) {
-                val targetBook = sourceBook ?: searchTargetBook(source, book) ?: return@withTimeout null
-                if (targetBook.tocUrl.isBlank()) {
-                    WebBook.getBookInfoAwait(source, targetBook)
-                }
-                val toc = WebBook.getChapterListAwait(source, targetBook).getOrThrow()
-                val match = matchChapterSource(chapter, toc)
+                val toc = loadToc(source, book, sourceBook) ?: return@withTimeout null
+                val match = matchChapterSource(chapter, toc.chapters)
                 if (match !is ChapterSourceMatch.Unique) return@withTimeout null
-                val targetChapter = toc.getOrNull(match.targetPosition)
+                val targetChapter = toc.chapters.getOrNull(match.targetPosition)
                     ?: return@withTimeout null
-                val targetNextUrl = toc.getOrNull(match.targetPosition + 1)?.url
+                val targetNextUrl = toc.chapters.getOrNull(match.targetPosition + 1)?.url
                     ?: nextChapterUrl
                 val content = WebBook.getContentAwait(
                     bookSource = source,
-                    book = targetBook,
+                    book = toc.book,
                     bookChapter = targetChapter,
                     nextChapterUrl = targetNextUrl,
                     needSave = false,
+                    pageGate = BatchContentGate.forSource(source.bookSourceUrl),
                 )
                 stripDuplicateChapterTitle(content, targetChapter.title)
             }
@@ -230,6 +244,105 @@ object ChapterSourceFallback {
         } catch (e: Throwable) {
             Debug.log(source.bookSourceUrl, "自动补源失败:${e.localizedMessage}")
             return null
+        }
+    }
+
+    private suspend fun loadToc(
+        source: BookSource,
+        book: Book,
+        sourceBook: Book? = null,
+    ): SourceToc? {
+        val key = "${book.bookUrl}#${source.bookSourceUrl}"
+        val now = System.currentTimeMillis()
+        tocCache[key]?.takeIf { now - it.fetchedAt < TOC_TTL_MS }?.let { return it }
+        val lock = tocLocks.getOrPut(key) { Mutex() }
+        return lock.withLock {
+            val cached = tocCache[key]
+            if (cached != null && System.currentTimeMillis() - cached.fetchedAt < TOC_TTL_MS) {
+                return@withLock cached
+            }
+            val targetBook = sourceBook ?: searchTargetBook(source, book) ?: return@withLock null
+            if (targetBook.tocUrl.isBlank()) {
+                WebBook.getBookInfoAwait(source, targetBook)
+            }
+            val chapters = WebBook.getChapterListAwait(source, targetBook).getOrThrow()
+            if (chapters.isEmpty()) return@withLock null
+            SourceToc(targetBook, chapters, System.currentTimeMillis()).also {
+                tocCache[key] = it
+            }
+        }
+    }
+
+    /**
+     * 批量缓存时，若之前已有补源成功，优先用该源取后续章节；
+     * 目录缓存 30 分钟，命中不到章节就回退原书源。
+     */
+    suspend fun fillFromRemembered(book: Book, chapter: BookChapter): String? {
+        if (!AppConfig.autoFillChapterSource) return null
+        if (!book.isOnLineTxt || chapter.isVolume) return null
+        if (isNonStoryChapterTitle(chapter.title)) return null
+        val origin = rememberedSources[book.bookUrl] ?: return null
+        val source = appDb.bookSourceDao.getBookSource(origin)
+            ?.takeIf { it.enabled && it.bookSourceType == BookSourceType.default }
+            ?: return null
+        return withContext(SuppressSourceNavigation) {
+            try {
+                withTimeout(SOURCE_TIMEOUT_MS) {
+                    val toc = loadToc(source, book)
+                    if (toc == null) {
+                        onRememberedFailure(book.bookUrl)
+                        return@withTimeout null
+                    }
+                    val match = matchChapterSource(chapter, toc.chapters)
+                    if (match !is ChapterSourceMatch.Unique) return@withTimeout null
+                    val target = toc.chapters.getOrNull(match.targetPosition)
+                        ?: return@withTimeout null
+                    val targetNext = toc.chapters.getOrNull(match.targetPosition + 1)?.url
+                    val content = stripDuplicateChapterTitle(
+                        WebBook.getContentAwait(
+                            bookSource = source,
+                            book = toc.book,
+                            bookChapter = target,
+                            nextChapterUrl = targetNext,
+                            needSave = false,
+                            pageGate = BatchContentGate.forSource(source.bookSourceUrl),
+                        ),
+                        target.title,
+                    )
+                    if (isInvalidChapterContent(content)) {
+                        onRememberedFailure(book.bookUrl)
+                        return@withTimeout null
+                    }
+                    BookHelp.saveText(
+                        book,
+                        chapter,
+                        content,
+                        saveChapterMetadata = false,
+                        sourceUrl = source.bookSourceUrl,
+                        sourceName = source.bookSourceName,
+                    )
+                    runCatching { BookHelp.saveImages(source, book, chapter, content, 1) }
+                    rememberedFailures.remove(book.bookUrl)
+                    content
+                }
+            } catch (e: TimeoutCancellationException) {
+                onRememberedFailure(book.bookUrl)
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                onRememberedFailure(book.bookUrl)
+                Debug.log(source.bookSourceUrl, "优先补源失败:${e.localizedMessage}")
+                null
+            }
+        }
+    }
+
+    private fun onRememberedFailure(bookUrl: String) {
+        val count = rememberedFailures.merge(bookUrl, 1, Int::plus) ?: 1
+        if (count >= REMEMBERED_FAILURE_LIMIT) {
+            rememberedSources.remove(bookUrl)
+            rememberedFailures.remove(bookUrl)
         }
     }
 

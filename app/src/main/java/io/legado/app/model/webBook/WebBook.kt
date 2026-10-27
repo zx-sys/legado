@@ -8,6 +8,7 @@ import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.CONTENT_CALL_TIMEOUT_MS
 import io.legado.app.help.book.CONTENT_READ_TIMEOUT_MS
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.removeAllBookType
@@ -29,6 +30,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlin.coroutines.CoroutineContext
 
 @Suppress("MemberVisibilityCanBePrivate")
@@ -398,7 +400,9 @@ object WebBook {
         book: Book,
         bookChapter: BookChapter,
         nextChapterUrl: String? = null,
-        needSave: Boolean = true
+        needSave: Boolean = true,
+        contentDeadline: Long? = null,
+        pageGate: Semaphore? = null,
     ): String {
         val saveToken = if (needSave) {
             BookHelp.contentSaveToken(book, bookChapter)
@@ -443,7 +447,9 @@ object WebBook {
                 redirectUrl = bookChapter.getAbsoluteURL(),
                 body = book.tocHtml,
                 nextChapterUrl = nextChapterUrl,
-                needSave = false
+                needSave = false,
+                contentDeadline = contentDeadline,
+                pageGate = pageGate,
             )
         } else {
             val analyzeUrl = AnalyzeUrl(
@@ -453,14 +459,25 @@ object WebBook {
                 ruleData = book,
                 chapter = bookChapter,
                 readTimeout = CONTENT_READ_TIMEOUT_MS,
+                callTimeout = CONTENT_CALL_TIMEOUT_MS,
                 coroutineContext = currentCoroutineContext()
             )
             val checkJs = bookSource.loginCheckJs
             val res = kotlin.runCatching {
-                analyzeUrl.getStrResponseAwait(
-                    jsStr = contentRule.webJs,
-                    sourceRegex = contentRule.sourceRegex
-                ).let {
+                val response = if (pageGate == null) {
+                    analyzeUrl.getStrResponseAwait(
+                        jsStr = contentRule.webJs,
+                        sourceRegex = contentRule.sourceRegex
+                    )
+                } else {
+                    pageGate.withPermit {
+                        analyzeUrl.getStrResponseAwait(
+                            jsStr = contentRule.webJs,
+                            sourceRegex = contentRule.sourceRegex
+                        )
+                    }
+                }
+                response.let {
                     if (!checkJs.isNullOrBlank()) { //检测书源是否已登录
                         analyzeUrl.evalJS(checkJs, it) as StrResponse
                     } else {
@@ -492,7 +509,9 @@ object WebBook {
                 redirectUrl = res.url,
                 body = res.body,
                 nextChapterUrl = nextChapterUrl,
-                needSave = false
+                needSave = false,
+                contentDeadline = contentDeadline,
+                pageGate = pageGate,
             )
         }
         if (saveToken != null) {

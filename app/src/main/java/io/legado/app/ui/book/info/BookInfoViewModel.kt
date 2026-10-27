@@ -16,6 +16,7 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.replaceBookAfterSourceChange
+import io.legado.app.data.entities.stopCacheForChangedBook
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.NoBooksDirException
@@ -295,6 +296,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 isFromBookInfo = isFromBookInfo,
             )
                 .onSuccess(IO) {
+                    stopCacheForChangedBook(oldBook, book)
                     if (inBookshelf) {
                         book.removeType(BookType.updateError)
                         appDb.bookDao.replace(oldBook, book)

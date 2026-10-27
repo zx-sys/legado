@@ -18,6 +18,8 @@ import io.legado.app.data.entities.BookCacheInfo
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookshelfBook
+import io.legado.app.data.entities.stopCacheForChangedBook
+import io.legado.app.data.entities.stopCacheForDeletedBook
 import io.legado.app.help.book.isNotShelf
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
@@ -385,12 +387,16 @@ interface BookDao {
 
     @Transaction
     fun delete(vararg book: Book) {
-        book.forEach { deleteMemo(it.bookUrl) }
+        book.forEach {
+            stopCacheForDeletedBook(it)
+            deleteMemo(it.bookUrl)
+        }
         deleteRows(*book)
     }
 
     @Transaction
     fun replace(oldBook: Book, newBook: Book) {
+        stopCacheForChangedBook(oldBook, newBook)
         val storedBookUrl = if (has(newBook.bookUrl)) newBook.bookUrl else oldBook.bookUrl
         val customCoverUrl = getCustomCoverUrl(storedBookUrl)
         val persistedCoverUrl = getPersistedCoverUrl(storedBookUrl)
@@ -434,6 +440,7 @@ interface BookDao {
 
     @Transaction
     fun deleteNotShelfBook() {
+        getNotShelfBooks().forEach(::stopCacheForDeletedBook)
         deleteNotShelfMemos()
         deleteNotShelfRows()
     }

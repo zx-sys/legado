@@ -349,6 +349,8 @@ class ChangeChapterSourceViewModel(application: Application) :
                     originalChapter,
                     mergedContent,
                     saveChapterMetadata = true,
+                    sourceUrl = bookSource.bookSourceUrl,
+                    sourceName = bookSource.bookSourceName,
                 )
                 withContext(Main) {
                     cacheTask = null

@@ -8,6 +8,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.help.sync.SyncManager
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.stopCacheForChangedBook
 import io.legado.app.model.ReadBook
 import io.legado.app.model.ReadManga
 import io.legado.app.model.AudioPlay
@@ -37,6 +38,7 @@ class BookInfoEditViewModel(application: Application) : BaseViewModel(applicatio
         saving = true
         execute {
             val metadataChanged = oldBook.name != book.name || oldBook.author != book.author
+            stopCacheForChangedBook(oldBook, book)
             appDb.runInTransaction {
                 appDb.bookDao.update(book)
                 appDb.bookHighlightDao.updateBookMetadata(book.bookUrl, book.name, book.author)

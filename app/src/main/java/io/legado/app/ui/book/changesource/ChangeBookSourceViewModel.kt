@@ -36,6 +36,7 @@ import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import io.legado.app.help.source.SuppressSourceNavigation
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
@@ -727,13 +728,15 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
     suspend fun getToc(book: Book): Result<Pair<List<BookChapter>, BookSource>> =
         withContext(SuppressSourceNavigation) {
             runCatchingCancellable {
-                val source = appDb.bookSourceDao.getBookSource(book.origin)
-                    ?: throw NoStackTraceException("书源不存在")
-                if (book.tocUrl.isEmpty()) {
-                    WebBook.getBookInfoAwait(source, book)
-                }
-                val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
-                Pair(toc, source)
+                withTimeoutOrNull(60_000L) {
+                    val source = appDb.bookSourceDao.getBookSource(book.origin)
+                        ?: throw NoStackTraceException("书源不存在")
+                    if (book.tocUrl.isEmpty()) {
+                        WebBook.getBookInfoAwait(source, book)
+                    }
+                    val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
+                    Pair(toc, source)
+                } ?: throw NoStackTraceException("加载目录超时，请稍后重试")
             }
         }
 

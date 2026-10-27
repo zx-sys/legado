@@ -11,8 +11,12 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.exception.ConcurrentException
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentSaveToken
+import io.legado.app.help.book.BatchContentGate
+import io.legado.app.help.book.batchChapterConcurrency
+import io.legado.app.help.book.CONTENT_TOTAL_TIMEOUT_MS
 import io.legado.app.help.book.isInvalidChapterContent
 import io.legado.app.help.book.manualBatchDelayMs
+import io.legado.app.help.book.PAGINATED_BATCH_CONCURRENCY
 import io.legado.app.help.book.refreshBookResources
 import io.legado.app.help.book.VERIFICATION_RETRY_DELAY_MS
 import io.legado.app.help.book.isLocal
@@ -45,6 +49,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.CoroutineContext
 
 object CacheBook {
@@ -150,7 +155,7 @@ object CacheBook {
                 var emitted = false
 
                 cacheBookMap.forEach { (_, model) ->
-                    if (!model.isLoading() && model.waitCount > 0) {
+                    if (!model.isLoading() && model.waitCount > 0 && model.canStartManualChapter()) {
                         emit(model)
                         emitted = true
                     }
@@ -216,6 +221,8 @@ object CacheBook {
         internal val downloads = ChapterDownloadState()
         private val resourceRefreshMutex = Mutex()
         private val manualPaceSemaphore = Semaphore(1)
+        private val paginatedBatchSemaphore = Semaphore(PAGINATED_BATCH_CONCURRENCY)
+        private val paginatedActive = AtomicInteger()
         private val tasks = CompositeCoroutine()
         @Volatile private var isStopped = false
         @Volatile private var isLoading = false
@@ -233,6 +240,34 @@ object CacheBook {
         fun isStop(): Boolean = isStopped || !isRun()
         fun isLoading(): Boolean = isLoading
         fun setLoading() { isLoading = true }
+
+        private val isPaginatedContentSource: Boolean
+            get() = !bookSource.getContentRule().nextContentUrl.isNullOrBlank()
+
+        /** 分页源一章要发多次请求，限制同时在取正文的章节数，避免源站限流。 */
+        internal fun canStartManualChapter(): Boolean {
+            if (!isPaginatedContentSource) return true
+            val limit = batchChapterConcurrency(AppConfig.threadCount, paginated = true)
+            return paginatedActive.get() < limit
+        }
+
+        /** 只限制正文请求本身；补源走别的书源，不应继续占用当前源的并发名额。 */
+        private suspend fun <T> withPaginatedPermit(
+            enabled: Boolean,
+            block: suspend () -> T,
+        ): T {
+            if (!enabled) return block()
+            paginatedActive.incrementAndGet()
+            var acquired = false
+            try {
+                paginatedBatchSemaphore.acquire()
+                acquired = true
+                return block()
+            } finally {
+                if (acquired) paginatedBatchSemaphore.release()
+                paginatedActive.decrementAndGet()
+            }
+        }
 
         @Synchronized
         fun stop() {
@@ -322,6 +357,7 @@ object CacheBook {
         /** Start one explicit cache operation. All four download entry points share downloads. */
         @Synchronized
         fun download(scope: CoroutineScope, context: CoroutineContext) {
+            if (isStopped) return onFinally()
             val requestBook = book
             val source = bookSource
             if (source.supportContentBatch()) {
@@ -365,6 +401,7 @@ object CacheBook {
             }
             var contentToken = BookHelp.contentSaveToken(requestBook, chapter)
             val refreshingResources = needsResourceRefresh(requestBook, chapter)
+            val sourcePace = ticket.fromManualQueue && isPaginatedContentSource
             startManual(scope, context, listOf(ticket)) {
                 val slowPace = paceDelay > 0
                 if (slowPace) manualPaceSemaphore.acquire()
@@ -372,19 +409,52 @@ object CacheBook {
                     if (slowPace) delay(paceDelay)
                     val content = if (refreshingResources) {
                         resourceRefreshMutex.withLock {
-                            refreshBookResources(source, requestBook, listOf(chapter), onPublished = { accepted ->
-                                val refreshed = accepted.single()
-                                contentToken = refreshed.token
-                                onSuccess(ticket, requestBook, refreshed.chapter, refreshed.content,
-                                    notifyReader = true, contentToken = refreshed.token)
-                            }) {
-                                downloads.isCurrent(ticket)
+                            withPaginatedPermit(sourcePace) {
+                                refreshBookResources(source, requestBook, listOf(chapter), onPublished = { accepted ->
+                                    val refreshed = accepted.single()
+                                    contentToken = refreshed.token
+                                    onSuccess(ticket, requestBook, refreshed.chapter, refreshed.content,
+                                        notifyReader = true, contentToken = refreshed.token)
+                                }) {
+                                    downloads.isCurrent(ticket)
+                                }
                             }.single().content
                         }
                     } else {
-                        val fetched = BookHelp.getContent(requestBook, chapter)
-                            ?: WebBook.getContentAwait(source, requestBook, chapter)
-                        BookHelp.saveImages(source, requestBook, chapter, fetched, 1)
+                        val cached = BookHelp.getContent(requestBook, chapter)
+                            ?.takeUnless { isInvalidChapterContent(it) }
+                        val remembered = if (cached == null && ticket.fromManualQueue) {
+                            ChapterSourceFallback.fillFromRemembered(requestBook, chapter)
+                        } else {
+                            null
+                        }
+                        val fetched = when {
+                            cached != null -> cached
+                            remembered != null -> {
+                                contentToken = BookHelp.contentSaveToken(requestBook, chapter)
+                                remembered
+                            }
+                            else -> {
+                                val primary = withPaginatedPermit(sourcePace) {
+                                    BookHelp.getContent(requestBook, chapter)
+                                        ?: WebBook.getContentAwait(
+                                            source,
+                                            requestBook,
+                                            chapter,
+                                            contentDeadline = if (ticket.fromManualQueue) {
+                                                System.currentTimeMillis() + CONTENT_TOTAL_TIMEOUT_MS
+                                            } else {
+                                                null
+                                            },
+                                            pageGate = BatchContentGate.forSource(
+                                                source.bookSourceUrl
+                                            ),
+                                        )
+                                }
+                                BookHelp.saveImages(source, requestBook, chapter, primary, 1)
+                                primary
+                            }
+                        }
                         val current = BookHelp.getContent(requestBook, chapter) ?: fetched
                         if (isInvalidChapterContent(current)) {
                             ChapterSourceFallback.fillChapter(requestBook, chapter)?.let { fallback ->
@@ -502,6 +572,7 @@ object CacheBook {
 
         /** Reading prefetch may borrow queued manual work, but must restore it on cancellation. */
         suspend fun downloadBatchAwait(chapters: List<BookChapter>): List<BookChapter> {
+            if (isStopped) return chapters
             // A previous chunk may have released this model. Register and claim atomically,
             // so a foreground reader cannot acquire a different model for the same book.
             val (model, tickets) = synchronized(CacheBook) {
@@ -561,6 +632,7 @@ object CacheBook {
             chapter: BookChapter,
             allowFallback: Boolean = true,
         ): String {
+            if (isStopped) throw CancellationException("cache task stopped")
             while (true) {
                 currentCoroutineContext().ensureActive()
                 var contentToken = BookHelp.contentSaveToken(book, chapter)

@@ -60,11 +60,27 @@ private val nonStoryTitleSuffixes = listOf(
     "请假条",
 )
 
+/** 作者单章说明里常见的更新提示。 */
+private val nonStoryTitleKeywords = listOf(
+    "晚点更新",
+    "稍后更新",
+    "延迟更新",
+    "推迟更新",
+    "恢复更新",
+    "今日更新",
+    "今天更新",
+    "明日更新",
+    "明天更新",
+    "正在手打",
+    "正在码字",
+)
+
 internal fun isNonStoryChapterTitle(title: String): Boolean {
     val normalized = title.normalizeForKeywordMatch()
     if (normalized.isEmpty()) return false
     return nonStoryTitlePrefixes.any(normalized::startsWith) ||
-        nonStoryTitleSuffixes.any(normalized::endsWith)
+        nonStoryTitleSuffixes.any(normalized::endsWith) ||
+        nonStoryTitleKeywords.any(normalized::contains)
 }
 
 private val leadingChapterMarkerRegex = Regex(
