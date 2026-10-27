@@ -99,6 +99,14 @@ object BookSourceSync {
         saveExcludedUrls(excludedUrls() + urls)
     }
 
+    fun removeExcludedUrls(urls: Collection<String>) {
+        if (urls.isEmpty()) return
+        val removing = urls.toSet()
+        val current = excludedUrls()
+        val remaining = current.filter { it !in removing }
+        if (remaining.size != current.size) saveExcludedUrls(remaining)
+    }
+
     private fun urlSet(raw: String): Set<String> {
         if (raw.isEmpty()) return emptySet()
         return GSON.fromJsonArray<String>(raw).getOrNull()?.toSet() ?: emptySet()
@@ -141,6 +149,13 @@ object BookSourceSync {
             if (!isConfigured) return@withContext null
             // 先拉目录：失败时保留本地的删除记录
             val catalog = fetchCatalog()
+            // 空目录不等于“所有源都已下架”。接口瞬时返回空列表时若继续合并，
+            // 会把本地全部书源标记为 removed 并关闭，而且之后很难自动恢复。
+            if (catalog.isEmpty()) {
+                AppLog.put("服务器书源目录为空，保留本地书源启用状态")
+                AppConfig.bookSourceLastSyncTime = System.currentTimeMillis()
+                return@withContext BookSourceSyncResult(0, 0, false)
+            }
             if (restoreDeleted) {
                 val catalogUrls = catalog.map { it.bookSourceUrl.trim() }.toSet()
                 saveExcludedUrls(excludedUrls().filter { it !in catalogUrls })
@@ -166,6 +181,9 @@ object BookSourceSync {
                 uploadSelection()
             }
             AppConfig.bookSourceLastSyncTime = System.currentTimeMillis()
+            // 目录已更新后再同步用户自定义源，保证能正确区分目录源与自定义源
+            runCatching { CustomBookSourceSync.sync() }
+                .onFailure { AppLog.put("同步自定义书源失败\n${it.localizedMessage}", it) }
             BookSourceSyncResult(added, updated, appliedRemote)
         }
 

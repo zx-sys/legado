@@ -29,6 +29,8 @@ import io.legado.app.databinding.DialogReadBgTextBinding
 import io.legado.app.databinding.ItemBgImageBinding
 import io.legado.app.help.DefaultData
 import io.legado.app.help.book.isImage
+import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ReadBookBackground
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.okHttpClient
@@ -161,6 +163,7 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
         ivDelete.setColorFilter(primaryTextColor, PorterDuff.Mode.SRC_IN)
         tvBgAlpha.setTextColor(primaryTextColor)
         tvBgImage.setTextColor(primaryTextColor)
+        tvBgImage.text = getString(R.string.read_bg_global)
         tvUnderlineColor.setTextColor(primaryTextColor)
         swUnderlineBody.setTextColor(primaryTextColor)
         swUnderlineTitle.setTextColor(primaryTextColor)
@@ -745,7 +748,7 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
                             inputStream.copyTo(outputStream)
                         }
                     }
-                    ReadBookConfig.durConfig.setCurBg(2, fileName)
+                    ReadBookBackground.set(AppConfig.isNightTheme, 2, fileName)
                     postEvent(EventBus.UP_CONFIG, arrayListOf(1))
                 }.onSuccess {
                     appCtx.toastOnUi("设定成功")
@@ -770,7 +773,7 @@ class BgTextConfigDialog : BaseDialogFragment(R.layout.dialog_read_bg_text) {
                 FileOutputStream(file).use { outputStream ->
                     inputStream.copyTo(outputStream)
                 }
-                ReadBookConfig.durConfig.setCurBg(2, fileName)
+                ReadBookBackground.set(AppConfig.isNightTheme, 2, fileName)
                 postEvent(EventBus.UP_CONFIG, arrayListOf(1))
             }.onFailure {
                 appCtx.toastOnUi(it.localizedMessage)

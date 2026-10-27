@@ -18,6 +18,7 @@ import io.legado.app.help.book.VERIFICATION_RETRY_DELAY_MS
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.CompositeCoroutine
+import io.legado.app.help.source.SourceVerificationRegistry
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.CacheBookService
@@ -32,6 +33,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
@@ -48,6 +50,11 @@ import kotlin.coroutines.CoroutineContext
 object CacheBook {
 
     val cacheBookMap = ConcurrentHashMap<String, CacheBookModel>()
+
+    /** 最近一次最终失败的章节与原因，显示在缓存通知里。 */
+    @Volatile
+    var lastErrorSummary: String = ""
+        private set
 
     private val workingState = MutableStateFlow(true)
     private val mutex = Mutex()
@@ -100,6 +107,7 @@ object CacheBook {
 
     fun start(context: Context, book: Book, start: Int, end: Int) {
         if (!book.isLocal) {
+            lastErrorSummary = ""
             context.startService<CacheBookService> {
                 action = IntentAction.start
                 putExtra("bookUrl", book.bookUrl)
@@ -128,6 +136,7 @@ object CacheBook {
         cacheBookMap.forEach { it.value.stop() }
         successDownloadSet.clear()
         errorDownloadMap.clear()
+        lastErrorSummary = ""
     }
 
     fun setWorkingState(value: Boolean) {
@@ -166,7 +175,9 @@ object CacheBook {
 
     val downloadSummary: String
         get() {
-            return "正在下载:${onDownloadCount}|等待中:${waitCount}|失败:${errorDownloadMap.count()}|成功:${successDownloadSet.size}"
+            val summary = "正在下载:${onDownloadCount}|等待中:${waitCount}|失败:${errorDownloadMap.count()}|成功:${successDownloadSet.size}"
+            val error = lastErrorSummary
+            return if (error.isBlank()) summary else "$summary|最近失败:$error"
         }
 
     val isRun: Boolean
@@ -292,7 +303,7 @@ object CacheBook {
             if (!BookHelp.isContentSaveCurrent(contentToken)) return false
             val errorCount = (errorDownloadMap[chapter.primaryStr()] ?: 0) +
                 if (error is ConcurrentException) 0 else 1
-            if (!downloads.finish(ticket, Result.failure(error), retryManual = errorCount < 3) {
+            if (!downloads.finish(ticket, Result.failure(error), retryManual = errorCount < 2) {
                 errorDownloadMap[chapter.primaryStr()] = errorCount
             }) return false
             synchronized(ReadBook) {
@@ -301,7 +312,10 @@ object CacheBook {
                         (ReadBook.downloadFailChapters[chapter.index] ?: 0) + 1
                 }
             }
-            if (errorCount >= 3) AppLog.put("下载${requestBook.name}-${chapter.title}失败\n${error.localizedMessage}", error)
+            if (errorCount >= 2) {
+                lastErrorSummary = "${chapter.title.take(16)}：${error.localizedMessage.orEmpty().lineSequence().firstOrNull().orEmpty()}"
+                AppLog.put("下载${requestBook.name}-${chapter.title}失败\n${error.localizedMessage}", error)
+            }
             return true
         }
 
@@ -328,7 +342,7 @@ object CacheBook {
                     tickets.forEach { downloads.finish(it) }
                 }
             }
-            val index = downloads.waitingIndexes().firstOrNull() ?: return onFinally()
+            val index = downloads.nextWaitingIndex() ?: return onFinally()
             val chapter = appDb.bookChapterDao.getChapter(requestBook.bookUrl, index)
             val skip = synchronized(downloads) {
                 (chapter == null || chapter.isVolume ||
@@ -343,7 +357,11 @@ object CacheBook {
             val ticket = downloads.claimManual(index) ?: return
             val paceDelay = synchronized(this) {
                 manualPacedIndexes.add(index)
-                manualBatchDelayMs(manualPacedIndexes.size - 1)
+                if (SourceVerificationRegistry.requiresVerification(source)) {
+                    manualBatchDelayMs(manualPacedIndexes.size - 1)
+                } else {
+                    0L
+                }
             }
             var contentToken = BookHelp.contentSaveToken(requestBook, chapter)
             val refreshingResources = needsResourceRefresh(requestBook, chapter)
@@ -387,6 +405,9 @@ object CacheBook {
                     val verificationBlocked = message.contains("书源验证") ||
                         message.contains("Cloudflare验证") ||
                         message.contains("验证未通过")
+                    if (verificationBlocked) {
+                        SourceVerificationRegistry.markRequired(source)
+                    }
                     if (!verificationBlocked) delay(1_000L)
                     val fallback = if (refreshingResources) {
                         null
@@ -498,6 +519,44 @@ object CacheBook {
             return chapters.filter { BookHelp.getContent(requestBook, it).isNullOrBlank() }
         }
 
+        /**
+         * 书源被换过但章节 URL 仍属于旧源时，按章节 URL 的域名选实际内容源，
+         * 否则用当前书源规则解析旧源的页面会得到空正文。
+         */
+        private fun contentSourceFor(chapter: BookChapter): BookSource {
+            val chapterHost = runCatching {
+                chapter.getAbsoluteURL().toHttpUrlOrNull()?.host
+            }.getOrNull()?.let(::normalizeSourceHost) ?: return bookSource
+            if (bookSource.bookSourceUrl.toHttpUrlOrNull()?.host
+                    ?.let(::normalizeSourceHost) == chapterHost
+            ) {
+                return bookSource
+            }
+            val resolved = appDb.bookSourceDao.allTextEnabledPart
+                .mapNotNull { it.getBookSource() }
+                .firstOrNull {
+                    it.bookSourceUrl.toHttpUrlOrNull()?.host
+                        ?.let(::normalizeSourceHost) == chapterHost
+                } ?: return bookSource
+            // 书籍记录的 origin 和章节 URL 已经不一致：按章节实际域名修正来源，
+            // 避免换源页仍把错误的旧源当作当前源。
+            if (book.origin != resolved.bookSourceUrl) {
+                book.origin = resolved.bookSourceUrl
+                book.originName = resolved.bookSourceName
+                book.save()
+                if (ReadBook.book?.bookUrl == book.bookUrl) {
+                    ReadBook.book?.origin = resolved.bookSourceUrl
+                    ReadBook.book?.originName = resolved.bookSourceName
+                    ReadBook.bookSource = resolved
+                }
+            }
+            bookSource = resolved
+            return resolved
+        }
+
+        private fun normalizeSourceHost(host: String): String =
+            host.removePrefix("www.").removePrefix("m.")
+
         suspend fun downloadAwait(
             chapter: BookChapter,
             allowFallback: Boolean = true,
@@ -552,7 +611,9 @@ object CacheBook {
                             }.single().content
                         }
                     } else BookHelp.getContent(requestBook, chapter)
-                        ?: WebBook.getContentAwait(model.bookSource, requestBook, chapter)
+                        ?: WebBook.getContentAwait(
+                            model.contentSourceFor(chapter), requestBook, chapter
+                        )
                     var currentContent = BookHelp.getContent(requestBook, chapter) ?: content
                     if (!refreshingResources && allowFallback &&
                         isInvalidChapterContent(currentContent)

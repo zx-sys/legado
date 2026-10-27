@@ -830,6 +830,13 @@
     <string name="read_aloud_follow_manual_page_summary">Restart speaking from the newly displayed page after a manual page turn; when disabled, speaking continues from its original position</string>
     <string name="speak_engine">Speak Engine</string>
     <string name="bg_image">Background images</string>
+    <string name="read_bg_global">Reading background (global)</string>
+    <string name="read_bg_day">Day background</string>
+    <string name="read_bg_night">Night background</string>
+    <string name="read_bg_follow_style">Use style background</string>
+    <string name="read_bg_custom">Custom image</string>
+    <string name="read_bg_global_hint">Applies to all reading styles and is restored from the cloud after reinstall.</string>
+    <string name="verification_badge">Verify</string>
     <string name="bg_color">Background color</string>
     <string name="text_color">Text color</string>
     <string name="text_accent_color">强调颜色</string>

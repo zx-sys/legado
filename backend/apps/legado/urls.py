@@ -8,6 +8,7 @@ from apps.legado.views_admin import (
     BackupViewSet,
     BookSourceViewSet,
     LegadoBookViewSet,
+    LegadoUserBookSourceViewSet,
     LegadoUserViewSet,
     TtsEngineViewSet,
     UserConfigViewSet,
@@ -21,6 +22,7 @@ from apps.legado.views_app import (
     BackupUploadView,
     BookSourceConfigView,
     BookSourceListView,
+    CustomBookSourceView,
     FontPackDownloadView,
     FontPackListView,
     SyncView,
@@ -30,6 +32,11 @@ from apps.legado.views_app import (
 
 router = routers.SimpleRouter()
 router.register(r"users", LegadoUserViewSet, basename="legado-user")
+router.register(
+    r"user-book-sources",
+    LegadoUserBookSourceViewSet,
+    basename="legado-user-book-source",
+)
 router.register(r"backups", BackupViewSet, basename="legado-backup")
 router.register(r"backup-items", BackupItemViewSet, basename="legado-backup-item")
 router.register(r"books", LegadoBookViewSet, basename="legado-book")
@@ -61,6 +68,11 @@ app_urlpatterns = [
         name="legado-app-tts-download",
     ),
     path("app/book-sources", BookSourceListView.as_view(), name="legado-app-book-sources"),
+    path(
+        "app/custom-book-sources",
+        CustomBookSourceView.as_view(),
+        name="legado-app-custom-book-sources",
+    ),
     path("app/fonts", FontPackListView.as_view(), name="legado-app-font-list"),
     path(
         "app/fonts/<str:code>/download",

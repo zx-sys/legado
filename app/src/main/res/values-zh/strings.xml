@@ -826,6 +826,13 @@
     <string name="read_aloud_follow_manual_page_summary">朗读期间手动翻页后，从新页面重新开始朗读；关闭时继续朗读原位置</string>
     <string name="speak_engine">朗读引擎</string>
     <string name="bg_image">背景图片</string>
+    <string name="read_bg_global">阅读背景（全局）</string>
+    <string name="read_bg_day">白天背景图</string>
+    <string name="read_bg_night">夜间背景图</string>
+    <string name="read_bg_follow_style">跟随样式背景</string>
+    <string name="read_bg_custom">自定义图片</string>
+    <string name="read_bg_global_hint">全局生效，所有阅读样式共用；重装或换机后从云端恢复。</string>
+    <string name="verification_badge">需验证</string>
     <string name="bg_color">背景颜色</string>
     <string name="text_color">文字颜色</string>
     <string name="select_image">选择图片</string>

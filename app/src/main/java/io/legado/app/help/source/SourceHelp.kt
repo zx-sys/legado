@@ -92,6 +92,7 @@ object SourceHelp {
         }
         SourceConfig.removeSources(sourceKeys)
         AppCacheManager.clearSourceVariables()
+        sourceKeys.forEach { CustomBookSourceSync.onSourceDeleted(it) }
         if (recordExcluded) {
             // 用户主动删除：记入排除项，避免服务器目录同步时复活
             BookSourceSync.addExcludedUrls(sourceKeys)
@@ -158,6 +159,7 @@ object SourceHelp {
         }
         bookSourcesGroup[false]?.let {
             appDb.bookSourceDao.insert(*it.toTypedArray())
+            CustomBookSourceSync.onSourcesInserted(it)
         }
         Coroutine.async {
             adjustSortNumber()

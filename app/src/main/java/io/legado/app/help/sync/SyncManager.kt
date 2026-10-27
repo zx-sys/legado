@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import splitties.init.appCtx
 import java.io.File
 
@@ -419,13 +420,23 @@ object SyncManager {
     }
 
     private fun Book.applyMeta(item: SyncBook, groupId: Long, updatedAt: Long) {
-        tocUrl = item.tocUrl
-        origin = when {
-            item.origin.isNotBlank() -> item.origin
-            origin == BookType.localTag && (item.type and BookType.local) == 0 -> ""
-            else -> origin
+        // 来源标识必须和本地书籍/章节目录一致。别的设备换源后同步过来的 origin/tocUrl
+        // 不能单独覆盖到本地旧目录上，否则会出现“书源是 A、章节 URL 是 B”的混合状态。
+        val localHasChapters = appDb.bookChapterDao.getChapterCount(bookUrl) > 0
+        val applySourceIdentity = !localHasChapters ||
+            (item.bookUrl == bookUrl && item.hasConsistentSourceHost())
+        if (applySourceIdentity) {
+            tocUrl = item.tocUrl
+            origin = when {
+                item.origin.isNotBlank() -> item.origin
+                origin == BookType.localTag && (item.type and BookType.local) == 0 -> ""
+                else -> origin
+            }
+            originName = item.originName
+            latestChapterTitle = item.latestChapterTitle.ifBlank { null }
+            latestChapterTime = item.latestChapterTime
+            totalChapterNum = item.totalChapterNum
         }
-        originName = item.originName
         kind = item.kind
         customTag = item.customTag
         coverUrl = item.coverUrl.ifBlank { null }
@@ -435,13 +446,21 @@ object SyncManager {
         charset = item.charset.ifBlank { null }
         type = if (item.type != 0) item.type else type
         group = groupId
-        latestChapterTitle = item.latestChapterTitle.ifBlank { null }
-        latestChapterTime = item.latestChapterTime
-        totalChapterNum = item.totalChapterNum
         wordCount = item.wordCount.ifBlank { null }
         variable = item.variable.ifBlank { null }
         syncTime = updatedAt
     }
+
+    /** 服务器记录里的 origin 是否和 bookUrl 同站，防止同步端本身就是混合数据。 */
+    private fun SyncBook.hasConsistentSourceHost(): Boolean {
+        if (origin.isBlank() || bookUrl.isBlank()) return true
+        val originHost = origin.toHttpUrlOrNull()?.host ?: return true
+        val bookHost = bookUrl.toHttpUrlOrNull()?.host ?: return true
+        return normalizeSourceHost(originHost) == normalizeSourceHost(bookHost)
+    }
+
+    private fun normalizeSourceHost(host: String): String =
+        host.removePrefix("www.").removePrefix("m.")
 
     private fun resolveGroupId(groupName: String): Long {
         if (groupName.isBlank()) return 0

@@ -210,6 +210,7 @@ object SourceVerificationHelp {
     ): VerificationResult {
         source
             ?: throw NoStackTraceException("getVerificationResult parameter source cannot be null")
+        SourceVerificationRegistry.markRequired(source.getKey())
         require(url.length < 64 * 1024) { "getVerificationResult parameter url too long" }
         check(!isMainThread) { "getVerificationResult must be called on a background thread" }
 

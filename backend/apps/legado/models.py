@@ -289,6 +289,35 @@ class BookSource(BaseModel):
         return self.name
 
 
+class LegadoUserBookSource(BaseModel):
+    """用户自行添加的书源，按用户隔离；服务器目录里的书源不写这张表。"""
+
+    user = models.ForeignKey(
+        LegadoUser, on_delete=models.CASCADE, related_name="custom_book_sources",
+        verbose_name="用户",
+    )
+    source_url = models.CharField(max_length=700, db_index=True, verbose_name="书源URL")
+    name = models.CharField(max_length=255, blank=True, default="", verbose_name="书源名称")
+    enabled = models.BooleanField(default=True, verbose_name="启用")
+    removed = models.BooleanField(default=False, verbose_name="已删除")
+    source_updated_at = models.BigIntegerField(default=0, db_index=True, verbose_name="客户端更新时间")
+    raw_json = models.JSONField(default=dict, verbose_name="书源JSON")
+
+    class Meta:
+        db_table = table_prefix + "legado_user_book_source"
+        verbose_name = "Legado 用户自定义书源"
+        verbose_name_plural = verbose_name
+        unique_together = (("user", "source_url"),)
+        ordering = ("-source_updated_at",)
+        indexes = [
+            models.Index(fields=["user", "source_updated_at"]),
+            models.Index(fields=["user", "removed"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.phone} - {self.name or self.source_url}"
+
+
 class FontPack(BaseModel):
     name = models.CharField(max_length=128, verbose_name="字体名称")
     code = models.CharField(max_length=64, unique=True, db_index=True, verbose_name="字体标识")

@@ -10,6 +10,7 @@ import io.legado.app.data.entities.rule.ContentRule
 import io.legado.app.exception.ContentEmptyException
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.CONTENT_READ_TIMEOUT_MS
 import io.legado.app.help.ConcurrentRateLimiter
 import io.legado.app.help.config.AppConfig
 import io.legado.app.model.BatchContentContext
@@ -87,6 +88,7 @@ object BookContent {
                     mUrl = nextUrl,
                     source = bookSource,
                     ruleData = book,
+                    readTimeout = CONTENT_READ_TIMEOUT_MS,
                     coroutineContext = currentCoroutineContext()
                 )
                 val res = analyzeUrl.getStrResponseAwait(jsStr = webJs) //控制并发访问
@@ -114,6 +116,7 @@ object BookContent {
                     mUrl = urlStr,
                     source = bookSource,
                     ruleData = book,
+                    readTimeout = CONTENT_READ_TIMEOUT_MS,
                     coroutineContext = currentCoroutineContext()
                 )
                 val res = analyzeUrl.getStrResponseAwait() //控制并发访问

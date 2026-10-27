@@ -30,6 +30,10 @@ api.bookSourceAdd = params => ajaxPost({ url: '/api/legado/book-sources/', param
 api.bookSourceEdit = params => ajaxPut({ url: '/api/legado/book-sources/', params });
 api.bookSourceDelete = params => ajaxDelete({ url: '/api/legado/book-sources/', params });
 
+// 用户自定义书源
+api.userBookSourceList = params => ajaxGet({ url: '/api/legado/user-book-sources/', params });
+api.userBookSourceDelete = params => ajaxDelete({ url: '/api/legado/user-book-sources/', params });
+
 // TTS 引擎
 api.ttsList = params => ajaxGet({ url: '/api/legado/tts-engines/', params });
 api.ttsAdd = params => ajaxPost({ url: '/api/legado/tts-engines/', params });

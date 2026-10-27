@@ -39,6 +39,7 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.source.CustomBookSourceSync
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.sync.ServerSync
 import io.legado.app.help.sync.SyncManager
@@ -175,6 +176,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             SyncManager.pullAsync(applyConfigs = true) {
                 SyncManager.endStartupQuiet()
                 SyncManager.bootstrap()
+                CustomBookSourceSync.syncInBackground()
             }
             notifyAppCrash()
             //备份同步

@@ -15,6 +15,7 @@ import io.legado.app.base.adapter.RecyclerAdapter
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.BookSourceCheckState
 import io.legado.app.databinding.ItemBookSourceBinding
+import io.legado.app.help.source.SourceVerificationRegistry
 import io.legado.app.lib.theme.backgroundColor
 import io.legado.app.model.Debug
 import io.legado.app.ui.login.SourceLoginActivity
@@ -135,7 +136,7 @@ class BookSourceAdapter(
                 upBookshelfCount(binding, item)
                 upCheckSourceMessage(binding, item)
                 upShowExplore(ivExplore, item)
-                tvJsBadge.gone(!item.hasJs)
+                upBadge(binding, item)
                 upSourceHost(binding, holder.layoutPosition)
             } else {
                 for (i in payloads.indices) {
@@ -145,7 +146,7 @@ class BookSourceAdapter(
                             "enabled" -> swtEnabled.isChecked = bundle.getBoolean("enabled")
                             "upName" -> cbBookSource.text = item.getDisPlayNameGroup()
                             "upExplore" -> upShowExplore(ivExplore, item)
-                            "upJs" -> tvJsBadge.gone(!item.hasJs)
+                            "upJs" -> upBadge(binding, item)
                             "bookshelfCount" -> upBookshelfCount(binding, item)
                             "bookshelfCountVisibility" -> upBookshelfCount(binding, item)
                             "selected" -> cbBookSource.isChecked = selected.contains(item)
@@ -234,6 +235,18 @@ class BookSourceAdapter(
 
                 "toggleExplore" -> callBack.enableExplore(!source.enabledExplore, source)
             }
+        }
+    }
+
+    private fun upBadge(binding: ItemBookSourceBinding, source: BookSourcePart) {
+        if (SourceVerificationRegistry.isMarked(source.bookSourceUrl)) {
+            binding.tvJsBadge.text = context.getString(R.string.verification_badge)
+            binding.tvJsBadge.visible()
+        } else if (source.hasJs) {
+            binding.tvJsBadge.text = context.getString(R.string.js_source_badge)
+            binding.tvJsBadge.visible()
+        } else {
+            binding.tvJsBadge.gone()
         }
     }
 

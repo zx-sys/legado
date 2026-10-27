@@ -20,13 +20,13 @@ class BgAdapterAssetUriTest {
     }
 
     @Test
-    fun `background names and selection behavior remain unchanged`() {
+    fun `background names stay unchanged and selection writes global background`() {
         val source = readProjectFile(
             "src/main/java/io/legado/app/ui/book/read/config/BgAdapter.kt"
         )
 
         assertTrue(source.contains("tvName.text = item.substringBeforeLast(\".\")"))
-        assertTrue(source.contains("ReadBookConfig.durConfig.setCurBg(1, it)"))
+        assertTrue(source.contains("ReadBookBackground.set(AppConfig.isNightTheme, 1, it)"))
         assertTrue(source.contains("postEvent(EventBus.UP_CONFIG, arrayListOf(1))"))
     }
 

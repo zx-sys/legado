@@ -2,6 +2,7 @@
 import hashlib
 import json
 import logging
+import time
 
 from django.http import FileResponse, HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
@@ -20,6 +21,7 @@ from apps.legado.models import (
     LegadoBookmark,
     LegadoHighlight,
     LegadoUser,
+    LegadoUserBookSource,
     TtsEngine,
     UserConfig,
 )
@@ -32,6 +34,7 @@ from apps.legado.serializers import (
     LegadoBookSerializer,
     LegadoBookmarkSerializer,
     LegadoHighlightSerializer,
+    LegadoUserBookSourceSerializer,
     LegadoUserSerializer,
     TtsEngineSerializer,
     UserConfigSerializer,
@@ -139,6 +142,24 @@ class UserConfigViewSet(CustomModelViewSet):
         # 管理端只改内容，PUT 按部分更新处理，避免 user/config_type 必填校验失败
         kwargs["partial"] = True
         return super().update(request, *args, **kwargs)
+
+
+class LegadoUserBookSourceViewSet(CustomModelViewSet):
+    queryset = LegadoUserBookSource.objects.select_related("user").all()
+    serializer_class = LegadoUserBookSourceSerializer
+    search_fields = ("user__phone", "name", "source_url")
+    filterset_fields = ("user", "enabled", "removed")
+    ordering_fields = ("source_updated_at", "update_time", "name")
+
+    def perform_destroy(self, instance):
+        # 管理端删除写墓碑，让客户端同步时也移除该源，而不是下次又被推回来
+        instance.removed = True
+        instance.enabled = False
+        instance.raw_json = {}
+        instance.source_updated_at = int(time.time() * 1000)
+        instance.save(
+            update_fields=["removed", "enabled", "raw_json", "source_updated_at", "update_time"]
+        )
 
 
 class BookSourceViewSet(CustomModelViewSet):

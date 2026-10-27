@@ -46,6 +46,8 @@ import io.legado.app.help.config.ThemeConfig.applyDayNightInit
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.Cronet
 import io.legado.app.help.source.BookSourceSync
+import io.legado.app.help.source.CustomBookSourceSync
+import io.legado.app.help.source.SourceVerificationRegistry
 import io.legado.app.help.http.ObsoleteUrlFactory
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.rhino.NativeBaseSource
@@ -109,7 +111,10 @@ class App : Application() {
             DefaultData.upVersion()
             DefaultData.removeUnusableBookSourcesIfNeeded()
             DefaultData.addNewDefaultBookSourcesIfNeeded()
+            runCatching { SourceVerificationRegistry.seed(appDb.bookSourceDao.all) }
+                .onFailure { AppLog.put("同步验证书源标记失败", it) }
             BookSourceSync.syncInBackground()
+            CustomBookSourceSync.syncInBackground()
             AppFreezeMonitor.init(this@App)
             DispatchersMonitor.init()
             URL.setURLStreamHandlerFactory(ObsoleteUrlFactory(okHttpClient))

@@ -2,6 +2,22 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <PreferenceCategory android:title="@string/read_bg_global">
+
+        <Preference
+            android:key="readBgImage"
+            android:persistent="false"
+            android:title="@string/read_bg_day"
+            app:iconSpaceReserved="false" />
+
+        <Preference
+            android:key="readBgImageNight"
+            android:persistent="false"
+            android:title="@string/read_bg_night"
+            app:iconSpaceReserved="false" />
+
+    </PreferenceCategory>
+
     <io.legado.app.lib.prefs.NameListPreference
         android:defaultValue="0"
         android:entries="@array/screen_direction_title"

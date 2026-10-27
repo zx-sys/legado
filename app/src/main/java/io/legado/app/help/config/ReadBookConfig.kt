@@ -259,6 +259,16 @@ object ReadBookConfig {
             configList.addAll(it)
         }
         normalizeGlobalLayout()
+        // 旧版本把背景图保存在样式模板里，升级时迁移为全局阅读背景。
+        configList.getOrNull(appCtx.getPrefInt(PreferKey.readStyleSelect))
+            ?.let {
+                ReadBookBackground.migrateFromStyleIfNeeded(
+                    dayType = it.bgType,
+                    dayPath = it.bgStr,
+                    nightType = it.bgTypeNight,
+                    nightPath = it.bgStrNight,
+                )
+            }
         if (previous.isNotEmpty() && previous != configList) ResourceThemeGeneration.changed()
     }
 
@@ -370,6 +380,15 @@ object ReadBookConfig {
                     bgs.add(path)
                 }
             }
+        }
+        ReadBookBackground.pathsForBackup().forEach { path ->
+            bgs.add(
+                if (path.contains(File.separator)) {
+                    path
+                } else {
+                    FileUtils.getPath(appCtx.externalFiles, "bg", path)
+                }
+            )
         }
         appCtx.externalFiles.getFile("bg").listFiles()?.forEach {
             if (!bgs.contains(it.absolutePath)) {
@@ -1270,7 +1289,13 @@ object ReadBookConfig {
             if (changed && configList.any { it === this }) ResourceThemeGeneration.changed()
         }
 
+        private fun globalBg(): ReadBgSelection? {
+            if (AppConfig.isEInkMode) return null
+            return ReadBookBackground.selection(AppConfig.isNightTheme)
+        }
+
         fun curBgStr(): String {
+            globalBg()?.let { return it.path }
             return when {
                 AppConfig.isEInkMode -> bgStrEInk
                 AppConfig.isNightTheme -> bgStrNight
@@ -1279,6 +1304,7 @@ object ReadBookConfig {
         }
 
         fun curBgType(): Int {
+            globalBg()?.let { return it.type }
             return when {
                 AppConfig.isEInkMode -> bgTypeEInk
                 AppConfig.isNightTheme -> bgTypeNight

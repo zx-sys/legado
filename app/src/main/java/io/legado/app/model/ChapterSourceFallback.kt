@@ -29,6 +29,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.util.concurrent.ConcurrentHashMap
 import splitties.init.appCtx
 
@@ -43,8 +44,9 @@ import splitties.init.appCtx
 object ChapterSourceFallback {
 
     private const val MAX_SOURCE_ATTEMPTS = 5
-    private const val SOURCE_TIMEOUT_MS = 20_000L
-    private const val TOTAL_TIMEOUT_MS = 60_000L
+    // 部分源（如无极书院）一章拆 5 页且冷页很慢，20 秒会误判整个源不可用
+    private const val SOURCE_TIMEOUT_MS = 90_000L
+    private const val TOTAL_TIMEOUT_MS = 180_000L
     private const val CHAPTER_COOLDOWN_MS = 10 * 60 * 1000L
 
     private val bookLocks = ConcurrentHashMap<String, Mutex>()
@@ -115,16 +117,32 @@ object ChapterSourceFallback {
                 )
             }.getOrDefault(emptyList())
             val cachedByOrigin = cachedBooks.associateBy { it.origin }
+            val failed = failedSources[book.bookUrl] ?: emptySet()
+            val onlineSources = appDb.bookSourceDao.allTextEnabledPart
+                .mapNotNull { it.getBookSource() }
+            val chapterHost = chapter.getAbsoluteURL().toHttpUrlOrNull()?.host
+            // 书源被换过但章节 URL 仍是旧源时，优先找与章节 URL 同域名的源，
+            // 否则按标题匹配时可能在前几个候选里找不到真正持有该章节的源。
+            val hostSource = chapterHost?.let { host ->
+                onlineSources.firstOrNull { it.enabled && it.bookSourceUrl.toHttpUrlOrNull()?.host == host }
+                    ?.bookSourceUrl
+                    ?.takeUnless { it in failed }
+            }
             val candidates = planFallbackSourceUrls(
                 currentOrigin = book.origin,
                 remembered = rememberedSources[book.bookUrl],
                 cached = cachedBooks.map { it.origin },
-                online = appDb.bookSourceDao.allTextEnabledPart
-                    .mapNotNull { it.getBookSource()?.bookSourceUrl },
-                failed = failedSources[book.bookUrl] ?: emptySet(),
+                online = onlineSources.map { it.bookSourceUrl },
+                failed = failed,
                 limit = MAX_SOURCE_ATTEMPTS,
             )
-            if (candidates.isEmpty()) return@withLock null
+            val orderedCandidates = if (hostSource != null) {
+                (listOf(hostSource) + candidates.filter { it != hostSource })
+                    .take(MAX_SOURCE_ATTEMPTS)
+            } else {
+                candidates
+            }
+            if (orderedCandidates.isEmpty()) return@withLock null
 
             val showLoadingMessage = shouldShowFallbackMessage(
                 currentBookUrl = ReadBook.book?.bookUrl,
@@ -139,7 +157,7 @@ object ChapterSourceFallback {
             }
             try {
                 withTimeoutOrNull(TOTAL_TIMEOUT_MS) {
-                    for (origin in candidates) {
+                    for (origin in orderedCandidates) {
                         currentCoroutineContext().ensureActive()
                         val source = appDb.bookSourceDao.getBookSource(origin)
                             ?.takeIf { it.enabled && it.bookSourceType == BookSourceType.default }

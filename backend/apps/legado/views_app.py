@@ -7,12 +7,20 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
+from django.db import transaction
 from django.http import FileResponse, HttpResponseRedirect
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.legado.models import Backup, FontPack, LegadoUser, TtsEngine, UserConfig
+from apps.legado.models import (
+    Backup,
+    FontPack,
+    LegadoUser,
+    LegadoUserBookSource,
+    TtsEngine,
+    UserConfig,
+)
 from apps.legado.services import backup_service, realtime, sync_service
 
 logger = logging.getLogger(__name__)
@@ -300,6 +308,137 @@ class BookSourceConfigView(NoAuthAPIView):
             },
         )
         return Response(payload)
+
+CUSTOM_SOURCE_MAX_ITEMS = 2000
+CUSTOM_SOURCE_MAX_BYTES = 512 * 1024
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _string(value, limit: int = 700) -> str:
+    return str(value or "").strip()[:limit]
+
+
+def _normalize_custom_source(row) -> dict | None:
+    if not isinstance(row, dict):
+        return None
+    source_url = _string(row.get("sourceUrl"))
+    if not source_url:
+        return None
+    removed = bool(row.get("removed", False))
+    raw = row.get("source")
+    if removed:
+        raw = {}
+    elif not isinstance(raw, dict):
+        return None
+    else:
+        raw = dict(raw)
+        raw["bookSourceUrl"] = source_url
+        encoded = json.dumps(raw, ensure_ascii=False)
+        if len(encoded.encode("utf-8")) > CUSTOM_SOURCE_MAX_BYTES:
+            return None
+        raw = json.loads(encoded)
+    try:
+        updated_at = int(row.get("updatedAt") or 0)
+    except (TypeError, ValueError):
+        updated_at = 0
+    if updated_at <= 0:
+        updated_at = _now_ms()
+    # 客户端时钟可能超前；避免单台设备长期压住其它设备
+    updated_at = min(updated_at, _now_ms() + 60_000)
+    return {
+        "source_url": source_url,
+        "name": _string(row.get("name") or (raw.get("bookSourceName") if raw else ""), 255),
+        "enabled": bool(row.get("enabled", True)),
+        "removed": removed,
+        "updated_at": updated_at,
+        "raw_json": raw,
+    }
+
+
+def _custom_source_payload(item: LegadoUserBookSource) -> dict:
+    return {
+        "sourceUrl": item.source_url,
+        "name": item.name,
+        "enabled": item.enabled,
+        "removed": item.removed,
+        "updatedAt": item.source_updated_at,
+        "source": item.raw_json if not item.removed else None,
+    }
+
+
+class CustomBookSourceView(NoAuthAPIView):
+    """用户自定义书源：按手机号账号隔离，客户端 LWW 合并，删除写墓碑。"""
+
+    def get(self, request):
+        user, error = get_user(request)
+        if error:
+            return error
+        try:
+            since = int(request.query_params.get("since") or 0)
+        except (TypeError, ValueError):
+            since = 0
+        query = LegadoUserBookSource.objects.filter(user=user, is_delete=False)
+        if since > 0:
+            query = query.filter(source_updated_at__gt=since)
+        items = [_custom_source_payload(item) for item in query.order_by("source_updated_at")]
+        return Response({"items": items, "serverTime": _now_ms()})
+
+    def post(self, request):
+        user, error = get_user(request)
+        if error:
+            return error
+        rows = request.data.get("items")
+        if not isinstance(rows, list):
+            return Response({"detail": "items must be a list"}, status=400)
+        normalized = [
+            item for item in (
+                _normalize_custom_source(row) for row in rows[:CUSTOM_SOURCE_MAX_ITEMS]
+            ) if item is not None
+        ]
+        stored = []
+        with transaction.atomic():
+            for item in normalized:
+                obj = (
+                    LegadoUserBookSource.objects.select_for_update()
+                    .filter(user=user, source_url=item["source_url"])
+                    .first()
+                )
+                if obj is None:
+                    obj = LegadoUserBookSource.objects.create(
+                        user=user,
+                        source_url=item["source_url"],
+                        name=item["name"],
+                        enabled=item["enabled"],
+                        removed=item["removed"],
+                        source_updated_at=item["updated_at"],
+                        raw_json=item["raw_json"],
+                    )
+                elif item["updated_at"] >= (obj.source_updated_at or 0):
+                    obj.name = item["name"]
+                    obj.enabled = item["enabled"]
+                    obj.removed = item["removed"]
+                    obj.source_updated_at = item["updated_at"]
+                    obj.raw_json = item["raw_json"]
+                    obj.is_delete = False
+                    obj.save(
+                        update_fields=[
+                            "name",
+                            "enabled",
+                            "removed",
+                            "source_updated_at",
+                            "raw_json",
+                            "is_delete",
+                            "update_time",
+                        ]
+                    )
+                stored.append(obj)
+        return Response(
+            {"items": [_custom_source_payload(item) for item in stored], "serverTime": _now_ms()}
+        )
+
 
 class FontPackListView(NoAuthAPIView):
     def get(self, request):

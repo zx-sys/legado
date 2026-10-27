@@ -48,7 +48,7 @@ object SettingsSync {
 
     private val excludedPrefixes = arrayOf(
         "color", "bgImage", "remoteFonts", "remoteTts", "bookSourceCatalog",
-        "bookSourceExcluded", "bookSourceServer", "bookSourceSelection",
+        "bookSourceExcluded", "bookSourceServer", "bookSourceSelection", "customSource",
         "bookSourceLast", "readAloudLast", "readAloudControlsX", "readAloudControlsY",
         "readAloudBall",
     )

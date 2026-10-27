@@ -13,6 +13,7 @@ import io.legado.app.help.config.SourceConfig
 import io.legado.app.help.http.CookieStore
 import io.legado.app.help.http.newCallStrResponse
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.source.CustomBookSourceSync
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.storage.ImportOldData
@@ -75,6 +76,7 @@ class BookSourceEditViewModel(application: Application) : BaseViewModel(applicat
             appDb.bookSourceDao.insert(source)
             bookSource = source
             concurrentRecordMap.remove(source.bookSourceUrl) //删除并发限制缓存
+            CustomBookSourceSync.onSourceSaved(source)
             source
         }.onSuccess {
             success?.invoke(it)

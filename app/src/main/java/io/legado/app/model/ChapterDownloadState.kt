@@ -4,21 +4,31 @@ import kotlinx.coroutines.CompletableDeferred
 
 /** One owner per chapter; a manual cache request survives a reader borrowing its work. */
 internal class ChapterDownloadState {
-    class Ticket internal constructor(val index: Int, internal var manualRequested: Boolean) {
+    class Ticket internal constructor(
+        val index: Int,
+        internal var manualRequested: Boolean,
+        /** 是否由批量缓存队列直接认领；这类失败延后重试，避免坏章节阻塞整批。 */
+        internal val fromManualQueue: Boolean = false,
+    ) {
         // null means that the owner stopped or a batch missed this chapter: callers may retry.
         val result = CompletableDeferred<Result<String>?>()
     }
 
     private val waiting = linkedSetOf<Int>()
+    /** 主队列失败章节，等主队列跑完后再统一重试，避免坏章节阻塞整批。 */
+    private val deferredRetry = linkedSetOf<Int>()
     private val running = linkedMapOf<Int, Ticket>()
     private val batchFallback = hashSetOf<Int>()
     private val resourceRefresh = hashSetOf<Int>()
 
-    val waitCount get() = synchronized(this) { waiting.size }
+    val waitCount get() = synchronized(this) { waiting.size + deferredRetry.size }
     val runningCount get() = synchronized(this) { running.size }
-    val isIdle get() = synchronized(this) { waiting.isEmpty() && running.isEmpty() }
+    val isIdle get() = synchronized(this) {
+        waiting.isEmpty() && deferredRetry.isEmpty() && running.isEmpty()
+    }
     val hasManualWork get() = synchronized(this) {
-        waiting.isNotEmpty() || running.values.any { it.manualRequested }
+        waiting.isNotEmpty() || deferredRetry.isNotEmpty() ||
+            running.values.any { it.manualRequested }
     }
 
     @Synchronized
@@ -33,9 +43,20 @@ internal class ChapterDownloadState {
     @Synchronized
     fun stopManual() {
         waiting.clear()
+        deferredRetry.clear()
         batchFallback.clear()
         resourceRefresh.clear()
         running.values.forEach { it.manualRequested = false }
+    }
+
+    /** 主队列优先；主队列和运行中都为空后，把失败章节放回队列做第二轮。 */
+    @Synchronized
+    fun nextWaitingIndex(): Int? {
+        if (waiting.isEmpty() && running.isEmpty() && deferredRetry.isNotEmpty()) {
+            waiting.addAll(deferredRetry)
+            deferredRetry.clear()
+        }
+        return waiting.firstOrNull()
     }
 
     @Synchronized
@@ -46,6 +67,7 @@ internal class ChapterDownloadState {
         val obsolete = synchronized(this) {
             indexes.mapNotNull { index ->
                 batchFallback.remove(index)
+                deferredRetry.remove(index)
                 running.remove(index)?.also { if (it.manualRequested) waiting.add(index) }
             }
         }
@@ -55,6 +77,7 @@ internal class ChapterDownloadState {
     @Synchronized
     fun discardWaiting(index: Int) {
         waiting.remove(index)
+        deferredRetry.remove(index)
         resourceRefresh.remove(index)
     }
 
@@ -70,7 +93,7 @@ internal class ChapterDownloadState {
     @Synchronized
     fun claimManual(index: Int): Ticket? {
         if (index !in waiting || index in running) return null
-        return begin(index)
+        return begin(index, fromManualQueue = true)
     }
 
     /** Atomic join-or-create, shared by ordinary reading and read-aloud. */
@@ -83,12 +106,17 @@ internal class ChapterDownloadState {
     @Synchronized
     fun claimBatch(indexes: List<Int>, manual: Boolean): List<Ticket> =
         indexes.mapNotNull { index ->
-            if (index in running || index in batchFallback || (manual && index !in waiting)) null else begin(index)
+            if (index in running || index in batchFallback || (manual && index !in waiting)) {
+                null
+            } else {
+                begin(index, fromManualQueue = manual)
+            }
         }
 
-    private fun begin(index: Int): Ticket = Ticket(index, waiting.remove(index)).also {
-        running[index] = it
-    }
+    private fun begin(index: Int, fromManualQueue: Boolean = false): Ticket =
+        Ticket(index, waiting.remove(index), fromManualQueue).also {
+            running[index] = it
+        }
 
     /** A late callback cannot release a newer owner or restore a stopped manual request. */
     fun finish(
@@ -110,8 +138,12 @@ internal class ChapterDownloadState {
                 if (ticket.manualRequested && !manualComplete()) waiting.add(ticket.index)
                 else resourceRefresh.remove(ticket.index)
             } else {
-                if (retryManual && ticket.manualRequested) waiting.add(ticket.index)
-                else resourceRefresh.remove(ticket.index)
+                if (retryManual && ticket.manualRequested) {
+                    if (ticket.fromManualQueue) deferredRetry.add(ticket.index)
+                    else waiting.add(ticket.index)
+                } else {
+                    resourceRefresh.remove(ticket.index)
+                }
                 if (fallback) batchFallback.add(ticket.index)
             }
         }

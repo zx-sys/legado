@@ -118,6 +118,10 @@ object BackupConfig {
 
     //阅读配置
     private val readPrefKeys = arrayOf(
+        PreferKey.readBgImageType,
+        PreferKey.readBgImagePath,
+        PreferKey.readBgImageTypeNight,
+        PreferKey.readBgImagePathNight,
         PreferKey.readStyleSelect,
         PreferKey.comicStyleSelect,
         PreferKey.mangaRightToLeft,

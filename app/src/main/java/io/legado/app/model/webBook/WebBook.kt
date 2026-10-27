@@ -8,6 +8,7 @@ import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.book.BookHelp
+import io.legado.app.help.book.CONTENT_READ_TIMEOUT_MS
 import io.legado.app.help.book.addType
 import io.legado.app.help.book.removeAllBookType
 import io.legado.app.help.coroutine.Coroutine
@@ -451,6 +452,7 @@ object WebBook {
                 source = bookSource,
                 ruleData = book,
                 chapter = bookChapter,
+                readTimeout = CONTENT_READ_TIMEOUT_MS,
                 coroutineContext = currentCoroutineContext()
             )
             val checkJs = bookSource.loginCheckJs

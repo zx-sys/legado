@@ -281,6 +281,14 @@ object PreferKey {
     const val bgImageN = "backgroundImageNight"
     const val bgImageNBlurring = "backgroundImageNightBlurring"
     const val tNavBarN = "transparentNavBarNight"
+
+    /** 全局阅读背景（与样式模板解耦，键名避开 bgImage* 同步排除前缀） */
+    const val readBgImage = "readBgImage"
+    const val readBgImageNight = "readBgImageNight"
+    const val readBgImageType = "readBgImageType"
+    const val readBgImagePath = "readBgImagePath"
+    const val readBgImageTypeNight = "readBgImageTypeNight"
+    const val readBgImagePathNight = "readBgImagePathNight"
     const val wallpaperColorFollow = "wallpaperColorFollow"
     const val wallpaperColorAutoUpdate = "wallpaperColorAutoUpdate"
     const val disablePredictiveBack = "disablePredictiveBack"

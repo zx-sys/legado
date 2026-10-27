@@ -26,10 +26,15 @@ private val challengeMarkers = listOf(
     "请完成验证",
 )
 
+internal fun containsVerificationMarker(text: String?): Boolean {
+    if (text.isNullOrBlank()) return false
+    val lower = text.lowercase()
+    return challengeMarkers.any(lower::contains)
+}
+
 internal fun isVerificationChallengeHtml(html: String?): Boolean {
     if (html.isNullOrBlank()) return true
-    val text = html.lowercase()
-    return challengeMarkers.any(text::contains)
+    return containsVerificationMarker(html)
 }
 
 internal fun isLoginFormHtml(html: String?): Boolean {

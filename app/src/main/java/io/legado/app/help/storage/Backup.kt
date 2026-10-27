@@ -12,6 +12,7 @@ import io.legado.app.exception.NoStackTraceException
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.config.ReadBookBackground
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReplacePreviewConfig
 import io.legado.app.help.config.ThemeConfig
@@ -264,6 +265,7 @@ object Backup {
                     if (config.bgTypeNight == 2) add(config.bgStrNight)
                     if (config.bgTypeEInk == 2) add(config.bgStrEInk)
                 }
+                addAll(ReadBookBackground.pathsForBackup())
             }
         } else {
             emptyList()

@@ -8,6 +8,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.BookSourcePart
 import io.legado.app.data.entities.toBookSource
 import io.legado.app.help.source.BookSourceSync
+import io.legado.app.help.source.CustomBookSourceSync
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -63,6 +64,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
             appDb.bookSourceDao.update(*bookSource)
             BookSourceSync.clearServerDisabledUrls(bookSource.map { it.bookSourceUrl })
             BookSourceSync.uploadSelectionInBackground()
+            bookSource.forEach { CustomBookSourceSync.onSourceSaved(it) }
         }
     }
 
@@ -84,6 +86,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
             appDb.bookSourceDao.enable(enable, items)
             BookSourceSync.clearServerDisabledUrls(items.map { it.bookSourceUrl })
             BookSourceSync.uploadSelectionInBackground()
+            CustomBookSourceSync.onSourceEnabledChanged(items.map { it.bookSourceUrl }, enable)
         }
     }
 
@@ -92,6 +95,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
             appDb.bookSourceDao.enable(true, sources)
             BookSourceSync.clearServerDisabledUrls(sources.map { it.bookSourceUrl })
             BookSourceSync.uploadSelectionInBackground()
+            CustomBookSourceSync.onSourceEnabledChanged(sources.map { it.bookSourceUrl }, true)
         }
     }
 
@@ -100,6 +104,7 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
             appDb.bookSourceDao.enable(false, sources)
             BookSourceSync.clearServerDisabledUrls(sources.map { it.bookSourceUrl })
             BookSourceSync.uploadSelectionInBackground()
+            CustomBookSourceSync.onSourceEnabledChanged(sources.map { it.bookSourceUrl }, false)
         }
     }
 

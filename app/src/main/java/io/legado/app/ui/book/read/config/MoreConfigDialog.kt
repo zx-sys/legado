@@ -17,6 +17,7 @@ import io.legado.app.base.BasePrefDialogFragment
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ReadBookBackground
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.lib.prefs.fragment.PreferenceFragment
 import io.legado.app.lib.theme.bottomBackground
@@ -31,6 +32,7 @@ import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.removePref
 import io.legado.app.utils.setEdgeEffectColor
+import io.legado.app.utils.showDialogFragment
 
 class MoreConfigDialog : BasePrefDialogFragment() {
     private val readPreferTag = "readPreferenceFragment"
@@ -86,6 +88,7 @@ class MoreConfigDialog : BasePrefDialogFragment() {
             addPreferencesFromResource(R.xml.pref_config_read)
             upPreferenceSummary(PreferKey.pageTouchSlop, slopSquare.toString())
             upPreferenceSummary(PreferKey.pullBookmarkDistance, (slopSquare * 6).toString())
+            upBgSummary()
             if (!CanvasRecorderFactory.isSupport) {
                 removePref(PreferKey.optimizeRender)
                 preferenceScreen.removePreferenceRecursively(PreferKey.optimizeRender)
@@ -99,9 +102,19 @@ class MoreConfigDialog : BasePrefDialogFragment() {
 
         override fun onResume() {
             super.onResume()
+            upBgSummary()
             preferenceManager
                 .sharedPreferences
                 ?.registerOnSharedPreferenceChangeListener(this)
+        }
+
+        private fun upBgSummary() {
+            findPreference<Preference>(PreferKey.readBgImage)?.summary =
+                ReadBookBackground.displayName(night = false)
+                    ?: getString(R.string.read_bg_follow_style)
+            findPreference<Preference>(PreferKey.readBgImageNight)?.summary =
+                ReadBookBackground.displayName(night = true)
+                    ?: getString(R.string.read_bg_follow_style)
         }
 
         override fun onPause() {
@@ -116,6 +129,11 @@ class MoreConfigDialog : BasePrefDialogFragment() {
             key: String?
         ) {
             when (key) {
+                PreferKey.readBgImageType,
+                PreferKey.readBgImagePath,
+                PreferKey.readBgImageTypeNight,
+                PreferKey.readBgImagePathNight -> upBgSummary()
+
                 PreferKey.readBodyToLh -> activity?.recreate()
                 PreferKey.hideStatusBar -> {
                     ReadBookConfig.hideStatusBar = getPrefBoolean(PreferKey.hideStatusBar)
@@ -183,6 +201,16 @@ class MoreConfigDialog : BasePrefDialogFragment() {
 
         override fun onPreferenceTreeClick(preference: Preference): Boolean {
             when (preference.key) {
+                PreferKey.readBgImage -> {
+                    showDialogFragment(ReadBgImageDialog.newInstance(night = false))
+                    return true
+                }
+
+                PreferKey.readBgImageNight -> {
+                    showDialogFragment(ReadBgImageDialog.newInstance(night = true))
+                    return true
+                }
+
                 "customPageKey" -> PageKeyDialog(requireContext()).show()
                 "clickRegionalConfig" -> {
                     (activity as? ReadBookActivity)?.showClickRegionalConfig()

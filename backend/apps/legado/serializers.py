@@ -13,6 +13,7 @@ from apps.legado.models import (
     LegadoBookmark,
     LegadoHighlight,
     LegadoUser,
+    LegadoUserBookSource,
     TtsEngine,
     UserConfig,
 )
@@ -33,6 +34,15 @@ class LegadoUserSerializer(CustomModelSerializer):
 
     def get_book_count(self, obj):
         return obj.books.count()
+
+
+class LegadoUserBookSourceSerializer(CustomModelSerializer):
+    user_phone = serializers.CharField(source="user.phone", read_only=True)
+
+    class Meta:
+        model = LegadoUserBookSource
+        fields = "__all__"
+        read_only_fields = ("create_time", "update_time", "is_delete")
 
 
 class BackupSerializer(CustomModelSerializer):

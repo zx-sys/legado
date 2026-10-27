@@ -23,6 +23,7 @@ import io.legado.app.help.http.SSLHelper
 import io.legado.app.help.http.StrResponse
 import io.legado.app.help.source.SourceHelp
 import io.legado.app.help.source.SourceVerificationHelp
+import io.legado.app.help.source.SourceVerificationRegistry
 import io.legado.app.help.source.HEADLESS_VERIFICATION_DELAY_MS
 import io.legado.app.help.source.SOURCE_VERIFICATION_RETRY_MESSAGE
 import io.legado.app.help.source.isLoginPageHtml
@@ -424,6 +425,7 @@ interface JsExtensions : JsEncodeUtils {
 
     fun startBrowserAwait(url: String, title: String, refetchAfterSuccess: Boolean, html: String?): StrResponse {
         rhinoContext.ensureActive()
+        getSource()?.getKey()?.let { SourceVerificationRegistry.markRequired(it) }
         // 先尝试隐藏 WebView 自动过验证，批量缓存时不弹可见浏览器
         tryHeadlessVerification(url)?.let { return it }
         if (CacheBookService.isRun) {

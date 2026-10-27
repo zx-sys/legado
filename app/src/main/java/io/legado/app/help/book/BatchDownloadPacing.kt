@@ -9,6 +9,9 @@ internal const val MANUAL_BATCH_DELAY_MS = 2_000L
 /** 验证未通过时静默重试前的等待时间。 */
 internal const val VERIFICATION_RETRY_DELAY_MS = 20_000L
 
+/** 正文页（含分页）读超时。部分书源冷页生成会超过 90 秒。 */
+internal const val CONTENT_READ_TIMEOUT_MS = 120_000L
+
 internal fun manualBatchDelayMs(claimedCount: Int): Long {
     return if (claimedCount >= MANUAL_BATCH_FAST_CHAPTERS) MANUAL_BATCH_DELAY_MS else 0L
 }

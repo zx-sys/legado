@@ -152,12 +152,31 @@ class ChapterDownloadStateTest {
         state.finish(batch[0], Result.success("first"))
         state.finish(batch[1], fallback = true)
         batch.forEach { state.finish(it, fallback = true) }
-        assertEquals(listOf(2), state.waitingIndexes())
+        assertTrue(state.waitingIndexes().isEmpty())
         assertEquals("first", batch[0].result.await()!!.getOrThrow())
         assertTrue(state.canBatch(1))
         assertFalse(state.canBatch(2))
         assertTrue(state.claimBatch(listOf(2), manual = false).isEmpty())
+        assertEquals(2, state.nextWaitingIndex())
         assertNotNull(state.claimManual(2))
+    }
+
+    @Test
+    fun `manual failures retry only after the main queue is drained`() {
+        val state = ChapterDownloadState()
+        state.enqueue(listOf(1, 2))
+        val first = state.claimManual(1)!!
+        state.finish(first, Result.failure(IllegalStateException("timeout")))
+        assertEquals(listOf(2), state.waitingIndexes())
+        assertEquals(2, state.waitCount)
+        assertFalse(state.isIdle)
+        assertEquals(2, state.nextWaitingIndex())
+        val second = state.claimManual(2)!!
+        state.finish(second, Result.success("second"))
+        assertEquals(1, state.nextWaitingIndex())
+        val retry = state.claimManual(1)!!
+        state.finish(retry, Result.success("first"))
+        assertTrue(state.isIdle)
     }
 
     @Test
