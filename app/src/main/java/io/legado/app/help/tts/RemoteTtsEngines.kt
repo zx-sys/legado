@@ -38,6 +38,8 @@ object RemoteTtsEngines {
         okHttpClient.newBuilder()
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
+            // 语音包 100MB+，继承基础客户端的 60s callTimeout 会在手机上必然超时。
+            .callTimeout(0, TimeUnit.MILLISECONDS)
             .build()
     }
 

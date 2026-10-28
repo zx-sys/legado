@@ -2521,6 +2521,21 @@ class ReadBookActivity : BaseReadBookActivity(),
         return (position - textChapter.getReadLength(pageIndex)).coerceAtLeast(0)
     }
 
+    /** 菜单“继续播放”用：从当前屏幕看到的位置重新开始，不复用暂停前的朗读位置。 */
+    private fun restartReadAloudFromVisiblePosition(): Boolean {
+        binding.readView.updateScrollReadPosition()
+        val textChapter = ReadBook.curTextChapter ?: return false
+        val pageIndex = ReadBook.durPageIndex
+        if (pageIndex < 0) return false
+        val startPos = (ReadBook.durChapterPos - textChapter.getReadLength(pageIndex))
+            .coerceAtLeast(0)
+        ReadBook.readAloud(
+            startPos = startPos,
+            rewindToSentenceStart = AppConfig.readAloudStartAtSentence
+        )
+        return true
+    }
+
     /**
      * 朗读按钮
      */
@@ -2580,27 +2595,10 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             BaseReadAloudService.pause -> {
                 val scrollPageAnim = ReadBook.pageAnim() == 3
-                if (scrollPageAnim && pageChanged) {
+                if (scrollPageAnim || pageChanged) {
                     pageChanged = false
-                    val pos = binding.readView.getReadAloudPos()
-                    if (pos != null) {
-                        val (index, line) = pos
-                        if (ReadBook.durChapterIndex != index) {
-                            ReadBook.openChapter(index, line.chapterPosition, false) {
-                                ReadBook.readAloud(
-                                    startPos = line.pagePosition,
-                                    rewindToSentenceStart = AppConfig.readAloudStartAtSentence
-                                )
-                            }
-                        } else {
-                            ReadBook.durChapterPos = line.chapterPosition
-                            ReadBook.readAloud(
-                                startPos = line.pagePosition,
-                                rewindToSentenceStart = AppConfig.readAloudStartAtSentence
-                            )
-                        }
-                    } else {
-                        ReadBook.readAloud(rewindToSentenceStart = AppConfig.readAloudStartAtSentence)
+                    if (!restartReadAloudFromVisiblePosition()) {
+                        ReadAloud.resume(this)
                     }
                 } else {
                     ReadAloud.resume(this)

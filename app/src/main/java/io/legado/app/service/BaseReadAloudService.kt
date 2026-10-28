@@ -183,7 +183,7 @@ abstract class BaseReadAloudService : BaseService(),
         }
     }
 
-    private val useWakeLock = appCtx.getPrefBoolean(PreferKey.readAloudWakeLock, false)
+    private val useWakeLock = appCtx.getPrefBoolean(PreferKey.readAloudWakeLock, true)
     private val wakeLock by lazy {
         powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "legado:ReadAloudService")
             .apply {
@@ -1031,7 +1031,9 @@ abstract class BaseReadAloudService : BaseService(),
         if (!wasPaused) resumeReadAloudInternal()
         val nextSpeechIndex = speechChapterIndex() + 1
         val hasNextChapter = nextSpeechIndex < sessionChapterCount()
-        if (readerSynced()) {
+        // 息屏时阅读页不在前台，moveToNextChapter 可能一直等页面加载，导致章末停住。
+        // 这时由朗读服务自己加载下一章，唤醒后再同步阅读页位置。
+        if (readerSynced() && powerManager.isInteractive) {
             val visibleSyncMoved = ReadBook.moveToNextChapter(true, syncReadAloudFollow = true)
             when (nextChapterDecision(
                 hasNextSpeechChapter = hasNextChapter,
@@ -1049,6 +1051,9 @@ abstract class BaseReadAloudService : BaseService(),
             }
         } else {
             if (hasNextChapter) {
+                if (!powerManager.isInteractive) {
+                    AppLog.putDebug("屏幕关闭, 朗读服务自行加载下一章")
+                }
                 loadSpeechChapterOnly(nextSpeechIndex, startPaused = wasPaused)
             } else {
                 stopSelf()
@@ -1066,7 +1071,8 @@ abstract class BaseReadAloudService : BaseService(),
             delay(2_000L)
             if (!isRun || pause) return@launch
             if (textChapter?.chapter?.index == expectedIndex) {
-                if (contentList.isEmpty()) play()
+                // 新会话可能已切到下一章但正文还没准备完，直接 play 会空转/停住。
+                if (contentList.isEmpty()) loadSpeechChapterOnly(expectedIndex)
                 return@launch
             }
             loadSpeechChapterOnly(expectedIndex)

@@ -27,6 +27,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.locks.LockSupport
 
 /**
  * 本地神经 TTS 朗读，引擎与音色由后台目录下发，支持 vits / kokoro / matcha。
@@ -180,7 +181,11 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
                         val currentTrack = audioTrack
                         if (currentTrack != null) {
                             var offset = 0
+                            var zeroWrites = 0
                             while (offset < samples.size) {
+                                if (stopRequested || !isCurrent(sessionId) || !isRun || pause) {
+                                    return 0
+                                }
                                 val written = runCatching {
                                     currentTrack.write(
                                         samples,
@@ -188,8 +193,15 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
                                         samples.size - offset,
                                         AudioTrack.WRITE_BLOCKING
                                     )
-                                }.getOrElse { 0 }
-                                if (written <= 0) return 0
+                                }.getOrElse { -1 }
+                                if (written < 0) return 0
+                                if (written == 0) {
+                                    // 高速播放时缓冲欠载会让 write 返回 0，直接中止合成会只读半句。
+                                    if (++zeroWrites > 200) return 0
+                                    LockSupport.parkNanos(5_000_000)
+                                    continue
+                                }
+                                zeroWrites = 0
                                 offset += written
                             }
                         }
@@ -276,7 +288,8 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
             AudioFormat.CHANNEL_OUT_MONO,
             AudioFormat.ENCODING_PCM_FLOAT
         )
-        val bufferSize = if (minBuffer > 0) minBuffer * 2 else sampleRate * 2
+        // 高速播放时用更深的缓冲，降低合成速度波动导致的欠载/半句。
+        val bufferSize = if (minBuffer > 0) minBuffer * 4 else sampleRate * 2
         val attributes = AudioAttributes.Builder()
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .setUsage(AudioAttributes.USAGE_MEDIA)
