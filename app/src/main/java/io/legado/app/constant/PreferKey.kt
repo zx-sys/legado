@@ -2,6 +2,7 @@ package io.legado.app.constant
 
 @Suppress("ConstPropertyName")
 object PreferKey {
+    const val tabletFoldOptimization = "tabletFoldOptimization"
 
     const val myMoreItems = "myMoreItems"
     const val language = "language"
@@ -55,6 +56,8 @@ object PreferKey {
     const val readAloudStart = "readAloudStart"
     const val readAloudByPage = "readAloudByPage"
     const val readAloudFollowManualPage = "readAloudFollowManualPage"
+    const val readAloudSwipePages = "readAloudSwipePages"
+    const val readAloudDragSeek = "readAloudDragSeek"
     const val readAloudControlsRealtime = "readAloudControlsRealtime"
     const val readAloudControlsPause = "readAloudControlsPause"
     const val readAloudControlsPosition = "readAloudControlsPosition"

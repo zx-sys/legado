@@ -1135,7 +1135,15 @@ object ReadBook : CoroutineScope by MainScope() {
     ) {
         callBack?.pageChanged()
         curTextChapter?.let {
+            if (BaseReadAloudService.suppressReaderReadAloudRestart) return@let
             if (updateReadAloud && ReadAloud.isReadingBook(it.chapter.bookUrl) && it.isCompleted) {
+                // 锁屏期间朗读游标可能已经推进到后面的章节；旧页面不能把它拉回来重读。
+                if (BaseReadAloudService.isRun && !BaseReadAloudService.pause &&
+                    ReadAloud.readAloudChapterIndex >= 0 &&
+                    ReadAloud.readAloudChapterIndex != it.chapter.index
+                ) {
+                    return@let
+                }
                 if (!syncReadAloudFollow) {
                     if (!restartReadAloudFromVisiblePage) {
                         ReadAloud.detachReadAloudFollow()

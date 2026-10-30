@@ -80,7 +80,8 @@ class ReadAloudFloatBallContractTest {
                 "val bookUrl = intent.getStringExtra(\"bookUrl\") ?: ReadBook.book?.bookUrl"
             )
         )
-        assertTrue(activity.contains("aloudControls.update(menuVisible, bookUrl)"))
+        assertTrue(activity.contains("aloudControls.update("))
+        assertTrue(activity.contains("menuVisible || binding.readView.isReadAloudDragging"))
         assertTrue(onNewIntent.contains("updateReadAloudFloatBar()"))
     }
 
