@@ -2,6 +2,7 @@
 
 > 目的：固定本仓库的产品行为与数据归属，避免每次从上游同步代码时反复踩坑。
 > 任何与本文冲突的上游实现，默认不合并；确需合并时先改本文和 `AGENTS.md`。
+> 使用习惯、硬需求清单与逐项验收见 `docs/FORK_REQUIREMENTS.md`。
 
 ## 1. 产品形态
 
@@ -22,9 +23,39 @@
 - **朗读会话独立**：`BaseReadAloudService` 通过 `ReadAloudSession` 持有会话书/书源/章节数，不再借用 `ReadBook` 单例；支持边听 A 书边读 B 书。会话书与当前书相同时仍走原有实时状态，保证同书行为不变。
 - **App 内悬浮球**：`ReadAloudFloatBallManager` 把悬浮球挂到当前 Activity 的 content 根布局，只存在于 App 内，**不申请系统级悬浮窗**。三个热区：封面回朗读位置、播放/暂停、退出朗读；可拖动吸附左右边缘，底部预留 104dp 避让阅读页浮条。
 - **控制入口统一**：阅读页返回键不再暂停朗读；暂停态离开阅读页也不停止服务，统一由悬浮球/通知控制。
-- **阅读页浮条**：只在脱离阅读跟随时显示“回到朗读位置 / 从此处开始读”，不再显示单独暂停圆钮。
+- **阅读页浮条**：跟随朗读时隐藏；手动浏览/退出跟随后、菜单收起时显示“回到朗读位置 / 从此处开始读”。不显示单独暂停圆钮（播放/暂停由悬浮胶囊控制），也不因“拖动定位”开关而隐藏。
 - **事件门控**：`ALOUD_STATE`、`TTS_PROGRESS`（sticky）、`READ_ALOUD_FOLLOW` 的消费方都必须用 `ReadAloud.isReadingBook(当前书)` 过滤，避免 B 阅读页响应 A 的进度。
 - 合并上游朗读相关提交时保留以上边界，见 `AGENTS.md` 的代码所有权。
+
+### 1.3 阅读 / 朗读交互硬性约定（2026-10 定稿）
+
+下列行为是产品定稿，合上游时默认保留；测试名用于回归定位。
+
+| 约定 | 实现入口 | 回归测试 |
+|---|---|---|
+| 菜单“朗读/继续”始终从当前可见位置开始（服务未启动或已暂停都一样，不复用上次朗读位置） | `ReadBookActivity.onClickReadAloud()` → `restartReadAloudFromVisiblePosition()` | `ReadAloudMenuResumeTest` |
+| 悬浮胶囊“继续”从暂停位置开始 | `ReadAloud.resume()` | 手测 + 悬浮球逻辑 |
+| 页内浮条跟随朗读时隐藏，脱离跟随后才显示“回到朗读位置 / 从这读”，不受拖动定位开关影响 | `ReadAloudControls.update()` / `readAloudPositionBarVisible()` | `ReadAloudControlsVisibilityTest`、`ReadAloudFloatingBarTest` |
+| 朗读高亮只改文字颜色，不画背景块 | `TextLine.drawTextLine()` / `TextColumn` 的 `isReadAloud` | `ReadAloudHighlightStyleTest` |
+| 跟随朗读时上下滑动退出跟随并自由滚动/翻页，不再拖动朗读位置 | `ReadView.handleAloudTouch()` 竖直分支 → `detachReadAloudFollow()` + pageDelegate | `ReadAloudFollowGestureTest` |
+| 手动脱离跟随后，TTS 进度不能自动恢复跟随；只有回到朗读位置/从这读/新会话才恢复 | `SpeechFollowState.isManuallyDetached`、`ReadBookActivity.restoreAloudFollowOnVisiblePage()` | `ReadAloudManualDetachTest`、`SpeechFollowStateTest` |
+| 跟随中目录/进度条/上一章/下一章换章：朗读游标移到新章节并继续（暂停保持暂停）；已脱离跟随后换章只翻页不动朗读；回前台/解锁只在仍跟随时同步可见页 | `ReadBook.openChapter()`、`ReadBook.moveToNextChapter()/moveToPrevChapter()`、`prepareReadAloudChapterNavigation()`、`ReadBookActivity.syncVisiblePageToReadAloud()` | `ReadAloudManualPagePolicyTest`、`ReadAloudVisibleSyncPolicyTest`、`ReadAloudFollowPositionRegressionTest` |
+| 通知媒体面板上一首/下一首 = 上一章/下一章 | `BaseReadAloudService` 的 `onSkipToPrevious/onSkipToNext` | `ReadAloudNotificationActionTest` |
+| 耳机媒体键仍按“上一段/下一段 或 上一章/下一章”开关 | `MediaButtonReceiver` + `mediaButtonPerNext` | 手测 |
+| 章末由朗读服务单一接管；章节数取阅读页/会话较大值；TTS 无 `onDone` 有看门狗 | `nextChapter()`、`loadSpeechChapterOnly()`、`armChapterEndWatchdog()` | `ReadAloudChapterCountTest`、`ChapterStopTimerTest` |
+| 阅读页 `onPause` 同步落库，写库单调（旧位置不能覆盖新位置） | `ReadBook.saveReadBlocking()`、`writeReadProgress()` | `ReadProgressSaveContractTest`、`ReplacePreviewTest` |
+| 跟随朗读后台换章强制落库，播放中最多 30 秒落一次 | `BaseReadAloudService.saveSpeechProgressToReader()` | `ReadAloudBackgroundProgressTest` |
+| 启动时本地进度较新则回传，服务端严格更新才覆盖 | `SyncManager.applyProgressNow()` / `shouldApplyRemoteProgress()` | `SyncProgressMergeTest` |
+| 划掉最近任务/强杀不得回退本地阅读进度 | 上述进度写库 + `onTaskRemoved` | 模拟器手测 |
+
+**明确拒绝的上游实现**（来自 #1441 等）：
+
+- 拖动定位时给朗读文字加黄色背景块；
+- 开启拖动定位就隐藏页内“回到朗读位置/从这读”浮条；
+- 通知上一首/下一首按“上一段/下一段”处理（通知应为切章）；
+- `prevChapter()` 只翻阅读页、不移动朗读游标；
+- 竖直滑动拖动朗读位置而不是退出跟随；
+- 手动脱离跟随后由 TTS 进度事件自动恢复跟随（会把正在自由浏览的页面拉回朗读位置）。
 
 ## 2. 已删除功能（禁止合并回来）
 
@@ -155,6 +186,9 @@
 | 上游新增阅读界面设置 | 可合并，但必须进入全局 `ReadBookConfig`/AppConfig 并加入同步白名单 |
 | 上游新增朗读设置 | 可合并，但必须是全局 key；不要写进 Book.readConfig 作为习惯 |
 | 上游朗读服务与 `ReadBook` 耦合实现 | 保留本仓库 `ReadAloudSession` 解耦、App 内悬浮球与同书门控；不合入直接复用 `ReadBook` 全局状态的版本 |
+| 上游听书交互（拖动定位背景、隐藏浮条、通知按段切、prev 只翻页） | 按 1.3 改写：去背景、浮条常显、通知切章、服务统一切换 |
+| 上游 TTS 章末回调/章节总数实现 | 保留服务单一接管、章节数取较大值、章末无 `onDone` 看门狗 |
+| 上游阅读进度只异步写/启动只拉取 | 保留 `onPause` 同步写、单调写、本地较新时回传 |
 | 上游同步/备份实现 | 不替换本仓库 `help/sync` 与 backend sync；可借鉴字段 |
 | `server/` FastAPI | 不扩展 |
 | `admin-web` 旧 dvlyadmin 代码 | 与仓库内 admin-web 冲突时保留仓库实现 |
@@ -172,10 +206,14 @@
 
 - 文本阅读：切书后翻页动画/字体/间距一致；无“本书阅读设置”。
 - 朗读：引擎选择无“书”按钮；切书后仍用全局引擎/音色。
+- 朗读交互：菜单从可见位置、胶囊从暂停位置；页内浮条跟随隐藏、脱离后可见；高亮只有文字色；跟随中上下滑退出跟随且不被进度拉回；跟随中目录/换章后朗读落到新章节，脱离跟随后换章不改朗读位置；通知上一首切章。
+- 进度：最近任务划掉后重开不回退；后台跟随换章后本地进度已更新；本地较新时启动回传而非被服务端覆盖。
 - 无 WebDAV / 在线 TTS 的类、菜单、资源、默认数据。
 - 字体市场、TTS 市场可用。
 - `GET /api/legado/app/sync?since=0` 返回 `books/groups/settings`；WS 日志有 `ws connected`。
 - 首次绑定：最新备份恢复后，实时同步补齐书架/进度；删除/重加走墓碑。
+- 音频/朗读计量：音频播放/计时/睡眠定时用“集”，朗读用“章”。
+- 缓存/换源：前 3 章全速、之后 2 秒；分页源并发 4；换源/刷新/删书停旧队列；空目录不得禁用全部书源；缓存记录实际来源。
 - 构建：
 
 ```bash

@@ -88,6 +88,7 @@ class ChapterStopTimerTest {
 
         assertTrue(base.contains("IntentAction.next -> nextChapter()"))
         assertTrue(base.contains("open fun nextChapter(auto: Boolean = false)"))
-        assertEquals(2, Regex("nextChapter\\(auto = true\\)").findAll(tts).count())
+        // onDone / 无文本兜底 / 章末回调丢失看门狗
+        assertEquals(3, Regex("nextChapter\\(auto = true\\)").findAll(tts).count())
     }
 }

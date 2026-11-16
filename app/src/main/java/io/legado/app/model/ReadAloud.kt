@@ -51,6 +51,10 @@ object ReadAloud {
     val followReadAloudPosition: Boolean
         get() = BaseReadAloudService.followReadAloudPosition
 
+    /** 用户手动脱离朗读跟随后, 进度事件不能自动恢复跟随。 */
+    val isFollowManuallyDetached: Boolean
+        get() = BaseReadAloudService.isFollowManuallyDetached
+
     val readAloudChapterIndex: Int
         get() = BaseReadAloudService.readAloudChapterIndex
 

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>去舟山，吹几天海风，再回家｜4—7天慢游攻略</title>
+<style>
+:root{
+  --ink:#2d2823;
+  --muted:#6f6559;
+  --paper:#fbf7ef;
+  --paper2:#f3ebde;
+  --white:#fffdf8;
+  --line:#ded2bf;
+  --line-soft:#e9dfcf;
+  --a:#2f6f6a;
+  --a-soft:#dcebe9;
+  --b:#b18445;
+  --b-soft:#f6ecd9;
+  --gold:#b18445;
+  --danger:#9a3f33;
+  --shadow:0 12px 34px rgba(72,52,30,.08);
+  --radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(178,132,69,.07), transparent 26rem),
+    radial-gradient(circle at 96% 18%, rgba(47,111,106,.08), transparent 28rem),
+    var(--paper);
+  color:var(--ink);
+  font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC","Helvetica Neue",sans-serif;
+  font-size:17px;
+  line-height:1.78;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--a);text-decoration:none;border-bottom:1px solid rgba(47,111,106,.28)}
+a:hover{border-bottom-color:var(--a)}
+.wrap{max-width:1080px;margin:0 auto;padding:26px 22px 90px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:8px 0 20px;font-size:13px;color:var(--muted)}
+.brand{font-weight:800;letter-spacing:.12em;color:var(--ink)}
+.brand span{color:var(--a)}
+.print-btn{border:1px solid var(--line);background:var(--white);color:var(--ink);padding:8px 14px;border-radius:999px;font:inherit;font-size:13px;cursor:pointer;box-shadow:0 3px 10px rgba(72,52,30,.06)}
+.print-btn:hover{background:var(--paper2)}
+.hero{
+  position:relative;overflow:hidden;padding:58px 48px 50px;border:1px solid var(--line);border-radius:26px;
+  background:linear-gradient(135deg,rgba(255,253,248,.94),rgba(231,243,241,.9)),
+    repeating-linear-gradient(0deg,transparent 0 31px,rgba(47,111,106,.06) 31px 32px);
+  box-shadow:var(--shadow);
+}
+.hero:before{content:"";position:absolute;right:-90px;top:-110px;width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(47,111,106,.16),rgba(47,111,106,0) 68%)}
+.hero:after{content:"";position:absolute;right:54px;bottom:34px;width:120px;height:120px;border:1px solid rgba(177,132,69,.35);border-radius:50%;box-shadow:0 0 0 12px rgba(177,132,69,.05),0 0 0 24px rgba(177,132,69,.03)}
+.hero-meta{position:relative;z-index:1;font-size:13px;letter-spacing:.08em;color:var(--muted)}
+.hero h1{position:relative;z-index:1;margin:18px 0 14px;font-size:clamp(38px,6.5vw,68px);line-height:1.12;letter-spacing:-.035em;font-weight:900}
+.hero h1 em{font-style:normal;color:var(--a)}
+.hero-sub{position:relative;z-index:1;max-width:800px;margin:0;font-size:19px;color:#4b443b}
+.hero-sub strong{color:var(--ink)}
+.hero-note{position:relative;z-index:1;display:inline-block;margin-top:24px;padding:11px 16px;border-left:4px solid var(--gold);background:rgba(246,236,217,.8);font-size:14px;color:#5e5040;border-radius:0 9px 9px 0}
+.hero-stamp{position:absolute;right:44px;top:40px;z-index:1;writing-mode:vertical-rl;font-family:"KaiTi","STKaiti",serif;font-size:15px;color:var(--a);letter-spacing:.22em;opacity:.8}
+.section{margin:54px 0 0}
+.page-break{page-break-before:always}
+.section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;border-bottom:2px solid var(--ink);padding-bottom:14px}
+.section-kicker{font-size:12px;letter-spacing:.18em;color:var(--a);font-weight:800;text-transform:uppercase;margin-bottom:6px}
+.section-head h2{margin:0;font-size:clamp(28px,4.2vw,42px);line-height:1.2;letter-spacing:-.02em}
+.section-stamp{font-family:"KaiTi","STKaiti",serif;font-size:15px;color:var(--muted);white-space:nowrap;padding-bottom:6px}
+.lead{font-size:18px;color:#4b443b;max-width:840px;margin:22px 0 0}
+.subhead{font-size:22px;margin:38px 0 14px}
+.muted{color:var(--muted)}
+.small{font-size:14px;line-height:1.7}
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:24px}
+.choice{position:relative;background:var(--white);border:1px solid var(--line);border-radius:var(--radius);padding:26px 26px 24px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+.choice-a{border-top:7px solid var(--a)}
+.choice-b{border-top:7px solid var(--b)}
+.choice-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.badge{display:inline-block;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.08em}
+.badge-a{background:var(--a-soft);color:var(--a)}
+.badge-b{background:var(--b-soft);color:#8a642c}
+.days{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+.choice h3{font-size:28px;margin:14px 0 4px}
+.choice-lead{margin:0 0 10px;font-weight:700;color:var(--a)}
+.choice-b .choice-lead{color:#8a642c}
+.choice p{margin:8px 0}
+.mini{margin:12px 0 0;padding:0;list-style:none}
+.mini li{position:relative;padding-left:16px;margin:6px 0;font-size:14px;line-height:1.7;color:#50483e}
+.mini li:before{content:"";position:absolute;left:0;top:.7em;width:6px;height:6px;border-radius:50%;background:var(--gold)}
+.choice-a .mini li:before{background:var(--a)}
+.choice-b .mini li:before{background:var(--b)}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:auto;padding-top:18px}
+.stat-row div{border-top:1px solid var(--line-soft);padding-top:10px}
+.stat-row span{display:block;font-size:11px;color:var(--muted);letter-spacing:.06em}
+.stat-row strong{display:block;font-size:14px;line-height:1.45;margin-top:2px;white-space:nowrap}
+.callout{margin:24px 0;padding:20px 22px;border-radius:14px;border:1px solid var(--line);background:var(--white)}
+.callout-title{font-weight:900;margin-bottom:8px;font-size:16px}
+.callout-urgent{background:linear-gradient(180deg,#fbf3e3,#fffaf0);border-color:#e5cfaa;border-left:6px solid var(--gold)}
+.callout-a{background:linear-gradient(180deg,#eaf5f3,#f8fcfb);border-color:#c2dddb;border-left:6px solid var(--a)}
+.callout-b{background:linear-gradient(180deg,#fbf0e9,#fffaf6);border-color:#e8cdbd;border-left:6px solid var(--b)}
+.callout-warn{background:#fbf0ee;border-color:#e7c9c4;border-left:6px solid var(--danger)}
+.tight{margin:8px 0 0;padding-left:20px}
+.tight li{margin:5px 0}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--white);box-shadow:0 6px 18px rgba(72,52,30,.04)}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{padding:11px 13px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line-soft);font-size:14.5px;line-height:1.65}
+th{background:var(--paper2);font-size:13px;letter-spacing:.04em;color:#4c4338;font-weight:800;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even){background:rgba(248,243,234,.5)}
+td strong{color:var(--ink)}
+.table-a th{background:#e2f0ee;color:#185f59}
+.table-b th{background:#f6ecd9;color:#7c5a24}
+.total-row td{background:#f8efdf!important;font-weight:900;border-top:2px solid var(--gold)}
+.rules{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px}
+.rule{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:18px}
+.rule span{display:block;font-size:12px;font-weight:900;color:var(--gold);letter-spacing:.12em;margin-bottom:6px}
+.rule p{margin:0;font-size:14.5px;line-height:1.7}
+.rule strong{display:block;margin-bottom:3px;font-size:16px}
+.route-strip{display:flex;flex-direction:column;gap:9px;margin:24px 0 6px;padding:16px;border:1px dashed var(--line);border-radius:14px;background:rgba(255,253,248,.7)}
+.route-line{display:flex;flex-wrap:wrap;align-items:center;gap:7px;width:100%}
+.route-label{font-size:10.5px;font-weight:900;color:var(--muted);letter-spacing:.12em;min-width:34px}
+.route-strip .stop{padding:7px 12px;border-radius:999px;background:var(--white);border:1px solid #bcd9db;font-weight:800;font-size:14px;line-height:1.3}
+.route-strip .stop small{display:block;font-weight:400;color:var(--muted);font-size:10.5px;letter-spacing:.02em;margin-top:1px}
+.route-strip .arrow{color:var(--muted);font-size:15px}
+.day{display:grid;grid-template-columns:92px 1fr;gap:20px;padding:24px 0;border-bottom:1px dashed var(--line)}
+.day:last-child{border-bottom:none}
+.day-num{padding-top:2px}
+.day-num span{display:block;font-size:11px;letter-spacing:.16em;color:var(--muted);font-weight:800}
+.day-num strong{display:block;font-size:31px;line-height:1;color:var(--a);letter-spacing:-.04em;margin-top:4px}
+.day-body h4{margin:0 0 7px;font-size:19px;line-height:1.45}
+.day-body p{margin:6px 0;font-size:15px;line-height:1.75}
+.day-body .tag{display:inline-block;margin:0 6px 6px 0;padding:3px 8px;border-radius:6px;background:var(--paper2);color:#5a4f42;font-size:11.5px;font-weight:700;letter-spacing:.03em}
+.day-body .tag-main{background:var(--a-soft);color:var(--a)}
+.day-body ul{margin:6px 0 0;padding-left:18px}
+.day-body li{margin:3px 0;font-size:14.5px}
+.module{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:24px 26px;margin:18px 0;box-shadow:0 6px 22px rgba(72,52,30,.05)}
+.module-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line-soft);padding-bottom:10px;margin-bottom:12px}
+.module-head h3{margin:0;font-size:23px}
+.module-head span{font-size:12px;color:var(--muted);white-space:nowrap}
+.module p{margin:8px 0;font-size:15.2px;line-height:1.78}
+.module .kv{display:grid;grid-template-columns:76px 1fr;gap:4px 12px;margin:10px 0}
+.module .kv dt{font-size:12px;font-weight:900;color:var(--gold);letter-spacing:.05em;padding-top:3px}
+.module .kv dd{margin:0;font-size:14.8px;line-height:1.72}
+.module .kv dd strong{color:var(--ink)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.alt-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:10px}
+.alt{background:var(--paper2);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.65}
+.alt strong{display:block;margin-bottom:2px;color:var(--ink)}
+.budget-note{font-size:13px;color:var(--muted);margin:10px 0 0}
+.check-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin:12px 0 0}
+.check-grid label{display:flex;align-items:flex-start;gap:8px;background:var(--white);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:14px;line-height:1.5;cursor:pointer}
+.check-grid input{margin-top:4px;accent-color:var(--a)}
+.checklist-box{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin:16px 0}
+.checklist-box h3{margin:0 0 8px;font-size:20px}
+.checklist-box ul{margin:8px 0 0;padding-left:19px}
+.checklist-box li{margin:5px 0;font-size:14.8px}
+.note-lines{margin-top:12px}
+.note-lines span{display:block;height:34px;border-bottom:1px dotted #b8aa97}
+.quote{margin:28px 0;padding:24px 28px;border-left:4px solid var(--gold);background:linear-gradient(90deg,#f8efdf,rgba(248,239,223,.2));font-family:"KaiTi","STKaiti",serif;font-size:21px;line-height:1.8;color:#4c4032}
+.quote small{display:block;font-family:"Microsoft YaHei",sans-serif;font-size:12px;color:var(--muted);margin-top:8px;letter-spacing:.04em}
+.print-card{background:var(--white);border:1.5px solid var(--ink);border-radius:14px;padding:26px 28px;box-shadow:none}
+.print-card h3{margin:0 0 14px;font-size:22px}
+.print-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 24px}
+.field{border-bottom:1px dotted #9f9281;padding-bottom:7px;font-size:13px;color:var(--muted);min-height:38px}
+.field strong{display:block;font-size:12px;color:var(--ink);margin-bottom:4px}
+.footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:1.8}
+.footer a{color:var(--muted);border-bottom-color:rgba(111,101,89,.3)}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+.toc a{padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px;color:#544a3e;border-bottom:1px solid var(--line)}
+.toc a:hover{border-color:var(--gold)}
+@media screen and (max-width:820px){
+  .choice-grid,.rules,.two-col,.print-grid{grid-template-columns:1fr}
+  .alt-grid{grid-template-columns:1fr}
+  .hero{padding:40px 26px 36px}
+  .hero h1{font-size:clamp(36px,10vw,54px)}
+  .hero-stamp{display:none}
+  .section-head{align-items:flex-start;flex-direction:column;gap:6px}
+  .section-stamp{padding-bottom:0}
+  .day{grid-template-columns:64px 1fr;gap:14px}
+  .day-num strong{font-size:25px}
+  .module{padding:20px 18px}
+  .module .kv{grid-template-columns:64px 1fr}
+  .stat-row{grid-template-columns:1fr 1fr 1fr}
+}
+@media screen and (max-width:520px){
+  body{font-size:16px}
+  .wrap{padding:16px 13px 70px}
+  .hero{padding:32px 19px 30px;border-radius:18px}
+  .hero-sub{font-size:16.5px}
+  .hero-note{font-size:13px}
+  .choice{padding:21px 19px}
+  .choice h3{font-size:24px}
+  .stat-row{grid-template-columns:1fr}
+  .stat-row div{padding-top:7px}
+  .day{grid-template-columns:48px 1fr;gap:10px}
+  .day-num strong{font-size:21px}
+  .day-body h4{font-size:17px}
+  .route-strip{padding:12px;gap:5px}
+  .route-strip .stop{font-size:12.5px;padding:6px 9px}
+  th,td{font-size:13px;padding:9px 10px}
+  .print-card{padding:20px 16px}
+  .module-head{flex-direction:column;gap:2px}
+}
+@media print{
+  @page{size:A4;margin:13mm 12mm}
+  html,body{background:#fff!important}
+  body{font-size:10.4pt;line-height:1.62;color:#000}
+  .wrap{max-width:none;padding:0}
+  .no-print,.toc,.print-btn{display:none!important}
+  .hero{box-shadow:none;background:#fff;border:1px solid #bbb;padding:24px 26px;border-radius:0}
+  .hero:before,.hero:after,.hero-stamp{display:none}
+  .hero h1{font-size:34pt;margin:10px 0 6px}
+  .hero-sub{font-size:12pt}
+  .hero-note{font-size:9pt;background:#fff;border-left:3px solid #999}
+  .section{margin-top:22px}
+  .section-head h2{font-size:22pt}
+  .section-stamp{font-size:9pt}
+  .choice,.module,.callout,.checklist-box,.rule,.table-wrap{box-shadow:none}
+  .keep{page-break-inside:avoid;break-inside:avoid}
+  .callout-warn{page-break-inside:avoid;break-inside:avoid}
+  .choice-grid{gap:12px}
+  .choice{padding:15px 16px}
+  .choice h3{font-size:17pt}
+  .choice p,.mini li,.stat-row strong{font-size:8.8pt}
+  .stat-row span{font-size:7.5pt}
+  .lead{font-size:10.5pt}
+  .callout{padding:12px 14px;margin:14px 0}
+  .tight li,.table-wrap table{font-size:8.8pt}
+  th{font-size:8.2pt}
+  th,td{padding:6px 7px}
+  tr{page-break-inside:avoid;break-inside:avoid}
+  thead{display:table-header-group}
+  .day{padding:13px 0;grid-template-columns:62px 1fr;gap:12px;page-break-inside:avoid}
+  .day-num strong{font-size:19pt}
+  .day-body h4{font-size:12pt}
+  .day-body p,.day-body li{font-size:9.2pt}
+  .module{padding:14px 16px;margin:10px 0;page-break-inside:avoid}
+  .module-head h3{font-size:14pt}
+  .module p,.module .kv dd,.alt{font-size:9.1pt}
+  .alt-grid{gap:8px}
+  .alt{padding:8px 10px}
+  .budget-note,.footer{font-size:8pt}
+  .quote{font-size:13pt;padding:14px 16px;margin:16px 0}
+  .print-card{padding:16px}
+  .field{min-height:30px}
+  h2,h3,h4{page-break-after:avoid}
+  .page-break{page-break-before:always}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar no-print">
+    <div class="brand">慢旅行 <span>·</span> 舟山篇</div>
+    <button class="print-btn" onclick="window.print()">打印 / 存为 PDF</button>
+  </div>
+
+  <header class="hero" id="top">
+    <div class="hero-meta">2026年10月25日编制 · 江西宜春出发 · 公共交通 · 4—7天 · 终点杭州（回家）</div>
+    <div class="hero-stamp">海风 · 普陀 · 回家</div>
+    <h1>去舟山，<br>吹几天<em>海风</em>，<br>再回<em>杭州</em>。</h1>
+    <p class="hero-sub">一条不赶岛的路线：<strong>宜春→宁波→舟山</strong>，玩 3—6 天，最后从舟山坐大巴回杭州。杭州只是回家，不安排景点。</p>
+    <div class="hero-note">按上一份的同样口径写：爸妈慢游、公共交通。普陀山船班看风，行程里留半天缓冲；去程走宁波，比绕杭州更顺。</div>
+  </header>
+
+  <nav class="toc no-print" aria-label="目录">
+    <a href="#overview">先看这一页</a>
+    <a href="#days">4/5/7天怎么排</a>
+    <a href="#places">每个地方怎么玩</a>
+    <a href="#food">吃什么</a>
+    <a href="#budget">交通与费用</a>
+    <a href="#checklist">行前清单</a>
+  </nav>
+
+  <!-- ================= 总览 ================= -->
+  <section class="section" id="overview">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">先看这一页</div>
+        <h2>4天看海，7天把周边岛屿也走一走</h2>
+      </div>
+      <div class="section-stamp">不赶岛，留半天缓冲</div>
+    </div>
+
+    <p class="lead">舟山不用“跳岛”也能玩得很好：普陀山看寺庙和海，朱家尖看沙滩和观音法界，本岛吃海鲜、逛定海古城。4—7 天都在舟山及周边，最后回杭州家里，不在杭州安排游玩。</p>
+
+    <div class="choice-grid">
+      <article class="choice choice-a">
+        <div class="choice-top"><span class="badge badge-a">主线</span><span class="days">4—7天</span></div>
+        <h3>宜春 → 舟山 → 杭州（回家）</h3>
+        <p class="choice-lead">普陀山 · 朱家尖 · 舟山本岛 · 桃花岛</p>
+        <p>适合想看海、拜佛、吃海鲜、又不想天天搬行李的爸妈。普陀山有台阶，但可以坐景区巴士和索道；朱家尖海边路平。</p>
+        <ul class="mini">
+          <li><strong>4天：</strong>舟山 3 晚，普陀山 + 朱家尖，第 4 天回家</li>
+          <li><strong>5天：</strong>加本岛/桃花岛 1 天，第 5 天回家</li>
+          <li><strong>7天：</strong>加桃花岛/岱山，或普陀山住 1 晚，第 7 天回家</li>
+        </ul>
+        <div class="stat-row">
+          <div><span>走路</span><strong>海边平路</strong></div>
+          <div><span>天气</span><strong>18—26℃ · 海风</strong></div>
+          <div><span>2人预算</span><strong>0.42—0.80万</strong></div>
+        </div>
+      </article>
+
+      <article class="choice choice-b">
+        <div class="choice-top"><span class="badge badge-b">取舍</span><span class="days">别贪多</span></div>
+        <h3>哪些岛可以加，哪些别加</h3>
+        <p class="choice-lead">普陀山 · 朱家尖 · 桃花岛 · 东极岛</p>
+        <p>4—5 天只玩“普陀山 + 朱家尖 + 本岛”最舒服。桃花岛/岱山适合 5—7 天；东极岛船班少、受天气影响大，至少 8 天再去。</p>
+        <ul class="mini">
+          <li><strong>必去：</strong>普陀山、朱家尖南沙、沈家门渔港</li>
+          <li><strong>5—7天可加：</strong>桃花岛（射雕城/塔湾金沙）或岱山（东沙古镇）</li>
+          <li><strong>不建议：</strong>东极岛、嵊泗列岛，4—7 天会赶</li>
+          <li><strong>杭州：</strong>只回家，不安排景点</li>
+        </ul>
+        <div class="stat-row">
+          <div><span>普陀山</span><strong>1天起</strong></div>
+          <div><span>朱家尖</span><strong>1天</strong></div>
+          <div><span>桃花岛</span><strong>1天</strong></div>
+        </div>
+      </article>
+    </div>
+
+    <div class="callout callout-urgent">
+      <div class="callout-title">出发前，先把这 5 件事定下来</div>
+      <ol class="tight">
+        <li><strong>去程：</strong>宜春 08:42→宁波 12:32（G268，3 小时 50 分）；宁波汽车南站（就在宁波站旁）坐大巴到舟山，约 1.5 小时。</li>
+        <li><strong>普陀山：</strong>提前在“普陀山一码通”买门票+船票，成人联票约 220 元起；船从朱家尖蜈蚣峙码头出发，15 分钟。</li>
+        <li><strong>住宿：</strong>舟山住朱家尖/东港 3—6 晚；选电梯、低楼层、可取消。杭州是家，不用订酒店。</li>
+        <li><strong>回杭州：</strong>舟山（普陀客运中心/新城客运站）→杭州东/杭州客运中心，约 3.5—4 小时；到家，不安排景点。</li>
+        <li><strong>留缓冲：</strong>普陀山船班受风影响，行程里留半天；东极岛/桃花岛船班少，4—5 天不要去。</li>
+      </ol>
+    </div>
+
+    <h3 class="subhead">4 / 5 / 7 天骨架</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>天数</th><th>怎么排</th><th>适合谁</th></tr></thead>
+        <tbody>
+          <tr><td><strong>4 天</strong></td><td>D1 宜春→宁波→舟山；D2 普陀山；D3 朱家尖；D4 舟山→杭州回家</td><td>只想看海、拜佛、吃海鲜；杭州只是终点，不安排景点</td></tr>
+          <tr><td><strong>5 天</strong></td><td>D1 舟山；D2 普陀山；D3 朱家尖；D4 本岛/桃花岛；D5 回家</td><td>第一次来，舟山本岛和海边都想要；节奏刚好</td></tr>
+          <tr><td><strong>7 天</strong></td><td>D1 舟山；D2 普陀山；D3 朱家尖；D4 桃花岛/岱山；D5 回舟山/本岛；D6 普陀山第二日/慢住；D7 回家</td><td>愿意多换一次酒店；想把周边岛屿也走一走</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="subhead">舟山怎么辐射</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>目的地</th><th>怎么去</th><th>适合看什么</th><th>建议</th></tr></thead>
+        <tbody>
+          <tr><td><strong>普陀山</strong></td><td>朱家尖蜈蚣峙码头坐船 15 分钟</td><td>普济寺、南海观音、紫竹林、法雨寺、佛顶山</td><td>至少 1 天；想轻松就住岛上 1 晚</td></tr>
+          <tr><td><strong>朱家尖</strong></td><td>舟山本岛过跨海大桥，打车 20—30 分钟</td><td>南沙、大青山、观音法界、东沙、乌石塘</td><td>1 天；住朱家尖或东港</td></tr>
+          <tr><td><strong>舟山本岛</strong></td><td>定海/临城/东港/沈家门</td><td>定海古城、沈家门渔港、舟山博物馆、海鲜</td><td>半天到 1 天；适合到达日和雨天</td></tr>
+          <tr><td><strong>桃花岛</strong></td><td>沈家门墩头码头坐船 20—30 分钟</td><td>射雕城、塔湾金沙、安期峰</td><td>5—7 天可加 1 天；船班看天气</td></tr>
+          <tr><td><strong>岱山</strong></td><td>舟岱大桥，大巴/打车约 1 小时</td><td>东沙古镇、鹿栏晴沙、灯塔博物馆</td><td>5—7 天可加 1 天；比东极轻松</td></tr>
+          <tr><td><strong>东极岛</strong></td><td>沈家门半升洞码头坐船约 2 小时</td><td>庙子湖、东福山、日出</td><td>至少 2 天；船班少，4—7 天不建议</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-a">
+      <div class="callout-title">为什么去程走宁波，不先到杭州</div>
+      <p class="small">宜春有直达宁波的高铁（G268，3 小时 50 分），宁波汽车南站就在高铁站旁边，换大巴 1.5 小时到舟山，整体比“宜春→杭州→舟山”少折腾。回程从舟山直接坐大巴回杭州，到家；不在杭州安排景点。</p>
+    </div>
+  </section>
+
+  <!-- ================= 行程 ================= -->
+  <section class="section" id="days">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">5天慢游样板</div>
+        <h2>每天一个主项目，剩下随缘</h2>
+      </div>
+      <div class="section-stamp">4天删一天，7天加一岛</div>
+    </div>
+
+    <p class="lead">下面按 5 天排：舟山 4 晚。4 天版把 D4 删掉，D3 后直接回家；7 天版在 D4 加桃花岛/岱山，或在普陀山住 1 晚。普陀山和朱家尖都留了备选，累了就回酒店。</p>
+
+    <div class="route-strip">
+      <div class="route-line">
+        <span class="route-label">去程</span>
+        <span class="stop">宜春<small>G268 08:42</small></span><span class="arrow">→</span>
+        <span class="stop">宁波<small>12:32 到</small></span><span class="arrow">→</span>
+        <span class="stop">舟山<small>大巴 1.5 小时</small></span>
+      </div>
+      <div class="route-line">
+        <span class="route-label">回家</span>
+        <span class="stop">舟山<small>大巴 3.5—4 小时</small></span><span class="arrow">→</span>
+        <span class="stop">杭州<small>到家，不安排景点</small></span>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>01</strong></div>
+      <div class="day-body">
+        <h4>宜春→宁波→舟山：先去看渔港</h4>
+        <span class="tag tag-main">赶路</span><span class="tag">宁波换大巴</span><span class="tag">沈家门</span>
+        <p><strong>怎么走：</strong>宜春 08:42 坐 G268，12:32 到宁波；出站走到宁波汽车南站（约 5 分钟），坐 13:30 左右的大巴，1.5 小时到舟山。打车去朱家尖/东港酒店，放下行李。</p>
+        <p><strong>傍晚：</strong>去沈家门渔港滨港路走走，看渔船和夜排档；第一顿海鲜先问价、少点，清蒸/白灼为主。父母不吃生腌，不喝冰啤。</p>
+        <p><strong>住：</strong>朱家尖东沙/南沙附近（安静、看海）或东港（吃饭方便、离码头近），250—400 元/晚；选电梯酒店。</p>
+        <p><strong>备选：</strong>如果大巴晚点，就在酒店附近吃，不去渔港；定海古城也可以放到 D4。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>02</strong></div>
+      <div class="day-body">
+        <h4>普陀山：海天佛国，慢慢走</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">船 15 分钟</span><span class="tag">巴士+索道</span>
+        <p><strong>怎么走：</strong>7:30 到朱家尖蜈蚣峙码头，坐船 15 分钟上岛。提前买“门票+船票”联票（约 220 元/人），刷身份证/二维码进站。</p>
+        <p><strong>路线：</strong>码头→普济寺→南海观音→紫竹林/不肯去观音院→法雨寺→佛顶山索道→慧济寺。岛内坐景区巴士（5—10 元/趟），不要全程走；索道单程约 40 元，老人少爬香道。</p>
+        <p><strong>吃：</strong>普济寺/法雨寺素斋便宜，但有时间段；岛上餐馆贵，带水和一点零食。寺庙香花券 5—6 元，只收现金，带零钱。</p>
+        <p><strong>住：</strong>回朱家尖/东港住，性价比高；想轻松就住普陀山岛上 1 晚（贵、房间小，但不用赶船）。</p>
+        <p><strong>提醒：</strong>周末/香会节人多；船班受风影响，末班船别卡太晚；穿防滑鞋，寺庙里安静、着装得体。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>03</strong></div>
+      <div class="day-body">
+        <h4>朱家尖：沙滩、观音法界、海边慢走</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">海边平路</span><span class="tag">午休</span>
+        <p><strong>上午：</strong>南沙景区看海、走沙滩（门票约 75 元）；不想晒太阳就去观音法界（约 90 元，室内外结合，观音圣坛很震撼，预留 2—3 小时）。</p>
+        <p><strong>中午：</strong>回酒店午休，或东港吃海鲜面/海鲜排档。</p>
+        <p><strong>下午：</strong>大青山环岛路（门票约 100 元，打车/包车上去看海景，不用爬山）；或东沙、乌石塘、白山，选一个。</p>
+        <p><strong>备选：</strong>下雨就去观音法界+舟山博物馆；累了就海边咖啡坐一下午。南沙遮阳伞收费先问，海边风大带薄外套。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>04</strong></div>
+      <div class="day-body">
+        <h4>舟山本岛，或桃花岛：最后一天慢慢过</h4>
+        <span class="tag tag-main">二选一</span><span class="tag">不赶路</span><span class="tag">住朱家尖/东港</span>
+        <p><strong>选项一 · 本岛：</strong>定海古城/中大街（1—2 小时）→ 沈家门渔港滨港路（1 小时）→ 东港海鲜；或舟山博物馆（室内，1—2 小时）。不赶景点，适合到达日/离开日。</p>
+        <p><strong>选项二 · 桃花岛：</strong>沈家门墩头码头坐船 20—30 分钟；射雕城、塔湾金沙、安期峰，当天回或住 1 晚。船班看天气，提前查。</p>
+        <p><strong>住：</strong>回朱家尖/东港住，第二天回家方便；7 天版可以在桃花岛/岱山住 1 晚。</p>
+        <p><strong>备选：</strong>不想动就在酒店休息、海边散步；把体力留给第二天的大巴。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>05</strong></div>
+      <div class="day-body">
+        <h4>舟山→杭州：回家</h4>
+        <span class="tag tag-main">返程</span><span class="tag">大巴 3.5—4 小时</span><span class="tag">到家</span>
+        <p><strong>怎么走：</strong>早上从普陀客运中心/新城客运站坐大巴到杭州东/杭州客运中心，约 3.5—4 小时；也可以舟山→宁波大巴 1.5 小时，再宁波→杭州东高铁 1 小时。</p>
+        <p><strong>提醒：</strong>杭州是家，不安排景点；到家后休息。提前 40 分钟到车站，别把早餐省掉；大巴票提前一天买好。</p>
+        <p><strong>备选：</strong>如果大巴班次不合适，就舟山→宁波+高铁，班次更密；不要在杭州临时加景点，父母会累。</p>
+      </div>
+    </div>
+
+    <div class="callout callout-b">
+      <div class="callout-title">4天怎么删，7天怎么加</div>
+      <ul class="tight">
+        <li><strong>4天：</strong>D4 直接“舟山→杭州回家”，不安排本岛/桃花岛；D1—D3 同上。适合只想看海、拜佛、吃海鲜。</li>
+        <li><strong>5天：</strong>按上面走，舟山 4 晚，最平衡。</li>
+        <li><strong>7天加一岛：</strong>D4 去桃花岛（沈家门墩头码头坐船 20—30 分钟）或岱山（舟岱大桥，东沙古镇/鹿栏晴沙），住 1 晚；D5 回舟山，D6 本岛/普陀山第二日，D7 回家。</li>
+        <li><strong>7天深度普陀：</strong>D2 住普陀山 1 晚，D3 上午继续寺庙，下午回朱家尖；更松弛，但岛上住宿贵。</li>
+        <li><strong>不要加东极岛：</strong>船班少、受天气影响大，至少 8 天；4—7 天加了会一直在赶船。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= 每个地方 ================= -->
+  <section class="section page-break" id="places">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">每个地方怎么玩</div>
+        <h2>海、寺庙、沙滩、渔港</h2>
+      </div>
+      <div class="section-stamp">挑喜欢的，不用全去</div>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>普陀山</h3><span>1天，或住1晚</span></div>
+      <p><strong>为什么来：</strong>海天佛国，寺庙、海景、香道在一起。父母即使不拜佛，看看南海观音、吹吹海风也舒服。岛不大，但台阶多，坐景区巴士+索道最省力。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>码头→普济寺→南海观音→紫竹林→法雨寺→佛顶山索道→慧济寺；岛内坐巴士，索道单程约 40 元。</dd>
+        <dt>备选</dt><dd>只在普济寺+南海观音+紫竹林走半天；或住岛上 1 晚，第二天去法雨寺/佛顶山。</dd>
+        <dt>吃</dt><dd>寺庙素斋（便宜、有时间段）、岛上小馆；带水/零食，岛上物价高。</dd>
+        <dt>住</dt><dd>朱家尖/东港性价比高；住普陀山岛上贵、房间小，但不用赶末班船。</dd>
+        <dt>提醒</dt><dd>门票+船票联票约 220 元起，官方“普陀山一码通”预约；香花券 5—6 元只收现金；周末/香会节人多；船班受风影响，末班船别卡太晚。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>朱家尖</h3><span>1天</span></div>
+      <p><strong>为什么来：</strong>舟山最方便的海滨度假岛，和本岛有跨海大桥相连。南沙看沙滩，观音法界看建筑，大青山看环岛海景；路平，适合父母慢走。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>南沙（1—2 小时）→ 午饭/午休 → 观音法界（2—3 小时）→ 东港海鲜；或大青山环岛路（打车/包车，1—2 小时）。</dd>
+        <dt>备选</dt><dd>东沙、乌石塘、白山、舟山长乔海洋公园；下雨就去观音法界/舟山博物馆。</dd>
+        <dt>吃</dt><dd>东港/沈家门海鲜排档、海鲜面、海鲜市场加工；先问价、称重沥水。</dd>
+        <dt>住</dt><dd>朱家尖东沙/南沙（安静、看海）或东港（吃饭方便、离蜈蚣峙码头近），250—400 元/晚。</dd>
+        <dt>提醒</dt><dd>南沙遮阳伞收费先问；大青山打车/包车上去，不用爬山；海边风大，带薄外套。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>舟山本岛</h3><span>半天到1天</span></div>
+      <p><strong>为什么来：</strong>定海古城、沈家门渔港、东港和临城是舟山的生活面。到达日/离开日、下雨天，安排半天刚好；吃海鲜也在这里最方便。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>定海古城/中大街（1—2 小时）→ 沈家门渔港滨港路（1 小时）→ 东港海鲜排档；或舟山博物馆（室内，1—2 小时）。</dd>
+        <dt>备选</dt><dd>鸦片战争纪念馆、祖印寺、临城城市展示馆、东港夜市。</dd>
+        <dt>吃</dt><dd>带鱼、黄鱼、梭子蟹、皮皮虾、蛏子、蛤蜊、海鲜面、鱼鲞；清蒸/白灼为主。</dd>
+        <dt>提醒</dt><dd>沈家门夜排档先问价、看称；不喝冰啤；海鲜适量，肠胃药带上。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>桃花岛 / 岱山（5—7天加）</h3><span>1天，或住1晚</span></div>
+      <p><strong>为什么来：</strong>桃花岛有射雕城、塔湾金沙、安期峰，船程短；岱山有东沙古镇、鹿栏晴沙、灯塔博物馆，走舟岱大桥，不用坐船。两个选一个，别都加。</p>
+      <dl class="kv">
+        <dt>桃花岛</dt><dd>沈家门墩头码头坐船 20—30 分钟；射雕城+塔湾金沙+安期峰，1 天 1 晚；船班看天气。</dd>
+        <dt>岱山</dt><dd>舟岱大桥，大巴/打车约 1 小时；东沙古镇+鹿栏晴沙+灯塔博物馆，1 天；比东极轻松。</dd>
+        <dt>提醒</dt><dd>5—7 天加一个就够；东极岛至少 8 天，4—7 天不建议。</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ================= 吃 ================= -->
+  <section class="section" id="food">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">吃什么</div>
+        <h2>海鲜清蒸，素斋清淡，回家再吃家常菜</h2>
+      </div>
+      <div class="section-stamp">先问价 · 不喝冰啤</div>
+    </div>
+
+    <div class="two-col">
+      <div class="checklist-box">
+        <h3>舟山海鲜怎么点</h3>
+        <ul>
+          <li><strong>常见：</strong>带鱼、黄鱼、梭子蟹、皮皮虾、蛏子、蛤蜊、海鲜面、鱼鲞。</li>
+          <li><strong>做法：</strong>清蒸/白灼/葱油为主，少辣少油；父母不吃生腌。</li>
+          <li><strong>去哪儿：</strong>沈家门滨港路夜排档、东港海鲜排档、海鲜市场买来加工。</li>
+          <li><strong>价格：</strong>先问“多少钱一斤/一只”，称重前沥水，看着杀；保留小票。</li>
+          <li><strong>配：</strong>海鲜面、炒米面、鱼鲞；不喝冰啤，配热茶。</li>
+        </ul>
+      </div>
+      <div class="checklist-box">
+        <h3>普陀山素斋与舟山小吃</h3>
+        <ul>
+          <li><strong>普陀山素斋：</strong>普济寺/法雨寺有素斋，便宜但有时段；岛上餐馆贵，带水和零食。</li>
+          <li><strong>舟山小吃：</strong>海鲜面、炒米面、鱼鲞、海鲜粥、杨梅（季节）。</li>
+          <li><strong>沈家门：</strong>夜排档海鲜多，先看价再坐下；往里面走，别在路口第一家。</li>
+          <li><strong>注意：</strong>海鲜一次别吃太多；肠胃药带上；不喝冰啤。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 交通与费用 ================= -->
+  <section class="section" id="budget">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">交通与费用</div>
+        <h2>去程宁波，回程杭州，最顺</h2>
+      </div>
+      <div class="section-stamp">2人 · 舒适型</div>
+    </div>
+
+    <h3 class="subhead">大交通底稿</h3>
+    <div class="table-wrap table-a keep">
+      <table>
+        <thead><tr><th>路段</th><th>推荐走法</th><th>时间</th><th>2人参考</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>宜春→宁波</td><td>G268 08:42—12:32；备选 G1434 10:35—15:39</td><td>3 小时 50 分</td><td>848 元</td><td>直达；宁波站出来走到汽车南站约 5 分钟</td></tr>
+          <tr><td>宁波→舟山</td><td>宁波汽车南站大巴，7:00—19:00 约 30—60 分钟一班</td><td>约 1.5 小时</td><td>70—96 元</td><td>票价 35—48 元/人；到新城/普陀客运中心</td></tr>
+          <tr><td>舟山→杭州</td><td>普陀客运中心/新城客运站→杭州东/杭州客运中心</td><td>3.5—4 小时</td><td>200—240 元</td><td>约 100—120 元/人；到家，不安排景点</td></tr>
+          <tr><td>舟山→朱家尖</td><td>打车/公交过跨海大桥</td><td>20—30 分钟</td><td>30—60 元/次</td><td>住东港离蜈蚣峙码头更近</td></tr>
+          <tr><td>朱家尖→普陀山</td><td>蜈蚣峙码头坐船</td><td>15 分钟</td><td>120 元（2人往返）</td><td>船票 30 元/人/程；门票+船票联票约 220 元/人起</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="budget-note">票价按 2026 年 10 月查询到的二等座/大巴票价估算，实际以 12306、汽车站和“普陀山一码通”为准；普陀山船班受天气影响，留半天缓冲。</p>
+
+    <h3 class="subhead">2 人费用估算</h3>
+    <div class="table-wrap keep">
+      <table>
+        <thead><tr><th>项目</th><th>4 天</th><th>5 天</th><th>7 天</th></tr></thead>
+        <tbody>
+          <tr><td>大交通（高铁/大巴/船）</td><td>1,400—1,600</td><td>1,400—1,600</td><td>1,400—1,600</td></tr>
+          <tr><td>住宿（舟山，每晚 1 间）</td><td>900—1,200</td><td>1,200—1,600</td><td>1,800—2,400</td></tr>
+          <tr><td>吃饭</td><td>800—1,000</td><td>1,000—1,300</td><td>1,400—1,800</td></tr>
+          <tr><td>门票/体验</td><td>800—1,000</td><td>900—1,100</td><td>1,100—1,400</td></tr>
+          <tr><td>市内交通/杂费</td><td>300—500</td><td>400—600</td><td>600—800</td></tr>
+          <tr class="total-row"><td>合计（2 人）</td><td>4,200—5,300</td><td>4,900—6,200</td><td>6,300—8,000</td></tr>
+          <tr><td>人均</td><td>2,100—2,650</td><td>2,450—3,100</td><td>3,150—4,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="budget-note">按“舒适型”估算：干净酒店/民宿、每天 1—2 次打车、正常吃海鲜；不含购物。60/65 岁以上门票有优惠；普陀山岛上住 1 晚约 +400—800 元；桃花岛/岱山 +400—600 元；东极岛 +600—900 元（但 4—7 天不建议）。杭州是家，不含杭州住宿和景点。</p>
+
+    <h3 class="subhead">预约与购票清单</h3>
+    <div class="table-wrap keep">
+      <table>
+        <thead><tr><th>项目</th><th>怎么约</th><th>费用</th><th>注意</th></tr></thead>
+        <tbody>
+          <tr><td>普陀山</td><td>“普陀山一码通”/官方平台</td><td>门票 160 + 船票 60；联票约 220 起</td><td>船从朱家尖蜈蚣峙码头；香花券 5—6 元只收现金</td></tr>
+          <tr><td>朱家尖南沙</td><td>现场/线上</td><td>约 75 元</td><td>遮阳伞收费先问；中午晒</td></tr>
+          <tr><td>观音法界</td><td>现场/线上</td><td>约 90 元</td><td>室内外结合；着装得体</td></tr>
+          <tr><td>大青山</td><td>现场/线上</td><td>约 100 元</td><td>打车/包车上去，不用爬山</td></tr>
+          <tr><td>桃花岛/岱山</td><td>现场/线上；船票提前查</td><td>船票+门票另计</td><td>5—7 天再去；东极岛至少 8 天</td></tr>
+          <tr><td>舟山博物馆</td><td>现场/公众号</td><td>免费</td><td>周一闭馆；带身份证</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 清单 ================= -->
+  <section class="section" id="checklist">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">行前清单</div>
+        <h2>把这几件事做好，路上就稳了</h2>
+      </div>
+      <div class="section-stamp">不慌张 · 不将就</div>
+    </div>
+
+    <div class="two-col">
+      <div class="checklist-box">
+        <h3>证件与预约</h3>
+        <ul>
+          <li>身份证、老年证、医保卡；各复印一份，手机存照片。</li>
+          <li>普陀山门票+船票提前买；桃花岛/岱山船票提前查。</li>
+          <li>车票/大巴/酒店地址截图；宁波汽车南站、蜈蚣峙码头存好。</li>
+          <li>旅游意外险 30—80 元/人；需要的话办异地就医备案。</li>
+        </ul>
+      </div>
+      <div class="checklist-box">
+        <h3>衣物与药</h3>
+        <ul>
+          <li>11 月初舟山 18—26℃，海风大：薄外套/风衣、长裤、防滑鞋。</li>
+          <li>雨具、防晒霜、帽子、墨镜；海边风大，早晚加一件。</li>
+          <li>降压药、降糖药、心脏药带足全程+3 天；晕船药、肠胃药、感冒药、创可贴。</li>
+          <li>普陀山香花券只收现金，带 100—200 元零钱。</li>
+        </ul>
+      </div>
+      <div class="checklist-box">
+        <h3>交通与住宿</h3>
+        <ul>
+          <li>去程 G268 08:42；宁波站到汽车南站走路 5 分钟，留 30 分钟换乘。</li>
+          <li>舟山住朱家尖/东港 3—6 晚；电梯、低楼层、可取消。杭州是家，不用订酒店。</li>
+          <li>普陀山船班看风，行程留半天；末班船别卡太晚。</li>
+          <li>舟山→杭州大巴约 3.5—4 小时；也可舟山→宁波+高铁，班次更密。</li>
+        </ul>
+      </div>
+      <div class="checklist-box">
+        <h3>吃与安全</h3>
+        <ul>
+          <li>海鲜先问价、称重沥水、看着杀；父母不吃生腌，不喝冰啤。</li>
+          <li>普陀山岛上物价高，带水/零食；素斋有时段。</li>
+          <li>不参加低价团，不买“开光/药材/玉石”；寺庙里安静、着装得体。</li>
+          <li>每天给家人发定位；走散约定酒店大堂/码头游客中心。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout callout-warn">
+      <div class="callout-title">4—7 天避坑提醒</div>
+      <ul class="tight">
+        <li><strong>普陀山：</strong>门票+船票走官方“普陀山一码通”；香花券只收现金；周末/香会节人多；老人少爬香道，坐巴士+索道。</li>
+        <li><strong>船班：</strong>大风/大雾会停航；普陀山留半天缓冲，东极岛/桃花岛提前看船班。</li>
+        <li><strong>朱家尖：</strong>海鲜排档先问价；南沙遮阳伞收费；大青山打车/包车，不用爬山。</li>
+        <li><strong>东极岛：</strong>船班少、受天气影响大，至少 8 天；4—7 天不要硬加。</li>
+        <li><strong>回杭州：</strong>大巴约 3.5—4 小时；提前一天买票，别在杭州临时加景点。</li>
+        <li><strong>海鲜：</strong>不去司机推荐的店；称重前沥水；不喝冰啤；肠胃药带上。</li>
+        <li><strong>天气：</strong>海风大、可能下雨；带薄外套、雨具、防晒；鞋子防滑。</li>
+      </ul>
+    </div>
+
+    <div class="checklist-box">
+      <h3>旅途小记</h3>
+      <p class="small muted">今天去了哪里、吃了什么、花了多少钱，随手记一笔；回家翻看，比照片还有意思。</p>
+      <div class="note-lines"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
+  </section>
+
+  <!-- ================= 出发卡 ================= -->
+  <section class="section page-break" id="card">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">出发卡</div>
+        <h2>把这张卡填好，留给家里</h2>
+      </div>
+      <div class="section-stamp">打印出来 · 放在随身包</div>
+    </div>
+
+    <div class="print-card">
+      <h3>爸妈旅行信息卡 · 舟山线</h3>
+      <div class="print-grid">
+        <div class="field"><strong>去程车次/时间</strong>　</div>
+        <div class="field"><strong>宁波→舟山大巴</strong>　</div>
+        <div class="field"><strong>舟山酒店 / 电话</strong>　</div>
+        <div class="field"><strong>回杭州大巴 / 时间</strong>　</div>
+        <div class="field"><strong>普陀山门票/船票</strong>　</div>
+        <div class="field"><strong>当地紧急联系人</strong>　</div>
+        <div class="field"><strong>保险单号 / 电话</strong>　</div>
+        <div class="field"><strong>常用药清单</strong>　</div>
+        <div class="field"><strong>过敏/病史备注</strong>　</div>
+        <div class="field"><strong>走散集合点</strong>　</div>
+      </div>
+      <p class="small muted" style="margin-top:18px">建议把这张卡拍照发给子女，再打印一份放在随身包里；酒店地址、车次和船班截图也存到手机相册。</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p><strong>说明：</strong>本攻略编制于 2026 年 10 月 25 日，按 4—7 天、2 人、公共交通、舒适型慢游估算；终点为杭州（回家），不含回宜春的票，也不在杭州安排景点。车次、大巴、船班、票价和景区政策会调整，出发前请以 12306、汽车站、“普陀山一码通”和景区公告为准。</p>
+    <p><strong>官方查询：</strong><a href="https://www.12306.cn/" target="_blank" rel="noopener">中国铁路 12306</a> · <a href="https://www.weather.com.cn/" target="_blank" rel="noopener">中国天气网</a></p>
+    <p>愿爸妈一路慢慢走，吹吹海风，不赶船。</p>
+  </footer>
+
+</div>
+</body>
+</html>

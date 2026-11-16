@@ -112,7 +112,7 @@ class ReplacePreviewTest {
             pause,
             "binding.readView.cancelTouchGestures()",
             "updateScrollReadPosition()",
-            "ReadBook.saveRead()",
+            "ReadBook.saveReadBlocking()",
         )
     }
 

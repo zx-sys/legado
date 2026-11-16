@@ -84,8 +84,15 @@ object SyncManager {
     private fun isQuiet(): Boolean =
         quietUntil > 0 && System.currentTimeMillis() < quietUntil
 
-    fun enqueueProgress(book: Book, chapterIndex: Int, chapterPos: Int, chapterTitle: String?) {
-        if (!ServerSync.isConfigured || isQuiet()) return
+    fun enqueueProgress(
+        book: Book,
+        chapterIndex: Int,
+        chapterPos: Int,
+        chapterTitle: String?,
+        force: Boolean = false,
+    ) {
+        if (!ServerSync.isConfigured) return
+        if (!force && isQuiet()) return
         val item = SyncProgress(
             bookUrl = book.bookUrl,
             name = book.name,
@@ -483,7 +490,19 @@ object SyncManager {
 
     private fun applyProgressNow(item: SyncProgress) {
         val book = appDb.bookDao.getBook(item.bookUrl) ?: return
-        if (book.durChapterTime >= item.updatedAt) return
+        if (!shouldApplyRemoteProgress(book.durChapterTime, item.updatedAt)) {
+            // 本地更新: 保留本地并回传, 不能让旧的服务端进度覆盖。
+            if (book.durChapterTime > item.updatedAt) {
+                enqueueProgress(
+                    book,
+                    book.durChapterIndex,
+                    book.durChapterPos,
+                    book.durChapterTitle,
+                    force = true,
+                )
+            }
+            return
+        }
         book.durChapterIndex = item.chapterIndex
         book.durChapterPos = item.chapterPos
         if (item.chapterTitle.isNotBlank()) book.durChapterTitle = item.chapterTitle
@@ -602,3 +621,10 @@ object SyncManager {
         updatedAt = updatedAt,
     )
 }
+
+/**
+ * 阅读进度按时间戳取新: 服务端严格更新才覆盖本地。
+ * 本地更新或相同时由调用方把本地进度回传服务端。
+ */
+internal fun shouldApplyRemoteProgress(localUpdatedAt: Long, remoteUpdatedAt: Long): Boolean =
+    remoteUpdatedAt > localUpdatedAt

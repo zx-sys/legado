@@ -245,7 +245,7 @@
     <string name="read_aloud_timer">Speaking(%d min left)</string>
     <string name="read_aloud_timer_chapter">Speaking(%d chapters left)</string>
     <string name="playing_timer">Playing(%d min left)</string>
-    <string name="playing_timer_chapter">Playing(%d chapters left)</string>
+    <string name="playing_timer_chapter">Playing(%d episodes left)</string>
     <string name="sleep_timer_title">Sleep timer</string>
     <string name="sleep_timer_by_time">Minutes</string>
     <string name="sleep_timer_by_chapter">Chapters</string>
@@ -1903,6 +1903,6 @@
     <string name="content_search_anchor_unavailable">The reading position could not be located after text processing. Return to the reader and try again, or choose Whole book.</string>
     <string name="content_search_result_unavailable">This result could not be located reliably in the displayed text. Check text replacement and title settings, then search again.</string>
 
-    <string name="read_aloud_drag_seek">Drag the listening position bar</string>
-    <string name="read_aloud_drag_seek_summary">Swipe anywhere in the text to move the bar relative to the current spoken position. Crossing the top or bottom previews the adjacent page. Release to speak the target paragraph. Paused speech stays paused; tap for the menu.</string>
+    <string name="read_aloud_drag_seek">Listening controls reader gestures</string>
+    <string name="read_aloud_drag_seek_summary">Vertical swipes leave follow mode and scroll or turn pages freely. Enable the swipe-page option to turn pages horizontally. Tap the text for the listening menu.</string>
 </resources>

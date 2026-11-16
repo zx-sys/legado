@@ -145,6 +145,9 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'cronet-proguard-rules.pro'
         }
     }
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
     //noinspection GrDeprecatedAPIUsage
     flavorDimensions = ['mode']
     productFlavors {

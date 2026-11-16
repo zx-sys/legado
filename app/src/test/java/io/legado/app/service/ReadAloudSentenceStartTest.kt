@@ -62,14 +62,19 @@ class ReadAloudSentenceStartTest {
         val visibleReadCalls = Regex("ReadBook\\.readAloud").findAll(onClick).count()
 
         assertTrue(visibleReadCalls > 0)
-        // 每个可见位置启动都显式传 rewind 参数；其中两处是从上次位置继续/回退，
-        // 不能强制回退到句首（savedStart 分支），因此这里不再要求两者数量相等。
+        // 菜单从可见位置启动时显式传 rewind 参数（是否回退到句首由设置决定）；
+        // 这个契约只看 onClickReadAloud 内的调用数量，不要求与其它入口相等。
         assertEquals(
             visibleReadCalls,
             Regex("rewindToSentenceStart =").findAll(onClick).count()
         )
         assertTrue(onClick.contains("rewindToSentenceStart = AppConfig.readAloudStartAtSentence"))
-        assertTrue(onClick.contains("startPos = line.pagePosition"))
+        val menuVisiblePosition = activity
+            .substringAfter("private fun restartReadAloudFromVisiblePosition")
+            .substringBefore("override fun onClickReadAloud()")
+        assertTrue(menuVisiblePosition.contains("binding.readView.getReadAloudPos()"))
+        assertTrue(menuVisiblePosition.contains("position - chapter.getReadLength(page)"))
+        assertTrue(menuVisiblePosition.contains("rewindToSentenceStart = AppConfig.readAloudStartAtSentence"))
         assertTrue(readBook.contains("rewindToSentenceStart: Boolean = false"))
         assertTrue(readBook.contains("rewindToSentenceStart = rewindToSentenceStart"))
         assertTrue(readAloud.contains("rewindToSentenceStart: Boolean = false"))

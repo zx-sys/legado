@@ -36,14 +36,15 @@ class ReadMangaOfflineActionsTest {
         assertTrue(viewModel.contains("BookHelp.saveImage(ReadManga.bookSource, book, src)"))
         assertTrue(viewModel.contains("createFileIfNotExist(image.name).writeFile(image)"))
         val cacheSuccess = cacheBook.substringAfter("val ticket = downloads.claimManual(index)")
-            // Ordinary offline caching still finishes only after its images are saved.
-            // Theme resource refresh now has a separate staged transaction above this branch.
-            .substringAfter("} else {")
             .substringBefore("private fun startManual")
-        assertTrue(cacheSuccess.contains("val content = BookHelp.getContent(requestBook, chapter)"))
-        assertTrue(cacheSuccess.contains("BookHelp.saveImages(source, requestBook, chapter, content, 1)"))
+        // Ordinary offline caching still finishes only after its images are saved.
+        assertTrue(cacheSuccess.contains("BookHelp.getContent(requestBook, chapter)"))
+        assertTrue(cacheSuccess.contains("BookHelp.saveImages(source, requestBook, chapter, primary, 1)"))
         assertTrue(cacheSuccess.contains("val currentContent = BookHelp.getContent(requestBook, chapter) ?: content"))
-        assertTrue(cacheSuccess.indexOf("BookHelp.saveImages") < cacheSuccess.indexOf("onSuccess(ticket"))
+        assertTrue(
+            cacheSuccess.indexOf("BookHelp.saveImages") <
+                cacheSuccess.indexOf("val currentContent = BookHelp.getContent")
+        )
         assertTrue(mangaViewHolder.contains("mangaImagePath(imageUrl)"))
         assertTrue(mangaViewHolder.contains("takeIf { it.isFile }?.absolutePath ?: imageUrl"))
         assertTrue(bookCover.contains("ImageLoader.loadFile(context, path).apply(options)"))

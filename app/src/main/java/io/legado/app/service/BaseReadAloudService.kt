@@ -148,6 +148,11 @@ abstract class BaseReadAloudService : BaseService(),
         val followReadAloudPosition: Boolean
             get() = speechFollowState.followReadAloudPosition
 
+        /** 用户手动脱离跟随后, 只有显式“回到朗读位置/从这读/新会话”才恢复。 */
+        @JvmStatic
+        val isFollowManuallyDetached: Boolean
+            get() = speechFollowState.isManuallyDetached
+
         val isPositionChangePending get() = speechFollowState.pendingPosition != null
 
         fun beginPositionChange(): Long = speechFollowState.beginPositionChange()
@@ -225,9 +230,13 @@ abstract class BaseReadAloudService : BaseService(),
     private var needResumeOnCallStateIdle = false
     private var registeredPhoneStateListener = false
     private val chapterStopTimer = ChapterStopTimer()
+    @Volatile
+    private var lastSpeechProgressSaveAt = 0L
     private var dsJob: Job? = null
     private var readAloudJob: Coroutine<*>? = null
     private var chapterLoadRetryJob: Job? = null
+    @Volatile
+    protected var chapterLoadPending = false
     private val readAloudGeneration = AtomicLong()
     private var upNotificationJob: Coroutine<*>? = null
     private var cover: Bitmap =
@@ -304,11 +313,11 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     private fun sessionChapterCount(): Int {
-        return if (readerSynced()) {
-            ReadBook.simulatedChapterSize
-        } else {
-            ReadAloudSession.chapterCount
-        }
+        return resolveSessionChapterCount(
+            readerSynced = readerSynced(),
+            readerChapterCount = ReadBook.simulatedChapterSize,
+            sessionChapterCount = ReadAloudSession.chapterCount,
+        )
     }
 
     private fun sessionSource(): BookSource? {
@@ -640,7 +649,26 @@ abstract class BaseReadAloudService : BaseService(),
         postEvent(EventBus.TTS_PROGRESS, progress)
         if (!readerSynced()) {
             saveSessionProgress()
+        } else if (System.currentTimeMillis() - lastSpeechProgressSaveAt >= 30_000L) {
+            // 进度回调可能来自 TTS 工作线程, 落库切到主线程执行。
+            lifecycleScope.launch(Main) { saveSpeechProgressToReader() }
         }
+    }
+
+    /**
+     * 后台跟随朗读时, 书籍本地进度要跟着朗读游标走, 而不是只在暂停/被划掉时写一次。
+     * 每 30 秒最多落库一次, 换章时强制落库。
+     */
+    private fun saveSpeechProgressToReader(force: Boolean = false) {
+        if (!readerSynced() || !followReadAloudPosition) return
+        val chapterIndex = speechChapterIndex()
+        if (chapterIndex < 0) return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastSpeechProgressSaveAt < 30_000L) return
+        lastSpeechProgressSaveAt = now
+        ReadBook.durChapterIndex = chapterIndex
+        ReadBook.durChapterPos = readAloudChapterStart.coerceAtLeast(0)
+        ReadBook.saveReadBlocking()
     }
 
     private fun prevP() {
@@ -815,19 +843,13 @@ abstract class BaseReadAloudService : BaseService(),
             }
 
             override fun onSkipToNext() {
-                if (getPrefBoolean("mediaButtonPerNext", false)) {
-                    nextChapter()
-                } else {
-                    nextP()
-                }
+                // 通知媒体面板的上一首/下一首语义是切章; 耳机媒体键走 MediaButtonReceiver,
+                // 仍按“媒体按钮上一段/章”开关处理。
+                nextChapter()
             }
 
             override fun onSkipToPrevious() {
-                if (getPrefBoolean("mediaButtonPerNext", false)) {
-                    prevChapter()
-                } else {
-                    prevP()
-                }
+                prevChapter()
             }
 
             override fun onStop() {
@@ -1031,11 +1053,19 @@ abstract class BaseReadAloudService : BaseService(),
         toLast = false
         val wasPaused = pause
         if (!wasPaused) resumeReadAloudInternal()
-        if (readerSynced() && shouldSyncSpeechNavigation()) {
-            ReadBook.moveToPrevChapter(true, toLast = false, syncReadAloudFollow = true)
-        } else {
-            loadSpeechChapterOnly(speechChapterIndex() - 1, startPaused = wasPaused)
+        val previousIndex = speechChapterIndex() - 1
+        if (previousIndex < 0) return
+        // 与 nextChapter 对称: 阅读页只负责跟随/加载正文, 朗读游标由服务统一切换。
+        // 否则通知栏"上一章"只翻了页面, 语音仍停在原章节。
+        if (readerSynced() && powerManager.isInteractive) {
+            suppressReaderReadAloudRestart = true
+            try {
+                ReadBook.moveToPrevChapter(true, toLast = false, syncReadAloudFollow = true)
+            } finally {
+                suppressReaderReadAloudRestart = false
+            }
         }
+        loadSpeechChapterOnly(previousIndex, startPaused = wasPaused)
     }
 
     open fun nextChapter(auto: Boolean = false) {
@@ -1061,6 +1091,11 @@ abstract class BaseReadAloudService : BaseService(),
         val nextSpeechIndex = speechChapterIndex() + 1
         val hasNextChapter = nextSpeechIndex < sessionChapterCount()
         if (!hasNextChapter) {
+            AppLog.put(
+                "朗读到章末但没有下一章: speech=$nextSpeechIndex, " +
+                    "readerSynced=${readerSynced()}, readerSize=${ReadBook.simulatedChapterSize}, " +
+                    "sessionSize=${ReadAloudSession.chapterCount}"
+            )
             stopSelf()
             return
         }
@@ -1088,7 +1123,11 @@ abstract class BaseReadAloudService : BaseService(),
         attempt: Int = 0,
         startPaused: Boolean = false
     ) {
-        if (chapterIndex !in 0..<sessionChapterCount()) return
+        if (chapterIndex !in 0..<sessionChapterCount()) {
+            chapterLoadPending = false
+            return
+        }
+        chapterLoadPending = true
         execute(executeContext = IO) {
             val book = sessionBook() ?: return@execute false
             val chapter = appDb.bookChapterDao.getChapter(book.bookUrl, chapterIndex)
@@ -1131,10 +1170,13 @@ abstract class BaseReadAloudService : BaseService(),
             contentList.isNotEmpty()
         }.onSuccess(Main) { canContinue ->
             chapterLoadRetryJob?.cancel()
+            chapterLoadPending = false
             if (canContinue) {
                 upTtsProgress(0)
                 if (!readerSynced()) {
                     saveSessionProgress(flush = true, force = true)
+                } else {
+                    saveSpeechProgressToReader(force = true)
                 }
                 if (!startPaused) play()
             } else {
@@ -1145,8 +1187,11 @@ abstract class BaseReadAloudService : BaseService(),
             if (isRun && !pause && attempt < 12) {
                 scheduleChapterLoadRetry(chapterIndex, attempt + 1)
             } else if (isRun && !pause) {
+                chapterLoadPending = false
                 toastOnUi("加载下一章失败，朗读已暂停")
                 pauseReadAloud()
+            } else {
+                chapterLoadPending = false
             }
         }
     }
@@ -1242,4 +1287,17 @@ abstract class BaseReadAloudService : BaseService(),
         }
     }
 
+}
+
+/**
+ * 阅读页数据可能被系统回收或刷新成 0; 会话绑定的章节总数仍然有效, 用它兜底避免误判章末。
+ */
+internal fun resolveSessionChapterCount(
+    readerSynced: Boolean,
+    readerChapterCount: Int,
+    sessionChapterCount: Int,
+): Int {
+    // 阅读页的目录数量可能被回收/刷新成 0 或旧值, 取两者较大值, 避免误判已到最后一章。
+    val readerCount = if (readerSynced) readerChapterCount else 0
+    return maxOf(readerCount, sessionChapterCount)
 }

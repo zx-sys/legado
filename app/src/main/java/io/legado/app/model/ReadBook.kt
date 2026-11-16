@@ -198,6 +198,9 @@ object ReadBook : CoroutineScope by MainScope() {
     private var pendingHighlightAnchor: PendingHighlightAnchor? = null
     private data class PendingPdfJump(val bookUrl: String, val chapterIndex: Int, val pageIndex: Int)
     private var pendingPdfJump: PendingPdfJump? = null
+
+    /** 跟随朗读时手动换章: 新章节正文就绪后把朗读游标移过去。 */
+    private var pendingChapterReadAloudRestart = false
     var readStartTime: Long = System.currentTimeMillis()
 
     /* 跳转进度前进度记录 */
@@ -874,6 +877,28 @@ object ReadBook : CoroutineScope by MainScope() {
         return restartReadAloud
     }
 
+    /**
+     * 用户手动换章: 跟随中的朗读要移到新章节, 已脱离跟随时保持原朗读位置。
+     */
+    private fun prepareReadAloudChapterNavigation(syncReadAloudFollow: Boolean): Boolean {
+        val restartReadAloud = ReadAloudManualPagePolicy.shouldRestartAfterChapterSwitch(
+            isReadAloudRunning = ReadAloud.isReadingBook(book?.bookUrl),
+            speechDrivenNavigation = syncReadAloudFollow,
+            followingReadAloudPosition = ReadAloud.followReadAloudPosition
+        )
+        pendingChapterReadAloudRestart = restartReadAloud
+        if (ReadAloud.isReadingBook(book?.bookUrl) && !syncReadAloudFollow && !restartReadAloud) {
+            ReadAloud.detachReadAloudFollow()
+        }
+        return restartReadAloud
+    }
+
+    private fun consumeChapterReadAloudRestart(): Boolean {
+        val restart = pendingChapterReadAloudRestart
+        pendingChapterReadAloudRestart = false
+        return restart
+    }
+
     fun moveToNextPage(syncReadAloudFollow: Boolean = false): Boolean {
         if (ReadAloud.isReadingBook(book?.bookUrl) && !syncReadAloudFollow) {
             ReadAloud.detachReadAloudFollow()
@@ -925,7 +950,7 @@ object ReadBook : CoroutineScope by MainScope() {
             return false
         }
         if (durChapterIndex < simulatedChapterSize - 1) {
-            val restartReadAloud = prepareReadAloudPageNavigation(syncReadAloudFollow)
+            val restartReadAloud = prepareReadAloudChapterNavigation(syncReadAloudFollow)
             durChapterPos = 0
             durChapterIndex++
             clearExpiredChapterLoadingJob()
@@ -1005,7 +1030,7 @@ object ReadBook : CoroutineScope by MainScope() {
             return false
         }
         if (durChapterIndex > 0) {
-            val restartReadAloud = prepareReadAloudPageNavigation(syncReadAloudFollow)
+            val restartReadAloud = prepareReadAloudChapterNavigation(syncReadAloudFollow)
             durChapterPos = if (toLast) prevTextChapter?.lastReadLength ?: Int.MAX_VALUE else 0
             durChapterIndex--
             clearExpiredChapterLoadingJob()
@@ -1081,13 +1106,20 @@ object ReadBook : CoroutineScope by MainScope() {
         highlightLayoutTitleLength: Int? = null,
         highlightAnchorText: String? = null,
         pdfPageIndex: Int? = null,
+        restartReadAloudFromChapter: Boolean = false,
         success: (() -> Unit)? = null
     ) {
+        // 先记录换章前的跟随状态, 再脱离跟随加载新章节。
+        val restartReadAloud = restartReadAloudFromChapter &&
+            ReadAloud.isReadingBook(book?.bookUrl) &&
+            ReadAloud.followReadAloudPosition
         if (ReadAloud.isReadingBook(book?.bookUrl)) {
             ReadAloud.detachReadAloudFollow()
         }
         if (index < chapterSize) {
             clearTextChapter()
+            // 跟随朗读时用目录/进度条换章: 正文加载完成后由 contentLoadFinish 重读新章节。
+            pendingChapterReadAloudRestart = restartReadAloud
             if (upContent) callBack?.upContent()
             durChapterIndex = index
             ReadBook.durChapterPos = durChapterPos
@@ -1138,7 +1170,9 @@ object ReadBook : CoroutineScope by MainScope() {
             if (BaseReadAloudService.suppressReaderReadAloudRestart) return@let
             if (updateReadAloud && ReadAloud.isReadingBook(it.chapter.bookUrl) && it.isCompleted) {
                 // 锁屏期间朗读游标可能已经推进到后面的章节；旧页面不能把它拉回来重读。
-                if (BaseReadAloudService.isRun && !BaseReadAloudService.pause &&
+                // 用户手动换章(restartReadAloudFromVisiblePage)是明确要移动朗读游标, 不拦。
+                if (!restartReadAloudFromVisiblePage &&
+                    BaseReadAloudService.isRun && !BaseReadAloudService.pause &&
                     ReadAloud.readAloudChapterIndex >= 0 &&
                     ReadAloud.readAloudChapterIndex != it.chapter.index
                 ) {
@@ -1151,6 +1185,7 @@ object ReadBook : CoroutineScope by MainScope() {
                     }
                 }
                 if (restartReadAloudFromVisiblePage) {
+                    consumeChapterReadAloudRestart()
                     readAloud(!BaseReadAloudService.pause)
                 } else {
                     val scrollPageAnim = pageAnim() == 3
@@ -1593,9 +1628,11 @@ object ReadBook : CoroutineScope by MainScope() {
                             readPositionVersion = readPositionVersion,
                         )
                     }
+                    val chapterRestart = consumeChapterReadAloudRestart()
                     curPageChanged(
                         syncReadAloudFollow = BaseReadAloudService.shouldSyncSpeechNavigation(),
-                        updateReadAloud = updateReadAloud
+                        restartReadAloudFromVisiblePage = chapterRestart,
+                        updateReadAloud = updateReadAloud || chapterRestart
                     )
                     callBack?.contentLoadFinish()
                 }
@@ -1734,9 +1771,11 @@ object ReadBook : CoroutineScope by MainScope() {
                             readPositionVersion = readPositionVersion,
                         )
                     }
+                    val chapterRestart = consumeChapterReadAloudRestart()
                     curPageChanged(
                         syncReadAloudFollow = BaseReadAloudService.shouldSyncSpeechNavigation(),
-                        updateReadAloud = updateReadAloud
+                        restartReadAloudFromVisiblePage = chapterRestart,
+                        updateReadAloud = updateReadAloud || chapterRestart
                     )
                     callBack?.contentLoadFinish()
                 }
@@ -1864,6 +1903,7 @@ object ReadBook : CoroutineScope by MainScope() {
         val durChapterPos = durChapterPos
         val bookSource = bookSource
         val durTime = System.currentTimeMillis()
+        SyncManager.enqueueProgress(book, durChapterIndex, durChapterPos, book.durChapterTitle)
         runBlocking(IO) {
             kotlin.runCatching {
                 writeReadProgress(book, durChapterIndex, durChapterPos, bookSource, durTime, false)
@@ -1878,6 +1918,7 @@ object ReadBook : CoroutineScope by MainScope() {
         return !hasPendingHighlightJump()
     }
 
+    @Synchronized
     private fun writeReadProgress(
         book: Book,
         durChapterIndex: Int,
@@ -1886,6 +1927,8 @@ object ReadBook : CoroutineScope by MainScope() {
         durTime: Long,
         pageChanged: Boolean
     ) {
+        // 同步落库可能晚于队列里更早的异步写, 旧位置不能覆盖新位置。
+        if (book.durChapterTime > durTime) return
         book.lastCheckCount = 0
         book.durChapterTime = durTime
         val chapterChanged = book.durChapterIndex != durChapterIndex

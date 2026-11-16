@@ -89,12 +89,15 @@ class ReadAloudControls(
         }
         running = isRun
         wasFollowing = following
-        // 播放/暂停统一由 App 内悬浮球控制；页内浮条只提供位置操作。
+        // 播放/暂停统一由 App 内悬浮球控制；位置浮条只在脱离跟随后显示。
         val showPause = false
-        val showPosition = prefs.getBoolean(PreferKey.readAloudControlsPosition, true)
+        val showPosition = readAloudPositionBarVisible(
+            following = following,
+            positionEnabled = prefs.getBoolean(PreferKey.readAloudControlsPosition, true),
+        )
         bar.animate().cancel()
         bar.isVisible = readAloudControlsVisible(
-            isRun, AppConfig.readAloudDragSeek, menuVisible, hidden, showPause, showPosition,
+            isRun, menuVisible, hidden, showPause, showPosition,
         )
         if (!bar.isVisible) return
         binding.ivPauseAloud.isVisible = showPause
@@ -283,9 +286,13 @@ internal fun readAloudControlWidth(prefs: SharedPreferences): Int =
         prefs.getInt(PreferKey.readAloudControlsSize, 48).coerceIn(48, 72) * 6).coerceIn(85, 432)
 
 /** Drag seeking owns the listening UI only while its switch is enabled. */
-internal fun readAloudControlsVisible(running: Boolean, dragSeek: Boolean, menuVisible: Boolean,
+/** 跟随朗读时隐藏“回到朗读位置/从这读”浮条, 手动浏览脱离跟随后才显示。 */
+internal fun readAloudPositionBarVisible(following: Boolean, positionEnabled: Boolean): Boolean =
+    !following && positionEnabled
+
+internal fun readAloudControlsVisible(running: Boolean, menuVisible: Boolean,
     hidden: Boolean, pauseEnabled: Boolean, positionEnabled: Boolean): Boolean =
-    running && !dragSeek && !menuVisible && !hidden && (pauseEnabled || positionEnabled)
+    running && !menuVisible && !hidden && (pauseEnabled || positionEnabled)
 
 /** Opacity belongs to the surface; labels, icons and the original outline remain legible. */
 internal fun applyReadAloudControlStyle(binding: ViewReadAloudFloatBarBinding,

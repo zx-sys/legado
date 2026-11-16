@@ -47,10 +47,21 @@ class ReadAloudFollowPositionRegressionTest {
     fun detachedPreviousChapterMovesOnlyTheSpeechCursor() {
         val serviceKt = readProjectFile("src/main/java/io/legado/app/service/BaseReadAloudService.kt")
 
-        assertTrue(serviceKt.contains("if (readerSynced() && shouldSyncSpeechNavigation())"))
-        assertTrue(serviceKt.contains("loadSpeechChapterOnly(speechChapterIndex() - 1, startPaused ="))
+        assertTrue(serviceKt.contains("val previousIndex = speechChapterIndex() - 1"))
+        assertTrue(serviceKt.contains("loadSpeechChapterOnly(previousIndex, startPaused = wasPaused)"))
         assertTrue(serviceKt.contains("val nextSpeechIndex = speechChapterIndex() + 1"))
         assertTrue(serviceKt.contains("loadSpeechChapterOnly(nextSpeechIndex, startPaused = wasPaused)"))
+    }
+
+    @Test
+    fun `notification previous chapter moves the speech cursor too`() {
+        val serviceKt = readProjectFile("src/main/java/io/legado/app/service/BaseReadAloudService.kt")
+        val prev = serviceKt.substringAfter("open fun prevChapter()")
+            .substringBefore("open fun nextChapter(")
+
+        assertTrue(prev.contains("suppressReaderReadAloudRestart = true"))
+        assertTrue(prev.contains("ReadBook.moveToPrevChapter("))
+        assertTrue(prev.contains("loadSpeechChapterOnly(previousIndex"))
     }
 
     @Test

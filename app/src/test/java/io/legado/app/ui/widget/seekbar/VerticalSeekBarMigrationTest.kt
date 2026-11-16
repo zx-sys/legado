@@ -8,14 +8,13 @@ import java.io.File
 class VerticalSeekBarMigrationTest {
 
     @Test
-    fun brightnessControlUsesRotatedAppCompatSeekBar() {
+    fun brightnessControlUsesHorizontalThemeSeekBar() {
         val layout = projectFile("src/main/res/layout/view_read_menu.xml").readText()
 
-        assertTrue(layout.contains("VerticalSeekBarWrapper"))
-        assertTrue(layout.contains("androidx.appcompat.widget.AppCompatSeekBar"))
+        assertTrue(layout.contains("io.legado.app.lib.theme.view.ThemeSeekBar"))
         assertTrue(layout.contains("android:id=\"@+id/seek_brightness\""))
-        assertTrue(layout.contains("android:max=\"255\""))
-        assertTrue(layout.contains("android:rotation=\"-90\""))
+        assertFalse(layout.contains("VerticalSeekBarWrapper"))
+        assertFalse(layout.contains("android:rotation=\"-90\""))
     }
 
     @Test

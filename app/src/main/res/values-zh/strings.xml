@@ -242,7 +242,7 @@
     <string name="read_aloud_timer">正在朗读（还剩 %d 分钟）</string>
     <string name="read_aloud_timer_chapter">正在朗读（还剩 %d 章）</string>
     <string name="playing_timer">正在播放（还剩 %d 分钟）</string>
-    <string name="playing_timer_chapter">正在播放（还剩 %d 章）</string>
+    <string name="playing_timer_chapter">正在播放（还剩 %d 集）</string>
     <string name="sleep_timer_title">停止设置</string>
     <string name="sleep_timer_by_time">按分钟</string>
     <string name="sleep_timer_by_chapter">按章节</string>
@@ -1789,6 +1789,6 @@
     <string name="content_search_anchor_unavailable">正文处理后无法可靠定位当前阅读位置。请返回阅读页重试，或切换为全局搜索。</string>
     <string name="content_search_result_unavailable">无法在阅读正文中可靠定位此结果。请检查替换净化和标题设置后重新搜索。</string>
 
-    <string name="read_aloud_drag_seek">听书时拖动播放定位条</string>
-    <string name="read_aloud_drag_seek_summary">在正文任意位置上下滑动，播放条从当前朗读位置按滑动距离移动，越过顶部或底部可翻页；松手从目标段落朗读，原先暂停时保持暂停。点击正文打开菜单</string>
+    <string name="read_aloud_drag_seek">听书时接管正文手势</string>
+    <string name="read_aloud_drag_seek_summary">听书时上下滑动会退出跟随，直接滚动或翻页自由查看；开启“滑动听书时左右翻页”后，左右滑动可手动翻页；点击正文打开听书菜单</string>
 </resources>

@@ -56,6 +56,69 @@ class ReadAloudManualPagePolicyTest {
     }
 
     @Test
+    fun `chapter switch retargets speech only while still following`() {
+        assertTrue(
+            ReadAloudManualPagePolicy.shouldRestartAfterChapterSwitch(
+                isReadAloudRunning = true,
+                speechDrivenNavigation = false,
+                followingReadAloudPosition = true
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldRestartAfterChapterSwitch(
+                isReadAloudRunning = true,
+                speechDrivenNavigation = false,
+                followingReadAloudPosition = false
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldRestartAfterChapterSwitch(
+                isReadAloudRunning = true,
+                speechDrivenNavigation = true,
+                followingReadAloudPosition = true
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldRestartAfterChapterSwitch(
+                isReadAloudRunning = false,
+                speechDrivenNavigation = false,
+                followingReadAloudPosition = true
+            )
+        )
+    }
+
+    @Test
+    fun `chapter navigation restarts after the new chapter is ready`() {
+        val readBook = readProjectFile("src/main/java/io/legado/app/model/ReadBook.kt")
+        val activity = readProjectFile(
+            "src/main/java/io/legado/app/ui/book/read/ReadBookActivity.kt"
+        )
+
+        assertTrue(readBook.contains("prepareReadAloudChapterNavigation"))
+        assertTrue(
+            readBook.lines().count {
+                it.contains("val restartReadAloud = prepareReadAloudChapterNavigation")
+            } >= 2
+        )
+        assertTrue(
+            readBook.lines().count { it.contains("pendingChapterReadAloudRestart =") } >= 2
+        )
+        assertTrue(readBook.contains("consumeChapterReadAloudRestart()"))
+        assertTrue(readBook.contains("restartReadAloudFromChapter"))
+        // 目录跳转与进度条换章都按“跟随中换章重读”处理。
+        assertTrue(
+            activity.substringAfter("registerForActivityResult(TocActivityResult())")
+                .substringBefore("private val sourceEditActivity")
+                .contains("restartReadAloudFromChapter = true")
+        )
+        assertTrue(
+            activity.substringAfter("override fun skipToChapter(index: Int)")
+                .substringBefore("/* 全文搜索跳转 */")
+                .contains("restartReadAloudFromChapter = true")
+        )
+    }
+
+    @Test
     fun `dialog chapter controls follow the visible position after detaching`() {
         val dialog = readProjectFile(
             "src/main/java/io/legado/app/ui/book/read/config/ReadAloudDialog.kt"

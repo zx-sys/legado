@@ -40,7 +40,7 @@ class ReadAloudFloatingBarTest {
         assertTrue(activity.contains("ReadBook.readAloud()"))
         val controls = projectFile("src/main/java/io/legado/app/ui/book/read/ReadAloudControls.kt").readText()
         assertTrue(controls.contains("readAloudControlsVisible("))
-        assertTrue(controls.contains("isRun, AppConfig.readAloudDragSeek"))
+        assertTrue(controls.contains("isRun, menuVisible"))
         assertTrue(controls.contains("text.maxLines = 1"))
     }
 

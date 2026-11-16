@@ -15,6 +15,7 @@ class ChapterListAdapterContractTest {
             .first { it.isDirectory }
             .resolve("io/legado/app/ui/book/toc/ChapterListAdapter.kt")
             .readText()
+            .replace("\r\n", "\n")
 
         assertTrue(source.contains("displayTitleMap[item.key]"))
         assertTrue(source.contains("private fun getDisplayTitle(item: TocListItem)"))
@@ -28,6 +29,7 @@ class ChapterListAdapterContractTest {
             .first { it.isDirectory }
             .resolve("io/legado/app/ui/book/toc/ChapterListFragment.kt")
             .readText()
+            .replace("\r\n", "\n")
         val initBook = source.substringAfter("private fun initBook(book: Book)")
             .substringBefore("private fun submitChapterItems")
         val clearCache = initBook.indexOf("adapter.clearDisplayTitle()")
@@ -42,6 +44,7 @@ class ChapterListAdapterContractTest {
             .first { it.isDirectory }
             .resolve("io/legado/app/ui/book/toc/ChapterListAdapter.kt")
             .readText()
+            .replace("\r\n", "\n")
         val clearCache = source.substringAfter("fun clearDisplayTitle()")
             .substringBefore("fun upDisplayTitles")
         val updateTitles = source.substringAfter("fun upDisplayTitles")

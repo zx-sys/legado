@@ -162,6 +162,8 @@ class ReadView(context: Context, attrs: AttributeSet) :
     val isListeningNavigationLocked: Boolean
         get() = AppConfig.readAloudDragSeek && BaseReadAloudService.isRun && !pdfZoom.isEnabled()
     private var aloudTouchOwned = false
+    /** 上下滑动视为手动浏览: 退出跟随后把本次手势交还给翻页/滚动 */
+    private var aloudGestureDelegated = false
     private var aloudDirection = ReadAloudDragSeekSession.Direction.PENDING
     private var aloudTargets = emptyList<ReadAloudDragSeekSession.Target>()
     private var aloudTarget: ReadAloudDragSeekSession.Target? = null
@@ -319,8 +321,14 @@ class ReadView(context: Context, attrs: AttributeSet) :
      */
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            aloudGestureDelegated = false
+        }
         // Listening owns the complete stream before any page delegate or selection gesture.
-        if (aloudTouchOwned || isListeningNavigationLocked) return handleAloudTouch(event)
+        // 上下滑动一旦判定为手动浏览, 后续事件交还普通翻页/滚动处理。
+        if (!aloudGestureDelegated && (aloudTouchOwned || isListeningNavigationLocked)) {
+            return handleAloudTouch(event)
+        }
         if (pdfZoom.onTouch(event) { x, y ->
                 setStartPoint(x, y, false)
                 isAbortAnim = false
@@ -862,15 +870,25 @@ class ReadView(context: Context, attrs: AttributeSet) :
                 if (aloudDirection == ReadAloudDragSeekSession.Direction.PENDING) {
                     aloudDirection = ReadAloudDragSeekSession.direction(
                         movement.dx, movement.dy, slopSquare)
-                    if (aloudDirection == ReadAloudDragSeekSession.Direction.VERTICAL) beginReadAloudDrag()
-
+                    if (aloudDirection == ReadAloudDragSeekSession.Direction.VERTICAL) {
+                        // 上下滑动按手动浏览处理: 退出跟随, 本次手势交还给滚动/翻页。
+                        finishReadAloudDrag(cancelled = true)
+                        hideAloudBar()
+                        ReadAloud.detachReadAloudFollow()
+                        aloudTouchOwned = false
+                        aloudGestureDelegated = true
+                        pressDown = true
+                        isMove = true
+                        removeCallbacks(longPressRunnable)
+                        curPage.cancelHighlightTap()
+                        pageDelegate?.onDown()
+                        pageDelegate?.onTouch(event)
+                        return true
+                    }
                 }
                 if (aloudDirection == ReadAloudDragSeekSession.Direction.BLOCKED)
                     aloudPagingDirection = ReadAloudDragSeekSession.pageTurnDirection(
                         AppConfig.readAloudSwipePages, movement.dx, movement.dy, slopSquare)
-                if (aloudDirection == ReadAloudDragSeekSession.Direction.VERTICAL && isReadAloudDragging) {
-                    updateRelativeAloudDrag(aloudFingerY)
-                }
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
                 aloudPagingDirection = 0

@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>慢慢走，去看山和海｜爸妈的两份旅行方案</title>
+<style>
+:root{
+  --ink:#2d2823;
+  --muted:#6f6559;
+  --paper:#fbf7ef;
+  --paper2:#f3ebde;
+  --white:#fffdf8;
+  --line:#ded2bf;
+  --line-soft:#e9dfcf;
+  --a:#a2502e;
+  --a-soft:#f5e5da;
+  --b:#1f6b73;
+  --b-soft:#dcebed;
+  --gold:#b18445;
+  --gold-soft:#f6ecd9;
+  --danger:#9a3f33;
+  --shadow:0 12px 34px rgba(72,52,30,.08);
+  --radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(178,132,69,.07), transparent 26rem),
+    radial-gradient(circle at 96% 18%, rgba(31,107,115,.06), transparent 28rem),
+    var(--paper);
+  color:var(--ink);
+  font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC","Helvetica Neue",sans-serif;
+  font-size:17px;
+  line-height:1.78;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:var(--b);text-decoration:none;border-bottom:1px solid rgba(31,107,115,.28)}
+a:hover{border-bottom-color:var(--b)}
+.wrap{max-width:1080px;margin:0 auto;padding:26px 22px 90px}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:8px 0 20px;font-size:13px;color:var(--muted);
+}
+.brand{font-weight:800;letter-spacing:.12em;color:var(--ink)}
+.brand span{color:var(--a)}
+.print-btn{
+  border:1px solid var(--line);background:var(--white);color:var(--ink);
+  padding:8px 14px;border-radius:999px;font:inherit;font-size:13px;cursor:pointer;
+  box-shadow:0 3px 10px rgba(72,52,30,.06);
+}
+.print-btn:hover{background:var(--paper2)}
+.hero{
+  position:relative;overflow:hidden;
+  padding:58px 48px 50px;border:1px solid var(--line);border-radius:26px;
+  background:
+    linear-gradient(135deg,rgba(255,253,248,.92),rgba(243,235,222,.92)),
+    repeating-linear-gradient(0deg,transparent 0 31px,rgba(160,130,90,.07) 31px 32px);
+  box-shadow:var(--shadow);
+}
+.hero:before{
+  content:"";position:absolute;right:-90px;top:-110px;width:320px;height:320px;border-radius:50%;
+  background:radial-gradient(circle,rgba(162,80,46,.13),rgba(162,80,46,0) 68%);
+}
+.hero:after{
+  content:"";position:absolute;right:54px;bottom:34px;width:120px;height:120px;
+  border:1px solid rgba(162,80,46,.28);border-radius:50%;
+  box-shadow:0 0 0 12px rgba(162,80,46,.04),0 0 0 24px rgba(162,80,46,.025);
+}
+.hero-meta{position:relative;z-index:1;font-size:13px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.hero h1{
+  position:relative;z-index:1;
+  margin:18px 0 14px;font-size:clamp(38px,6.5vw,70px);line-height:1.12;
+  letter-spacing:-.035em;font-weight:900;
+}
+.hero h1 em{font-style:normal;color:var(--a)}
+.hero-sub{position:relative;z-index:1;max-width:760px;margin:0;font-size:19px;color:#4b443b}
+.hero-sub strong{color:var(--ink)}
+.hero-note{
+  position:relative;z-index:1;display:inline-block;margin-top:24px;padding:11px 16px;
+  border-left:4px solid var(--gold);background:rgba(246,236,217,.8);
+  font-size:14px;color:#5e5040;border-radius:0 9px 9px 0;
+}
+.hero-stamp{
+  position:absolute;right:44px;top:40px;z-index:1;
+  writing-mode:vertical-rl;font-family:"KaiTi","STKaiti",serif;font-size:15px;
+  color:var(--a);letter-spacing:.22em;opacity:.8;
+}
+.section{margin:54px 0 0}
+.page-break{page-break-before:always}
+.section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;border-bottom:2px solid var(--ink);padding-bottom:14px}
+.section-kicker{font-size:12px;letter-spacing:.18em;color:var(--a);font-weight:800;text-transform:uppercase;margin-bottom:6px}
+.section-head h2{margin:0;font-size:clamp(28px,4.2vw,42px);line-height:1.2;letter-spacing:-.02em}
+.section-stamp{font-family:"KaiTi","STKaiti",serif;font-size:15px;color:var(--muted);white-space:nowrap;padding-bottom:6px}
+h2{letter-spacing:-.02em}
+h3{letter-spacing:-.01em}
+.lead{font-size:18px;color:#4b443b;max-width:820px;margin:22px 0 0}
+.subhead{font-size:22px;margin:38px 0 14px}
+.muted{color:var(--muted)}
+.small{font-size:14px;line-height:1.7}
+.center{text-align:center}
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:24px}
+.choice{
+  position:relative;background:var(--white);border:1px solid var(--line);
+  border-radius:var(--radius);padding:26px 26px 24px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;
+}
+.choice-a{border-top:7px solid var(--a)}
+.choice-b{border-top:7px solid var(--b)}
+.choice-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.badge{display:inline-block;padding:5px 11px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.08em}
+.badge-a{background:var(--a-soft);color:var(--a)}
+.badge-b{background:var(--b-soft);color:var(--b)}
+.days{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+.choice h3{font-size:28px;margin:14px 0 4px}
+.choice-lead{margin:0 0 10px;font-weight:700;color:var(--a)}
+.choice-b .choice-lead{color:var(--b)}
+.choice p{margin:8px 0}
+.mini{margin:12px 0 0;padding:0;list-style:none}
+.mini li{position:relative;padding-left:16px;margin:6px 0;font-size:14px;line-height:1.7;color:#50483e}
+.mini li:before{content:"";position:absolute;left:0;top:.7em;width:6px;height:6px;border-radius:50%;background:var(--gold)}
+.choice-a .mini li:before{background:var(--a)}
+.choice-b .mini li:before{background:var(--b)}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:auto;padding-top:18px}
+.stat-row div{border-top:1px solid var(--line-soft);padding-top:10px}
+.stat-row span{display:block;font-size:11px;color:var(--muted);letter-spacing:.06em}
+.stat-row strong{display:block;font-size:14px;line-height:1.45;margin-top:2px;white-space:nowrap}
+.callout{
+  margin:24px 0;padding:20px 22px;border-radius:14px;border:1px solid var(--line);
+  background:var(--white);
+}
+.callout-title{font-weight:900;margin-bottom:8px;font-size:16px}
+.callout-urgent{background:linear-gradient(180deg,#fbf3e3,#fffaf0);border-color:#e5cfaa;border-left:6px solid var(--gold)}
+.callout-a{background:linear-gradient(180deg,#fbf0e9,#fffaf6);border-color:#e8cdbd;border-left:6px solid var(--a)}
+.callout-b{background:linear-gradient(180deg,#eaf5f5,#f8fcfc);border-color:#c2dddf;border-left:6px solid var(--b)}
+.callout-warn{background:#fbf0ee;border-color:#e7c9c4;border-left:6px solid var(--danger)}
+.tight{margin:8px 0 0;padding-left:20px}
+.tight li{margin:5px 0}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--white);box-shadow:0 6px 18px rgba(72,52,30,.04)}
+table{width:100%;border-collapse:collapse;min-width:640px}
+th,td{padding:11px 13px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line-soft);font-size:14.5px;line-height:1.65}
+th{background:var(--paper2);font-size:13px;letter-spacing:.04em;color:#4c4338;font-weight:800;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even){background:rgba(248,243,234,.5)}
+td strong{color:var(--ink)}
+.table-a th{background:#f6e8df;color:#7c3d25}
+.table-b th{background:#e2f0f1;color:#185960}
+.total-row td{background:#f8efdf!important;font-weight:900;border-top:2px solid var(--gold)}
+.rules{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:24px}
+.rule{background:var(--white);border:1px solid var(--line);border-radius:14px;padding:18px}
+.rule span{display:block;font-size:12px;font-weight:900;color:var(--gold);letter-spacing:.12em;margin-bottom:6px}
+.rule p{margin:0;font-size:14.5px;line-height:1.7}
+.rule strong{display:block;margin-bottom:3px;font-size:16px}
+.route-strip{display:flex;flex-direction:column;gap:9px;margin:24px 0 6px;padding:16px;border:1px dashed var(--line);border-radius:14px;background:rgba(255,253,248,.7)}
+.route-line{display:flex;flex-wrap:wrap;align-items:center;gap:7px;width:100%}
+.route-label{font-size:10.5px;font-weight:900;color:var(--muted);letter-spacing:.12em;min-width:34px}
+.route-strip .stop{padding:7px 12px;border-radius:999px;background:var(--white);border:1px solid var(--line);font-weight:800;font-size:14px;line-height:1.3}
+.route-strip .stop small{display:block;font-weight:400;color:var(--muted);font-size:10.5px;letter-spacing:.02em;margin-top:1px}
+.route-strip .arrow{color:var(--muted);font-size:15px}
+.route-a .stop{border-color:#e3c3b3;background:#fffaf6}
+.route-b .stop{border-color:#bcd9db;background:#f8fdfd}
+.day{display:grid;grid-template-columns:92px 1fr;gap:20px;padding:24px 0;border-bottom:1px dashed var(--line)}
+.day:last-child{border-bottom:none}
+.day-num{padding-top:2px}
+.day-num span{display:block;font-size:11px;letter-spacing:.16em;color:var(--muted);font-weight:800}
+.day-num strong{display:block;font-size:31px;line-height:1;color:var(--a);letter-spacing:-.04em;margin-top:4px}
+.route-b .day-num strong{color:var(--b)}
+.day-body h4{margin:0 0 7px;font-size:19px;line-height:1.45}
+.day-body p{margin:6px 0;font-size:15px;line-height:1.75}
+.day-body .tag{display:inline-block;margin:0 6px 6px 0;padding:3px 8px;border-radius:6px;background:var(--paper2);color:#5a4f42;font-size:11.5px;font-weight:700;letter-spacing:.03em}
+.day-body .tag-main{background:var(--a-soft);color:var(--a)}
+.route-b .day-body .tag-main{background:var(--b-soft);color:var(--b)}
+.day-body ul{margin:6px 0 0;padding-left:18px}
+.day-body li{margin:3px 0;font-size:14.5px}
+.module{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:24px 26px;margin:18px 0;box-shadow:0 6px 22px rgba(72,52,30,.05)}
+.module-head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;border-bottom:1px solid var(--line-soft);padding-bottom:10px;margin-bottom:12px}
+.module-head h3{margin:0;font-size:23px}
+.module-head span{font-size:12px;color:var(--muted);white-space:nowrap}
+.module p{margin:8px 0;font-size:15.2px;line-height:1.78}
+.module .kv{display:grid;grid-template-columns:76px 1fr;gap:4px 12px;margin:10px 0}
+.module .kv dt{font-size:12px;font-weight:900;color:var(--gold);letter-spacing:.05em;padding-top:3px}
+.module .kv dd{margin:0;font-size:14.8px;line-height:1.72}
+.module .kv dd strong{color:var(--ink)}
+.module .kv dt{font-family:"Microsoft YaHei",sans-serif}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.alt-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:10px}
+.alt{background:var(--paper2);border-radius:10px;padding:12px 14px;font-size:14px;line-height:1.65}
+.alt strong{display:block;margin-bottom:2px;color:var(--ink)}
+.budget-note{font-size:13px;color:var(--muted);margin:10px 0 0}
+.check-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin:12px 0 0}
+.check-grid label{display:flex;align-items:flex-start;gap:8px;background:var(--white);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:14px;line-height:1.5;cursor:pointer}
+.check-grid input{margin-top:4px;accent-color:var(--a)}
+.check-grid label:nth-child(n+7) input{accent-color:var(--b)}
+.checklist-box{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin:16px 0}
+.checklist-box h3{margin:0 0 8px;font-size:20px}
+.checklist-box ul{margin:8px 0 0;padding-left:19px}
+.checklist-box li{margin:5px 0;font-size:14.8px}
+.note-lines{margin-top:12px}
+.note-lines span{display:block;height:34px;border-bottom:1px dotted #b8aa97}
+.quote{
+  margin:28px 0;padding:24px 28px;border-left:4px solid var(--gold);
+  background:linear-gradient(90deg,#f8efdf,rgba(248,239,223,.2));
+  font-family:"KaiTi","STKaiti",serif;font-size:21px;line-height:1.8;color:#4c4032;
+}
+.quote small{display:block;font-family:"Microsoft YaHei",sans-serif;font-size:12px;color:var(--muted);margin-top:8px;letter-spacing:.04em}
+.tip-list{margin:8px 0 0;padding-left:20px}
+.tip-list li{margin:5px 0;font-size:14.8px}
+.print-card{
+  background:var(--white);border:1.5px solid var(--ink);border-radius:14px;padding:26px 28px;
+  box-shadow:none;
+}
+.print-card h3{margin:0 0 14px;font-size:22px}
+.print-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 24px}
+.field{border-bottom:1px dotted #9f9281;padding-bottom:7px;font-size:13px;color:var(--muted);min-height:38px}
+.field strong{display:block;font-size:12px;color:var(--ink);margin-bottom:4px}
+.footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:1.8}
+.footer a{color:var(--muted);border-bottom-color:rgba(111,101,89,.3)}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0}
+.toc a{padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--white);font-size:12.5px;color:#544a3e;border-bottom:1px solid var(--line)}
+.toc a:hover{border-color:var(--gold)}
+@media screen and (max-width:820px){
+  .choice-grid,.rules,.two-col,.print-grid{grid-template-columns:1fr}
+  .alt-grid{grid-template-columns:1fr}
+  .hero{padding:40px 26px 36px}
+  .hero h1{font-size:clamp(36px,10vw,54px)}
+  .hero-stamp{display:none}
+  .section-head{align-items:flex-start;flex-direction:column;gap:6px}
+  .section-stamp{padding-bottom:0}
+  .day{grid-template-columns:64px 1fr;gap:14px}
+  .day-num strong{font-size:25px}
+  .module{padding:20px 18px}
+  .module .kv{grid-template-columns:64px 1fr}
+  .stat-row{grid-template-columns:1fr 1fr 1fr}
+}
+@media screen and (max-width:520px){
+  body{font-size:16px}
+  .wrap{padding:16px 13px 70px}
+  .hero{padding:32px 19px 30px;border-radius:18px}
+  .hero-sub{font-size:16.5px}
+  .hero-note{font-size:13px}
+  .choice{padding:21px 19px}
+  .choice h3{font-size:24px}
+  .stat-row{grid-template-columns:1fr}
+  .stat-row div{padding-top:7px}
+  .day{grid-template-columns:48px 1fr;gap:10px}
+  .day-num strong{font-size:21px}
+  .day-body h4{font-size:17px}
+  .route-strip{padding:12px;gap:5px}
+  .route-strip .stop{font-size:12.5px;padding:6px 9px}
+  th,td{font-size:13px;padding:9px 10px}
+  .print-card{padding:20px 16px}
+  .module-head{flex-direction:column;gap:2px}
+}
+@media print{
+  @page{size:A4;margin:13mm 12mm}
+  html,body{background:#fff!important}
+  body{font-size:10.4pt;line-height:1.62;color:#000}
+  .wrap{max-width:none;padding:0}
+  .no-print,.toc,.print-btn{display:none!important}
+  .hero{box-shadow:none;background:#fff;border:1px solid #bbb;padding:24px 26px;border-radius:0}
+  .hero:before,.hero:after,.hero-stamp{display:none}
+  .hero h1{font-size:34pt;margin:10px 0 6px}
+  .hero-sub{font-size:12pt}
+  .hero-note{font-size:9pt;background:#fff;border-left:3px solid #999}
+  .section{margin-top:22px}
+  .section-head h2{font-size:22pt}
+  .section-stamp{font-size:9pt}
+  .choice,.module,.callout,.checklist-box,.rule,.table-wrap{box-shadow:none}
+  .keep{page-break-inside:avoid;break-inside:avoid}
+  .choice-grid{gap:12px}
+  .choice{padding:15px 16px}
+  .choice h3{font-size:17pt}
+  .choice p,.mini li,.stat-row strong{font-size:8.8pt}
+  .stat-row span{font-size:7.5pt}
+  .lead{font-size:10.5pt}
+  .callout{padding:12px 14px;margin:14px 0}
+  .tight li,.table-wrap table{font-size:8.8pt}
+  th{font-size:8.2pt}
+  th,td{padding:6px 7px}
+  tr{page-break-inside:avoid;break-inside:avoid}
+  thead{display:table-header-group}
+  .day{padding:13px 0;grid-template-columns:62px 1fr;gap:12px;page-break-inside:avoid}
+  .day-num strong{font-size:19pt}
+  .day-body h4{font-size:12pt}
+  .day-body p,.day-body li{font-size:9.2pt}
+  .module{padding:14px 16px;margin:10px 0;page-break-inside:avoid}
+  .module-head h3{font-size:14pt}
+  .module p,.module .kv dd,.alt{font-size:9.1pt}
+  .alt-grid{gap:8px}
+  .alt{padding:8px 10px}
+  .budget-note,.footer{font-size:8pt}
+  .quote{font-size:13pt;padding:14px 16px;margin:16px 0}
+  .print-card{padding:16px}
+  .field{min-height:30px}
+  h2,h3,h4{page-break-after:avoid}
+  .page-break{page-break-before:always}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar no-print">
+    <div class="brand">慢旅行 <span>·</span> 爸妈版</div>
+    <button class="print-btn" onclick="window.print()">打印 / 存为 PDF</button>
+  </div>
+
+  <header class="hero" id="top">
+    <div class="hero-meta">2026年10月25日编制 · 江西宜春出发 · 公共交通 · 7—14天</div>
+    <div class="hero-stamp">秋日 · 慢行</div>
+    <h1>慢慢走，<br>去看<em>山</em>和<em>海</em>。</h1>
+    <p class="hero-sub">给爸妈的两份旅行方案：<strong>边城线</strong>与<strong>北海线</strong>。不排满，不赶路；每天只设一个主项目，其余留白，按当天的心情挑。</p>
+    <div class="hero-note">明后天（10月26—27日）就能出发。先选方向，再订票；两条线都来得及，但不要两条都订。</div>
+  </header>
+
+  <nav class="toc no-print" aria-label="目录">
+    <a href="#choose">先看这一页</a>
+    <a href="#route-a">A线 · 边城—重庆—成都</a>
+    <a href="#route-b">B线 · 北海—涠洲岛—桂南</a>
+    <a href="#checklist">行前清单</a>
+    <a href="#card">出发卡</a>
+  </nav>
+
+  <!-- ================= 先看这一页 ================= -->
+  <section class="section" id="choose">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">先看这一页</div>
+        <h2>30秒，选出想走的那条线</h2>
+      </div>
+      <div class="section-stamp">不赶路，也能玩得很好</div>
+    </div>
+
+    <p class="lead">两条线都不是“打卡清单”，而是“住下来慢慢过几天”的骨架。下面给的是大概方向、交通底稿和备选；具体每天去哪，可以到了再定。</p>
+
+    <div class="choice-grid">
+      <article class="choice choice-a">
+        <div class="choice-top"><span class="badge badge-a">A线</span><span class="days">7—14天</span></div>
+        <h3>边城线</h3>
+        <p class="choice-lead">湘西古镇 · 重庆山城 · 成都茶馆</p>
+        <p>适合喜欢人文、江水、老街、火锅和茶馆的爸妈。边走边停，累了就找地方坐下。</p>
+        <ul class="mini">
+          <li><strong>7天：</strong>边城 3 晚 + 重庆 3 晚，别硬加成都</li>
+          <li><strong>10天：</strong>边城 3 晚 + 重庆 3 晚 + 成都 3 晚</li>
+          <li><strong>14天：</strong>凤凰 2 晚 + 成都周边 1—2 天</li>
+        </ul>
+        <div class="stat-row">
+          <div><span>走路</span><strong>台阶较多</strong></div>
+          <div><span>天气</span><strong>15—25℃ · 有雨</strong></div>
+          <div><span>2人预算</span><strong>0.7—1.5万</strong></div>
+        </div>
+      </article>
+
+      <article class="choice choice-b">
+        <div class="choice-top"><span class="badge badge-b">B线</span><span class="days">7—14天</span></div>
+        <h3>北海线</h3>
+        <p class="choice-lead">北海老街 · 涠洲岛 · 桂南边境</p>
+        <p>适合想放松、少爬坡、爱吃海鲜的爸妈。海边路平，城市不大，打车不贵，随时可以回酒店休息。</p>
+        <ul class="mini">
+          <li><strong>7天：</strong>北海 3 晚 + 涠洲岛 2 晚 + 1 晚缓冲</li>
+          <li><strong>10天：</strong>加东兴/防城港 2 晚 + 南宁 1—2 晚</li>
+          <li><strong>14天：</strong>加德天/明仕，或加桂林/阳朔</li>
+        </ul>
+        <div class="stat-row">
+          <div><span>走路</span><strong>平坦 · 少台阶</strong></div>
+          <div><span>天气</span><strong>24—33℃ · 中午晒</strong></div>
+          <div><span>2人预算</span><strong>0.6—1.6万</strong></div>
+        </div>
+      </article>
+    </div>
+
+    <div class="callout callout-urgent">
+      <div class="callout-title">明后天出发 · 先办这 6 件事</div>
+      <ol class="tight">
+        <li><strong>定方向：</strong>想看海选 B；想看古镇选 A。7 天别硬塞成都或德天，路上会累。</li>
+        <li><strong>买去程票：</strong>A 线 10/27 宜春 09:13→吉首东 12:24（G2319）；B 线 10/27 宜春 08:16→贵阳东 13:07，13:41→北海 17:31（G2165 + G3587）。</li>
+        <li><strong>订前两晚：</strong>A 订茶峒临江民宿；B 订北海侨港或银滩附近的电梯酒店。</li>
+        <li><strong>B 线今晚订船票：</strong>只走官方“来游吧”；按 7 天版选 10/29 上岛、10/31 返北海，留 11/1 在北海做缓冲。</li>
+        <li><strong>A 线定返程：</strong>重庆→宜春每天有航班；成都→宜春直飞约周二、四、六 13:20，赶不上就坐 G2167（13:04—21:29）。</li>
+        <li><strong>带齐：</strong>身份证、老年证、常用药、防滑鞋、雨具或防晒；把酒店地址和车次截图存到手机相册。</li>
+      </ol>
+    </div>
+
+    <h3 class="subhead">两条线放在一起看</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>比较项</th><th>A线 · 边城—重庆—成都</th><th>B线 · 北海—涠洲岛—桂南</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>主打</strong></td><td>古镇、清水江、山城夜景、火锅、茶馆</td><td>海、海岛、老街、海鲜、边境小城</td></tr>
+          <tr><td><strong>适合</strong></td><td>喜欢人文和烟火气，愿意慢慢逛街区</td><td>想放松、少走路、爱吃海鲜、喜欢海风</td></tr>
+          <tr><td><strong>每天走路</strong></td><td>石板路、台阶、坡道较多；可多打车</td><td>海边步道、老街平地；整体轻松</td></tr>
+          <tr><td><strong>换乘</strong></td><td>高铁为主，边城需包车/拼车 1.5 小时</td><td>高铁一次换乘 + 上岛船；船班会受风影响</td></tr>
+          <tr><td><strong>天气</strong></td><td>10 月底 15—25℃，阴雨，湿冷</td><td>10 月底 24—33℃，中午晒，早晚舒服</td></tr>
+          <tr><td><strong>吃</strong></td><td>湘西菜、重庆火锅、成都小吃；偏辣</td><td>海鲜、米粉、糖水、越南风味；偏鲜</td></tr>
+          <tr><td><strong>7天怎么玩</strong></td><td>边城 3 晚 + 重庆 3 晚</td><td>北海 3 晚 + 涠洲岛 2 晚 + 1 晚缓冲</td></tr>
+          <tr><td><strong>14天怎么玩</strong></td><td>加凤凰，或加都江堰/青城山/乐山</td><td>加东兴、德天/明仕，或加桂林/阳朔</td></tr>
+          <tr><td><strong>最大风险</strong></td><td>雨天路滑、吃得辣、台阶多</td><td>大风停航、海鲜价格、中午暴晒</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rules">
+      <div class="rule"><span>01</span><p><strong>一地连住 2—3 晚。</strong>不天天拖箱子，才有“住下来”的感觉；中间只换一次酒店。</p></div>
+      <div class="rule"><span>02</span><p><strong>每天只设一个主项目。</strong>再写 3 个备选；累了、下雨了，就换备选或直接回酒店。</p></div>
+      <div class="rule"><span>03</span><p><strong>不为打卡排队。</strong>吃饭跟着菜市场和本地人走；景区核心区只逛、不吃饭、不买贵重东西。</p></div>
+    </div>
+
+    <div class="quote">
+      “旅行不是把地图走完，是让日子慢下来。”
+      <small>给爸妈的建议：每天留半天什么都不做，喝茶、看江、看海，都算正经事。</small>
+    </div>
+  </section>
+
+  <!-- ================= A线 ================= -->
+  <section class="section page-break route-a" id="route-a">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">A线 · 边城—重庆—成都</div>
+        <h2>在江边坐一会儿，再去吃火锅</h2>
+      </div>
+      <div class="section-stamp">人文 · 古镇 · 山城 · 茶馆</div>
+    </div>
+
+    <p class="lead">这条线从湘西的清水江开始，走到重庆的立体山城，再到成都的茶馆。它适合“慢慢逛、慢慢吃”的爸妈；不适合一天跑五个景点。边城就是沈从文《边城》里的茶峒，一脚踏湖南、重庆、贵州三省。</p>
+
+    <div class="route-strip">
+      <div class="route-line">
+        <span class="route-label">去程</span>
+        <span class="stop">宜春<small>高铁 3 小时</small></span><span class="arrow">→</span>
+        <span class="stop">吉首<small>包车 1.5 小时</small></span><span class="arrow">→</span>
+        <span class="stop">茶峒 · 边城<small>住 3 晚</small></span><span class="arrow">→</span>
+        <span class="stop">重庆<small>高铁 3.5 小时</small></span><span class="arrow">→</span>
+        <span class="stop">成都<small>高铁 1.5 小时</small></span>
+      </div>
+      <div class="route-line">
+        <span class="route-label">返程</span>
+        <span class="stop">成都<small>高铁 8.5 小时 / 飞机 1.5 小时</small></span><span class="arrow">→</span>
+        <span class="stop">宜春<small>到家</small></span>
+      </div>
+    </div>
+
+    <h3 class="subhead">A线 · 交通底稿</h3>
+    <div class="table-wrap table-a">
+      <table>
+        <thead>
+          <tr><th>路段</th><th>推荐走法</th><th>时间</th><th>2人参考</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>宜春→吉首东</td><td>G2319 09:13—12:24；G219 10:44—13:37；G3373 13:20—16:49</td><td>3—3.5 小时</td><td>580—610 元</td><td>直达，不用换乘；票面可能显示“宜春”，以 12306 为准</td></tr>
+          <tr><td>吉首东→茶峒</td><td>包车/拼车；或花垣班车转车</td><td>1.5—2 小时</td><td>150—200 元</td><td>包车最省心；班车约 90 元，但要多换一次</td></tr>
+          <tr><td>茶峒→吉首东</td><td>包车/拼车</td><td>1.5 小时</td><td>150—200 元</td><td>提前一天让民宿老板帮约，别临时找黑车</td></tr>
+          <tr><td>吉首东→重庆东</td><td>G2418 10:47—14:20；G2322 12:26—15:56</td><td>3.5 小时</td><td>570—620 元</td><td>直达，经张家界、黔江；重庆东离解放碑约 30—40 分钟车程</td></tr>
+          <tr><td>重庆→成都东</td><td>高铁，车次很多</td><td>1.5 小时</td><td>280—310 元</td><td>选上午的车，下午还能喝茶</td></tr>
+          <tr><td>成都→宜春</td><td>G2167 13:04—21:29；或直飞</td><td>8.5 小时 / 1.5 小时</td><td>1,380 元 / 1,000—1,600 元</td><td>直飞约周二、四、六 13:20；高铁直达，不用换乘</td></tr>
+          <tr><td>备用：茶峒→秀山→重庆</td><td>拼车 1 小时 + C/K 4.5—5.5 小时</td><td>6—7 小时</td><td>300—400 元</td><td>买不到 G2418/G2322 时走；慢一点，但也是风景</td></tr>
+          <tr><td>备用：重庆→宜春</td><td>G1761 14:54—21:37；或直飞</td><td>6.7 小时 / 1.5 小时</td><td>1,094 元 / 1,000—1,500 元</td><td>7 天版从重庆返程，比从成都走更顺</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="budget-note">票价按 2026 年 10 月查询到的二等座估算，实际以 12306 和航司为准；临近出发可能有浮动。</p>
+
+    <h3 class="subhead">A线 · 三个版本，按体力挑</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>天数</th><th>怎么排</th><th>适合谁</th></tr></thead>
+        <tbody>
+          <tr><td><strong>7 天</strong></td><td>宜春→茶峒 3 晚→重庆 3 晚→宜春</td><td>只想看边城和重庆，不想太累；放弃成都，反而更松弛</td></tr>
+          <tr><td><strong>10 天</strong></td><td>宜春→茶峒 3 晚→重庆 3 晚→成都 3 晚→宜春</td><td>第一次走这条线，节奏刚好；每天都有半天可以休息</td></tr>
+          <tr><td><strong>14 天</strong></td><td>凤凰 2 晚 + 茶峒 3 晚 + 重庆 3 晚 + 成都 5 晚（含都江堰/乐山 1 天）</td><td>想深一点、愿意多换一次酒店；不建议再加张家界，会赶</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-a">
+      <div class="callout-title">A线 10 天慢游样板（以 10/27 出发为例）</div>
+      <p class="small">10/27 出发，11/5 返程，刚好是周四，成都直飞宜春有航班。若 10/26 出发，整体前移一天；返程日不是周二/四/六，就从重庆飞或坐高铁。</p>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>01</strong></div>
+      <div class="day-body">
+        <h4>宜春→吉首→茶峒：先把行李放下</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">江边散步</span><span class="tag">早睡</span>
+        <p><strong>怎么走：</strong>宜春 09:13 坐 G2319，12:24 到吉首东；出站包车约 1.5 小时到茶峒，14:30 左右到民宿。下午不安排景点，沿清水江走一小段，找家临江茶馆坐下。</p>
+        <p><strong>备选：</strong>如果到得早，先去翠翠岛；如果下雨，就在民宿喝茶、听雨。晚饭吃一顿湘西菜，早点休息。</p>
+        <p><strong>住：</strong>茶峒古镇内临江民宿，选低楼层或电梯，问清楚能不能接站。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>02</strong></div>
+      <div class="day-body">
+        <h4>茶峒：古镇、拉拉渡、洪安古镇</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">2 元拉拉渡</span><span class="tag">午休</span>
+        <p><strong>上午：</strong>逛茶峒老街、吊脚楼、白塔；坐 2 元拉拉渡到对岸的重庆洪安古镇，走一走“一脚踏三省”的界碑附近。中午回茶峒吃饭、午休。</p>
+        <p><strong>下午：</strong>翠翠岛或清水江游船（约 25 元/人），也可以什么都不做，在江边看船。傍晚光线最好，适合拍照。</p>
+        <p><strong>吃：</strong>米豆腐、血粑鸭、酸鱼、腊肉、油茶；不吃辣一定提前说“完全不辣”。</p>
+        <p><strong>提醒：</strong>石板路雨后滑，穿防滑鞋；拉拉渡和游船先问价，别跟着拉客的人走。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>03</strong></div>
+      <div class="day-body">
+        <h4>茶峒周边：十八洞村，或矮寨大桥/德夯</h4>
+        <span class="tag tag-main">二选一</span><span class="tag">包车半天</span><span class="tag">不爬台阶</span>
+        <p><strong>选项一：</strong>包车去十八洞村（约 40 分钟），看看山村和苗寨，走走平缓的村道，听当地人讲故事。适合不想爬山的人。</p>
+        <p><strong>选项二：</strong>包车去矮寨大桥+德夯苗寨（约 1.5 小时）。矮寨大桥观景台很震撼；德夯苗寨有台阶和山路，腿脚不便就只去大桥，或改去吉首乾州古城。</p>
+        <p><strong>最松弛的选项：</strong>不跑远。逛茶峒集市，买点本地菜，回民宿晒太阳；下午再坐一次拉拉渡。旅行不是非要去下一个点。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>04</strong></div>
+      <div class="day-body">
+        <h4>茶峒→重庆：从边城到山城</h4>
+        <span class="tag tag-main">换城市</span><span class="tag">高铁 3.5 小时</span><span class="tag">夜看江</span>
+        <p><strong>怎么走：</strong>早上在江边吃碗粉，9:00 左右包车去吉首东；坐 G2418（10:47—14:20）或 G2322（12:26—15:56）到重庆东。出站打车/地铁去酒店，先休息。</p>
+        <p><strong>晚上：</strong>如果住解放碑附近，晚饭后去千厮门大桥看洪崖洞夜景，逛 30—60 分钟就回。洪崖洞里面人多，远看比进去好看。</p>
+        <p><strong>住：</strong>解放碑/洪崖洞（方便但吵）、观音桥（吃住方便）、南滨路（安静看江）。订之前看清“离地铁站多远”和“有没有电梯”。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>05</strong></div>
+      <div class="day-body">
+        <h4>重庆：山城步道、长江索道、两江游</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">台阶多</span><span class="tag">可打车替代</span>
+        <p><strong>上午：</strong>山城步道或十八梯，慢慢走 1—2 小时。腿脚不便就别走全程：打车到观景台，看一眼就够。中午回酒店午休。</p>
+        <p><strong>下午：</strong>长江索道坐单程（排队久，买下午的票），到对岸后打车回来；或去三峡博物馆+人民大礼堂，室内不累。</p>
+        <p><strong>晚上：</strong>两江游船看夜景（约 1 小时），比爬南山轻松。备选：南山一棵树观景台，打车直达。</p>
+        <p><strong>提醒：</strong>重庆导航会把你带到楼梯，打车时让司机到“最近的路口/电梯口”；不要硬走。火锅点鸳鸯或微辣，肠胃药带上。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>06</strong></div>
+      <div class="day-body">
+        <h4>重庆：磁器口、李子坝、鹅岭二厂</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">早去</span><span class="tag">大足备选</span>
+        <p><strong>上午：</strong>磁器口早去（9 点前），逛 1 小时就撤；商业化重，不在里面吃正餐。然后去李子坝看轻轨穿楼，再到鹅岭二厂走走。</p>
+        <p><strong>下午：</strong>交通茶馆坐一会儿，喝盖碗茶，看本地人打牌；或去黄桷坪涂鸦街。累了就回酒店。</p>
+        <p><strong>备选：</strong>大足石刻一日游（高铁/汽车约 1 小时，景区有观光车）；武隆天生三桥+仙女山 2 天（走路多，体力好再去）。</p>
+        <p><strong>吃：</strong>小面、酸辣粉、抄手、豆花、烤鱼；火锅点鸳鸯锅，别逞强。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>07</strong></div>
+      <div class="day-body">
+        <h4>重庆→成都：把节奏慢下来</h4>
+        <span class="tag tag-main">换城市</span><span class="tag">高铁 1.5 小时</span><span class="tag">茶馆</span>
+        <p><strong>怎么走：</strong>上午坐高铁到成都东，地铁/打车去酒店。下午去人民公园鹤鸣茶社喝茶，体验一次采耳（可选）；傍晚逛宽窄巷子，晚上吃火锅。</p>
+        <p><strong>备选：</strong>四川博物院、杜甫草堂、望江楼。下雨就去博物馆，成都的博物馆很适合慢慢看。</p>
+        <p><strong>住：</strong>春熙路/太古里（方便）、人民公园/宽窄巷子（安静）、文殊院（性价比）。选电梯酒店，离地铁近。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>08</strong></div>
+      <div class="day-body">
+        <h4>成都：熊猫基地 + 文殊院</h4>
+        <span class="tag tag-main">早去</span><span class="tag">午休</span><span class="tag">小吃</span>
+        <p><strong>上午：</strong>7:30—9:00 到熊猫基地，熊猫早上最活跃。园区大，买观光车票，别全程走。中午回酒店午休。</p>
+        <p><strong>下午：</strong>文殊院喝茶、吃素斋；或去建设路小吃街。晚上可以在太古里走走，但不建议逛太久。</p>
+        <p><strong>备选：</strong>四川博物院、东郊记忆、望江楼公园。熊猫基地下午熊猫多在睡觉，尽量别下午去。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>09</strong></div>
+      <div class="day-body">
+        <h4>成都周边：都江堰，或乐山</h4>
+        <span class="tag tag-main">二选一</span><span class="tag">高铁 0.5—1 小时</span><span class="tag">当天回</span>
+        <p><strong>选项一：都江堰。</strong>高铁 30—40 分钟，景区有观光车，走路可控制；看鱼嘴、飞沙堰、宝瓶口，下午回成都。腿脚好可加青城山前山（索道上下）。</p>
+        <p><strong>选项二：乐山。</strong>高铁约 1 小时，看乐山大佛。排队久，建议坐游船看大佛，省力；中午吃跷脚牛肉、甜皮鸭，下午回成都。</p>
+        <p><strong>备选：</strong>三星堆（广汉，高铁 20 分钟，新馆很值得看）、街子古镇、洛带古镇。三星堆室内多，下雨也能去。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>10</strong></div>
+      <div class="day-body">
+        <h4>成都→宜春：带着茶香回家</h4>
+        <span class="tag tag-main">返程</span><span class="tag">13:20 航班</span><span class="tag">或高铁</span>
+        <p><strong>上午：</strong>睡到自然醒，去人民公园或望江楼坐一会儿，买点不占地方的小特产。11:00 出发去机场。</p>
+        <p><strong>返程：</strong>成都→宜春直飞约 13:20—15:10（周二、四、六）；没有航班就坐 G2167 13:04—21:29，或飞南昌/长沙再高铁回宜春。</p>
+        <p><strong>提醒：</strong>如果买的是 13:20 的航班，别安排上午景点；机场提前 2 小时到，给爸妈留足时间。</p>
+      </div>
+    </div>
+
+    <h3 class="subhead">A线 · 每个地方怎么玩</h3>
+
+    <div class="module">
+      <div class="module-head"><h3>茶峒（边城）</h3><span>建议住 2—3 晚</span></div>
+      <p><strong>为什么来：</strong>沈从文《边城》的原型地，清水江、吊脚楼、拉拉渡、白塔都在。古镇免费，消费不高，早上和傍晚最舒服。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>早上逛老街和白塔；坐 2 元拉拉渡到洪安古镇；下午临江茶馆；傍晚江边散步；遇到赶集就逛集市。</dd>
+        <dt>备选</dt><dd>翠翠岛、清水江游船（约 25 元）、三省界碑、洪安古镇、十八洞村、矮寨大桥、德夯苗寨、吉首乾州古城。</dd>
+        <dt>吃</dt><dd>米豆腐、血粑鸭、酸鱼、腊肉、油茶；重庆侧洪安有腌菜鱼。辣度提前说，父母肠胃弱就选清蒸/炖菜。</dd>
+        <dt>住</dt><dd>古镇内临江民宿，150—300 元/晚；选低楼层，问能不能接站、有没有空调和热水。</dd>
+        <dt>提醒</dt><dd>石板路雨后滑；晚上灯少，带手机手电；拉拉渡和游船先讲价；不要买“野生药材/银饰”。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>凤凰古城（可选）</h3><span>建议住 1—2 晚</span></div>
+      <p><strong>为什么来：</strong>沱江、吊脚楼、夜景；从吉首东坐高铁约 24 分钟到凤凰古城站，再转车进古城。适合喜欢古镇夜景的爸妈。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>白天沿沱江慢走，沈从文故居/熊希龄故居选一个；傍晚看江边日落；晚上看夜景，不去酒吧街。</dd>
+        <dt>备选</dt><dd>奇梁洞、南方长城、苗寨一日游（只选正规旅行社，不报低价团）。</dd>
+        <dt>住</dt><dd>沱江上游或下游的安静客栈，不要住酒吧街正中间；选能接站的。</dd>
+        <dt>提醒</dt><dd>古城免费，九景联票按需买；银饰、姜糖、药材多比价；晚上石板路滑。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>重庆</h3><span>建议住 3 晚</span></div>
+      <p><strong>为什么来：</strong>立体山城、江景夜景、火锅、茶馆。重庆适合“选两三个街区慢慢逛”，不适合一天跑五个点；导航显示 500 米，可能是一段楼梯。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>长江索道单程、两江游船、南山一棵树、三峡博物馆、人民大礼堂、磁器口、李子坝、鹅岭二厂、交通茶馆、黄桷坪涂鸦街。</dd>
+        <dt>备选</dt><dd>大足石刻（1 天）、武隆天生三桥/仙女山（2 天）、合川钓鱼城、北温泉。</dd>
+        <dt>吃</dt><dd>火锅（鸳鸯/微辣）、小面、酸辣粉、抄手、豆花、烤鱼。不能吃辣就点清汤/番茄锅，别不好意思说。</dd>
+        <dt>住</dt><dd>解放碑/洪崖洞（方便但吵）、观音桥（吃住方便）、南滨路（安静看江）。一定选电梯酒店。</dd>
+        <dt>提醒</dt><dd>洪崖洞只远看；长江索道排队久；山城步道/十八梯台阶多，腿脚不便就打车到观景台；重庆东站离市区 30—40 分钟，留足时间。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>成都</h3><span>建议住 3 晚</span></div>
+      <p><strong>为什么来：</strong>茶馆、火锅、熊猫、平原古镇。成都的节奏适合父母：上午一个点，下午喝茶，晚上吃一顿好的。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>人民公园鹤鸣茶社、宽窄巷子、武侯祠/锦里、杜甫草堂、四川博物院、熊猫基地、文殊院、望江楼、太古里。</dd>
+        <dt>备选</dt><dd>都江堰、青城山、乐山、三星堆、街子古镇、洛带古镇、峨眉山（2 天）。</dd>
+        <dt>吃</dt><dd>火锅/串串（鸳鸯）、担担面、钟水饺、龙抄手、甜水面、蛋烘糕、茶馆。成都小吃分量小，可以少点多样。</dd>
+        <dt>住</dt><dd>春熙路/太古里（方便）、人民公园/宽窄巷子（安静）、文殊院（性价比）。选离地铁近的电梯酒店。</dd>
+        <dt>提醒</dt><dd>熊猫基地早去；都江堰/青城山穿舒适鞋；成都地铁方便，打车也不贵；下雨就把室外点换成博物馆/茶馆。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>顺路加什么</h3><span>按体力和时间挑，不要都加</span></div>
+      <div class="alt-grid">
+        <div class="alt"><strong>芙蓉镇</strong>吉首东→芙蓉镇站约 30 分钟；瀑布上的古镇，半天或 1 晚。适合喜欢拍照的爸妈。</div>
+        <div class="alt"><strong>张家界</strong>吉首东→张家界西约 1 小时；山多、走路多，2—3 天。体力好再去，腿脚不便不建议。</div>
+        <div class="alt"><strong>武隆</strong>重庆出发 2 小时；天生三桥有电梯但走路仍多，仙女山轻松。适合加 2 天。</div>
+        <div class="alt"><strong>大足石刻</strong>重庆出发约 1 小时；室内外结合，景区有观光车，半天到 1 天。</div>
+        <div class="alt"><strong>乐山</strong>成都高铁 1 小时；大佛坐游船看最省力，中午吃跷脚牛肉，当天回。</div>
+        <div class="alt"><strong>峨眉山</strong>成都高铁 1.5 小时；坐索道到金顶，2 天；山下报国寺/温泉更轻松。</div>
+        <div class="alt"><strong>都江堰/青城山</strong>成都高铁 30—40 分钟；都江堰平缓，青城山坐索道。适合 1 天。</div>
+        <div class="alt"><strong>三星堆</strong>成都→广汉高铁 20 分钟；新馆室内多，下雨也能去，适合 1 天。</div>
+      </div>
+    </div>
+
+    <h3 class="subhead">A线 · 2人费用估算</h3>
+    <div class="table-wrap keep">
+      <table>
+        <thead><tr><th>项目</th><th>7 天</th><th>10 天</th><th>14 天</th></tr></thead>
+        <tbody>
+          <tr><td>大交通（高铁/飞机/包车）</td><td>2,800—3,300</td><td>3,500—4,200</td><td>4,000—4,800</td></tr>
+          <tr><td>住宿（每晚 1 间）</td><td>1,700—2,100</td><td>2,300—2,900</td><td>3,300—4,200</td></tr>
+          <tr><td>吃饭（2 人/天）</td><td>1,200—1,600</td><td>1,800—2,300</td><td>2,500—3,200</td></tr>
+          <tr><td>门票/体验</td><td>500—800</td><td>800—1,200</td><td>1,200—1,800</td></tr>
+          <tr><td>市内交通/杂费</td><td>400—600</td><td>600—900</td><td>900—1,300</td></tr>
+          <tr class="total-row"><td>合计（2 人）</td><td>6,600—8,400</td><td>9,000—11,500</td><td>11,900—15,300</td></tr>
+          <tr><td>人均</td><td>3,300—4,200</td><td>4,500—5,750</td><td>6,000—7,650</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="budget-note">按“舒适型”估算：电梯酒店/干净民宿、每天 1—2 次打车、1—2 天包车、正常吃火锅/下馆子；不含购物。60/65 岁以上门票有优惠，实际可能更低。明后天出发，机票和酒店可能比平时上浮 10%—30%。</p>
+
+    <h3 class="subhead">A线 · 避坑提醒</h3>
+    <div class="callout callout-warn">
+      <ul class="tight">
+        <li><strong>洪崖洞、磁器口：</strong>人多，早去或远看；不在景区核心吃饭，贵且不好吃。</li>
+        <li><strong>重庆火锅：</strong>点鸳鸯/微辣，别逞强；带肠胃药。父母有高血压/心脏病，少油少辣、别吃太撑。</li>
+        <li><strong>茶峒石板路：</strong>雨后滑，穿防滑鞋；晚上灯少，带手机手电；江边湿滑处别走太近。</li>
+        <li><strong>包车/拼车：</strong>吉首东、秀山站拉客的多，先讲好价、确认是正规车；不要让民宿老板“代叫”却不报价。</li>
+        <li><strong>凤凰：</strong>酒吧街吵，住远一点；银饰、姜糖、药材多比价；不报低价苗寨团。</li>
+        <li><strong>成都熊猫基地：</strong>下午熊猫睡觉，尽量 7:30—9:00 到；园区大，买观光车票。</li>
+        <li><strong>景区“免费拍照/祈福/药材”：</strong>别接，最后都可能收费。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= B线 ================= -->
+  <section class="section page-break route-b" id="route-b">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">B线 · 北海—涠洲岛—桂南</div>
+        <h2>把日子过成海边的样子</h2>
+      </div>
+      <div class="section-stamp">海 · 岛 · 老街 · 海鲜</div>
+    </div>
+
+    <p class="lead">这条线从北海老街开始，坐船上涠洲岛住两晚，再沿着北部湾走到东兴、南宁。海边路平、城市不大、打车不贵，适合想“少走路、多坐着看海”的爸妈。船班会受大风影响，行程里一定留一天缓冲。</p>
+
+    <div class="route-strip">
+      <div class="route-line">
+        <span class="stop">宜春<small>高铁 9 小时</small></span><span class="arrow">→</span>
+        <span class="stop">北海<small>住 3 晚</small></span><span class="arrow">→</span>
+        <span class="stop">涠洲岛<small>住 2 晚</small></span><span class="arrow">→</span>
+        <span class="stop">东兴<small>动车 1 小时</small></span><span class="arrow">→</span>
+        <span class="stop">南宁<small>动车 1.5 小时</small></span><span class="arrow">→</span>
+        <span class="stop">宜春<small>高铁 8—9 小时</small></span>
+      </div>
+    </div>
+    <p class="small muted">14 天版可在南宁之后加德天/明仕，或把终点改成桂林/阳朔；两条只选一条，别都加。</p>
+
+    <h3 class="subhead">B线 · 交通底稿</h3>
+    <div class="table-wrap table-b">
+      <table>
+        <thead>
+          <tr><th>路段</th><th>推荐走法</th><th>时间</th><th>2人参考</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>宜春→北海</td><td>G2165 宜春 08:16—贵阳东 13:07；换乘 G3587 13:41—北海 17:31</td><td>9 小时 15 分</td><td>900—1,000 元</td><td>贵阳东同站换乘 34 分钟，走“便捷换乘”；带父母尽量少行李</td></tr>
+          <tr><td>备选：宜春→广州南→北海</td><td>G1125 09:37—广州南 13:03；D3738 14:45—北海 19:55</td><td>10 小时 18 分</td><td>1,000—1,100 元</td><td>换乘时间宽裕，但到得晚；适合买不到贵阳东联程时</td></tr>
+          <tr><td>备选：宜春→南宁东→北海</td><td>G1505 13:15—南宁东 19:51；住南宁，次日动车去北海</td><td>6.5 小时 + 1.5 小时</td><td>1,000 元左右</td><td>不想赶 34 分钟换乘，就在南宁住一晚，顺便吃老友粉</td></tr>
+          <tr><td>北海市内</td><td>打车/公交</td><td>15—30 分钟</td><td>15—35 元/次</td><td>银滩、侨港、老街之间打车不贵；公交便宜但等车久</td></tr>
+          <tr><td>北海→涠洲岛</td><td>北海国际客运港坐船</td><td>70—110 分钟</td><td>600—960 元（往返）</td><td>船票 150—240 元/人/程；上岛票约 98 元/人；官方“来游吧”提前订</td></tr>
+          <tr><td>北海→东兴</td><td>动车到防城港北约 0.5—1 小时，同站换乘到东兴市约 20 分钟</td><td>1—1.5 小时</td><td>120—160 元</td><td>也可查北海→东兴是否有直达动车；没有就防城港北换乘</td></tr>
+          <tr><td>东兴→南宁东</td><td>动车</td><td>约 1.5 小时</td><td>160—200 元</td><td>东兴市站发车；南宁东站很大，留足换乘时间</td></tr>
+          <tr><td>南宁→德天（14天加）</td><td>琅东站 8:30 直达班车；或包车/2日游</td><td>4.5—5 小时</td><td>120—200 元（班车）</td><td>班车约 48 元/人；带父母建议 2 天 1 晚或包车，不建议当天往返</td></tr>
+          <tr><td>北海→桂林（14天加）</td><td>D8412 18:26—桂林北 22:48；或白天车次</td><td>4.5 小时</td><td>400—500 元</td><td>桂林/阳朔玩 3—4 天，从桂林回宜春约 4 小时</td></tr>
+          <tr><td>桂林→宜春</td><td>高铁</td><td>约 4 小时</td><td>600—700 元</td><td>桂林北/桂林西出发；阳朔先回桂林再转</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="budget-note">涠洲岛船票价格按普通舱/优选舱估算；上岛票、观光车另计。船班受风影响，出发前查船公司公告；停航可免费退改，但酒店要订可取消的。</p>
+
+    <h3 class="subhead">B线 · 三个版本，按时间挑</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>天数</th><th>怎么排</th><th>适合谁</th></tr></thead>
+        <tbody>
+          <tr><td><strong>7 天</strong></td><td>北海 3 晚→涠洲岛 2 晚→北海 1 晚（缓冲）→宜春</td><td>只想看海、吃海鲜；不折腾周边，最松弛</td></tr>
+          <tr><td><strong>10 天</strong></td><td>北海 3 晚→涠洲岛 2 晚→东兴 2 晚→南宁 2 晚→宜春</td><td>想多看一点边境小城，但不想赶路</td></tr>
+          <tr><td><strong>14 天</strong></td><td>北海 3 晚→涠洲岛 3 晚→东兴 2 晚→德天/明仕 2 晚→南宁 3 晚→宜春；或北海 4 晚→涠洲岛 3 晚→桂林 2 晚→阳朔 4 晚→宜春</td><td>愿意多换两次酒店；两条加餐只选一条</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-b">
+      <div class="callout-title">B线 10 天慢游样板（以 10/27 出发为例）</div>
+      <p class="small">10/27 到北海，10/30 上岛、11/1 下岛后去东兴，11/3 到南宁，11/5 返程。上岛船票今晚就订；10/31 留在涠洲岛，风大停航也不慌。</p>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>01</strong></div>
+      <div class="day-body">
+        <h4>宜春→北海：先吃一碗糖水</h4>
+        <span class="tag tag-main">赶路</span><span class="tag">贵阳东换乘</span><span class="tag">侨港</span>
+        <p><strong>怎么走：</strong>宜春 08:16 坐 G2165，13:07 到贵阳东；同站换乘 13:41 的 G3587，17:31 到北海。打车去酒店，放下行李就去侨港风情街吃晚饭。</p>
+        <p><strong>吃：</strong>虾饼、蟹仔粉、越南卷粉、槐花粉/芋圆糖水。海鲜先问价，第一顿别点太多。</p>
+        <p><strong>住：</strong>侨港（吃方便、离客运港近）或银滩（安静、看海）。选电梯酒店，问清楚离海边多远。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>02</strong></div>
+      <div class="day-body">
+        <h4>北海：老街、外沙、银滩日落</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">午休</span><span class="tag">日落</span>
+        <p><strong>上午：</strong>北海老街看骑楼，找家老店喝咖啡/糖水；走到外沙岛看渔船。中午回酒店午休。</p>
+        <p><strong>下午：</strong>4 点以后去银滩，避开最晒的时候；沿海边慢走，等日落。银滩遮阳伞/椅子先问价。</p>
+        <p><strong>备选：</strong>海底世界、冠头岭国家森林公园、金海湾红树林（赶海看潮汐）。下雨就改海底世界/老街喝茶。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>03</strong></div>
+      <div class="day-body">
+        <h4>北海：侨港早茶 + 慢生活</h4>
+        <span class="tag tag-main">不赶路</span><span class="tag">海鲜市场</span><span class="tag">夜市</span>
+        <p><strong>上午：</strong>侨港风情街吃早茶/糖水，逛市场认认海鲜；想自己做就买一点回民宿加工，不想做就找明码标价的店。</p>
+        <p><strong>下午：</strong>回酒店午休，海边咖啡/按摩；傍晚去侨港夜市，吃越南春卷、烤生蚝。</p>
+        <p><strong>备选：</strong>北海园博园、北海博物馆、外沙海鲜岛。今天不安排远景点，为明天上岛留体力。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>04</strong></div>
+      <div class="day-body">
+        <h4>北海→涠洲岛：住到海边去</h4>
+        <span class="tag tag-main">上岛</span><span class="tag">船 70—110 分钟</span><span class="tag">日落</span>
+        <p><strong>怎么走：</strong>提前 40 分钟到北海国际客运港，坐船到涠洲岛西角码头。岛上包观光车到酒店，下午不安排景点，去滴水丹屏看日落。</p>
+        <p><strong>住：</strong>滴水丹屏/石螺口（安静、看日落）或南湾（吃饭方便）。选有电梯/低楼层的民宿，问能不能接码头。</p>
+        <p><strong>提醒：</strong>晕船药提前 30 分钟吃；船票和上岛票都提前订；岛上物价高，常用药、防晒、水自带一些。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>05</strong></div>
+      <div class="day-body">
+        <h4>涠洲岛：鳄鱼山 + 五彩滩</h4>
+        <span class="tag tag-main">包观光车</span><span class="tag">有台阶</span><span class="tag">午休</span>
+        <p><strong>上午：</strong>包观光车去鳄鱼山火山公园，观光车到门口，里面栈道有上有下，慢慢走 1.5—2 小时。中午回酒店午休。</p>
+        <p><strong>下午：</strong>五彩滩看海蚀地貌，或天主教堂；傍晚去石螺口/滴水丹屏看日落。</p>
+        <p><strong>备选：</strong>贝壳沙滩、蓝桥、南湾市场买海鲜加工。不要骑电动车，岛上坡多、路窄，父母不安全。</p>
+        <p><strong>提醒：</strong>观光车 300—400 元/天，谈好价格和等待时间；海鲜加工先问加工费，称重前沥水。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>06</strong></div>
+      <div class="day-body">
+        <h4>涠洲岛→北海→东兴：边境小城</h4>
+        <span class="tag tag-main">换城市</span><span class="tag">船 + 动车</span><span class="tag">口岸</span>
+        <p><strong>怎么走：</strong>上午坐船回北海，中午从北海站坐动车到防城港北，同站换乘到东兴市；傍晚逛东兴口岸、中越友谊大桥、越南风情街。</p>
+        <p><strong>备选：</strong>如果船晚点，就在北海多住一晚，第二天再去东兴。船班受风影响，不要把行程卡死。</p>
+        <p><strong>住：</strong>东兴口岸附近，走路能到口岸和夜市；选电梯酒店。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>07</strong></div>
+      <div class="day-body">
+        <h4>东兴：金滩、京族文化、海鲜</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">海边平路</span><span class="tag">不办出境</span>
+        <p><strong>上午：</strong>去金滩/京岛，海边走走，看京族渔民；下午逛京族博物馆、口岸。晚上吃一顿海鲜。</p>
+        <p><strong>备选：</strong>防城港白浪滩、怪石滩、簕山古渔村（打车/包车半天）。下雨就逛博物馆/口岸商场。</p>
+        <p><strong>提醒：</strong>不办出境，不带违禁品；边贸商品多比价；海边风大，带薄外套。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>08</strong></div>
+      <div class="day-body">
+        <h4>东兴→南宁：回到城市</h4>
+        <span class="tag tag-main">换城市</span><span class="tag">动车 1.5 小时</span><span class="tag">夜市</span>
+        <p><strong>怎么走：</strong>上午动车到南宁东，地铁/打车去酒店。下午逛三街两巷或青秀山（选一个），晚上中山路夜市。</p>
+        <p><strong>吃：</strong>老友粉、柠檬鸭、卷筒粉、酸嘢、烤鱼。南宁口味酸辣，提前说少辣。</p>
+        <p><strong>住：</strong>朝阳广场/三街两巷附近（吃方便），或南宁东站附近（第二天赶车方便）。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>09</strong></div>
+      <div class="day-body">
+        <h4>南宁：公园、博物馆、慢慢过</h4>
+        <span class="tag tag-main">主项目</span><span class="tag">不赶路</span><span class="tag">德天备选</span>
+        <p><strong>上午：</strong>青秀山（园区大，坐观光车）或广西民族博物馆（室内，轻松）。中午回酒店午休。</p>
+        <p><strong>下午：</strong>南湖公园散步，或茶馆坐着；晚上再逛一次夜市，买点水果。</p>
+        <p><strong>备选：</strong>德天瀑布一日游（往返 8—10 小时，不建议 70 岁以上当天往返）；明仕田园 2 天 1 晚；伊岭岩。</p>
+      </div>
+    </div>
+
+    <div class="day">
+      <div class="day-num"><span>DAY</span><strong>10</strong></div>
+      <div class="day-body">
+        <h4>南宁→宜春：分两段走，不累</h4>
+        <span class="tag tag-main">返程</span><span class="tag">高铁 8—9 小时</span><span class="tag">可中途住一晚</span>
+        <p><strong>怎么走：</strong>南宁东→长沙南→宜春西，约 8—9 小时；或南宁东→桂林→宜春。带父母建议在长沙或桂林住一晚，拆成两段。</p>
+        <p><strong>备选：</strong>如果还想玩，就加桂林/阳朔 3 天，从桂林回宜春约 4 小时；但 10 天版不建议再加，会赶。</p>
+        <p><strong>提醒：</strong>南宁东站很大，提前 40 分钟到；高铁上带点水果和面包，别饿着。</p>
+      </div>
+    </div>
+
+    <h3 class="subhead">B线 · 每个地方怎么玩</h3>
+
+    <div class="module">
+      <div class="module-head"><h3>北海</h3><span>建议住 2—3 晚</span></div>
+      <p><strong>为什么来：</strong>银滩、老街、侨港，城市不大，打车便宜，海边路平。适合“早上出门、中午回酒店、傍晚再出门”的节奏。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>老街骑楼喝咖啡/糖水；外沙岛看渔船；银滩早晚散步；侨港吃小吃；冠头岭看日落；红树林赶海（看潮汐）。</dd>
+        <dt>备选</dt><dd>海底世界、园博园、北海博物馆、外沙海鲜岛、金海湾红树林。</dd>
+        <dt>吃</dt><dd>虾饼、蟹仔粉、越南卷粉、槐花粉、芋圆、海鲜（皮皮虾、花蟹、沙虫、生蚝）。海鲜市场加工先问价。</dd>
+        <dt>住</dt><dd>侨港（吃方便、近客运港）、银滩（海景、安静）、老街/外沙（市区烟火气）。选电梯酒店。</dd>
+        <dt>提醒</dt><dd>中午 11:00—16:00 最晒，尽量室内；银滩遮阳伞收费先问；出租车/司机推荐的海鲜店不去。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>涠洲岛</h3><span>建议住 2 晚</span></div>
+      <p><strong>为什么来：</strong>火山岛、海蚀地貌、日落、海鲜。岛不大，但坡多路窄，父母不要骑电动车，包观光车最稳。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>鳄鱼山（观光车+栈道）、五彩滩、滴水丹屏日落、石螺口、天主教堂、南湾市场。</dd>
+        <dt>备选</dt><dd>贝壳沙滩、蓝桥、出海打渔（谨慎选正规船）、冬季追鲸。</dd>
+        <dt>住</dt><dd>滴水丹屏/石螺口（安静看日落）、南湾（吃饭方便）。选低楼层/电梯，问能否接码头。</dd>
+        <dt>提醒</dt><dd>船票只走官方“来游吧”；上岛票约 98 元；包观光车 300—400 元/天；岛上物价高；大风停航要留缓冲。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>东兴 / 防城港</h3><span>建议住 1—2 晚</span></div>
+      <p><strong>为什么来：</strong>中越边境、金滩、京族文化，比北海安静。适合从海岛回到陆地后，换一种风景。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>东兴口岸、中越友谊大桥、越南风情街、金滩、京族博物馆；防城港白浪滩、怪石滩、簕山古渔村。</dd>
+        <dt>备选</dt><dd>屏峰雨林公园、十万大山（爬山，谨慎）。</dd>
+        <dt>吃</dt><dd>京族海鲜、越南鸡粉、春卷、滴漏咖啡。海鲜先问价，别在口岸正门口吃。</dd>
+        <dt>提醒</dt><dd>不办出境；边贸商品多比价；海边风大，带薄外套；金滩遮阳伞收费先问。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>南宁</h3><span>建议住 1—2 晚</span></div>
+      <p><strong>为什么来：</strong>中转和补给城市，公园多、吃的多，适合休整。不用把它当旅游城市，慢慢过一天就好。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>青秀山（坐观光车）、三街两巷、广西民族博物馆、南湖公园、中山路夜市。</dd>
+        <dt>备选</dt><dd>德天瀑布/明仕田园（2 天）、伊岭岩、昆仑关。</dd>
+        <dt>吃</dt><dd>老友粉、柠檬鸭、卷筒粉、酸嘢、烤鱼。酸辣口味，提前说少辣。</dd>
+        <dt>提醒</dt><dd>南宁东站很大，留足换乘时间；地铁方便，打车也不贵。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>德天 / 明仕（14天加）</h3><span>建议住 1—2 晚</span></div>
+      <p><strong>为什么来：</strong>德天跨国瀑布、明仕田园，山水慢。适合喜欢自然风景的爸妈，但车程长，最好 2 天 1 晚，不要当天往返。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>德天瀑布坐竹筏靠近瀑布；明仕田园坐竹筏/观光车，住明仕村，早上看雾。</dd>
+        <dt>备选</dt><dd>通灵大峡谷（台阶多，谨慎）、鹅泉、旧州。</dd>
+        <dt>提醒</dt><dd>边境检查带身份证；南宁出发单程 3.5—4.5 小时；雨季水量大但路滑；包车先谈好全天价格。</dd>
+      </dl>
+    </div>
+
+    <div class="module">
+      <div class="module-head"><h3>桂林 / 阳朔（14天加）</h3><span>建议住 3—4 晚</span></div>
+      <p><strong>为什么来：</strong>漓江、遇龙河、田园，适合慢住。桂林和阳朔之间高铁/大巴都方便，但阳朔西街吵，住西街外围或遇龙河更好。</p>
+      <dl class="kv">
+        <dt>不累的玩法</dt><dd>桂林象鼻山、两江四湖夜游；漓江四星游船（桂林→阳朔约 4 小时）；阳朔遇龙河竹筏（2 人筏）、十里画廊观光车、兴坪古镇。</dd>
+        <dt>备选</dt><dd>龙脊梯田（2 天，山路）、银子岩、世外桃源、印象刘三姐。</dd>
+        <dt>吃</dt><dd>桂林米粉、啤酒鱼、田螺酿、荔浦芋扣肉。</dd>
+        <dt>提醒</dt><dd>漓江游船选正规码头；遇龙河竹筏给船工小费自愿；低价一日游别报；西街酒吧吵，住远一点。</dd>
+      </dl>
+    </div>
+
+    <h3 class="subhead">B线 · 2人费用估算</h3>
+    <div class="table-wrap keep">
+      <table>
+        <thead><tr><th>项目</th><th>7 天</th><th>10 天</th><th>14 天</th></tr></thead>
+        <tbody>
+          <tr><td>大交通（高铁/船/包车）</td><td>1,900—2,300</td><td>2,700—3,300</td><td>4,000—5,000</td></tr>
+          <tr><td>住宿（每晚 1 间）</td><td>1,700—2,200</td><td>2,400—3,000</td><td>3,400—4,300</td></tr>
+          <tr><td>吃饭（2 人/天）</td><td>1,300—1,700</td><td>1,900—2,500</td><td>2,800—3,600</td></tr>
+          <tr><td>门票/船票/体验</td><td>800—1,100</td><td>1,000—1,400</td><td>1,800—2,500</td></tr>
+          <tr><td>市内交通/杂费</td><td>400—600</td><td>600—900</td><td>900—1,300</td></tr>
+          <tr class="total-row"><td>合计（2 人）</td><td>6,100—7,900</td><td>8,600—11,100</td><td>12,900—16,700</td></tr>
+          <tr><td>人均</td><td>3,050—3,950</td><td>4,300—5,550</td><td>6,450—8,350</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="budget-note">按“舒适型”估算：海边干净酒店/民宿、每天 1—2 次打车、涠洲岛包观光车、正常吃海鲜；不含购物。海鲜价格波动大，点之前先问“多少钱一斤/一只”。60/65 岁以上门票有优惠。</p>
+
+    <h3 class="subhead">B线 · 避坑提醒</h3>
+    <div class="callout callout-warn">
+      <ul class="tight">
+        <li><strong>海鲜加工：</strong>先问加工费（按斤还是按份）、称重前沥水、看着杀；不去出租车/司机推荐的店；保留小票。</li>
+        <li><strong>涠洲岛船票：</strong>只走官方“来游吧”/“嗯噢哇”小程序；码头黄牛别信；大风停航可免费退改，行程留 1 天缓冲。</li>
+        <li><strong>岛上交通：</strong>不要骑电动车；包正规观光车，谈好价格和等待时间；码头和景点门口拉客的车不要坐。</li>
+        <li><strong>银滩：</strong>遮阳伞/椅子先问价；游泳只在指定区域；中午防晒，帽子、墨镜、防晒霜都带上。</li>
+        <li><strong>低价团：</strong>“99 元涠洲岛一日游”“北海—德天特价团”别报，购物点多、时间赶。</li>
+        <li><strong>德天：</strong>边境检查带身份证；竹筏排队；雨季路滑；不要当天往返。</li>
+        <li><strong>阳朔：</strong>西街酒吧吵；遇龙河竹筏选正规码头；不买“老乡店”银饰/玉石。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= 行前清单 ================= -->
+  <section class="section" id="checklist">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">通用清单</div>
+        <h2>出发前，把这几件事做好</h2>
+      </div>
+      <div class="section-stamp">不慌张 · 不将就</div>
+    </div>
+
+    <div class="two-col">
+      <div class="checklist-box">
+        <h3>证件与钱</h3>
+        <ul>
+          <li>身份证、老年证、医保卡；各复印一份，手机里再存照片。</li>
+          <li>银行卡 + 少量现金（古镇、岛上有些小店只收现金）。</li>
+          <li>车次/航班/酒店地址截图，设成手机相册“收藏”。</li>
+          <li>旅游意外险 30—80 元/人；需要的话提前办异地就医备案。</li>
+        </ul>
+      </div>
+      <div class="checklist-box">
+        <h3>药与身体</h3>
+        <ul>
+          <li>降压药、降糖药、心脏药：带足全程 + 3 天，别托运。</li>
+          <li>晕车/晕船药、肠胃药、感冒药、创可贴、膏药、眼药水。</li>
+          <li>防晒霜、驱蚊液、保温杯；A 线加一件薄羽绒/冲锋衣。</li>
+          <li>每天定时吃药，别因为赶车漏服；酒店前台电话存好。</li>
+        </ul>
+      </div>
+      <div class="checklist-box">
+        <h3>衣物</h3>
+        <ul>
+          <li>A 线：薄羽绒/冲锋衣、长裤、防滑鞋、雨伞/雨衣；重庆成都阴雨多。</li>
+          <li>B 线：短袖 + 薄外套/防晒衣、帽子、墨镜、走路鞋；海边早晚有风。</li>
+          <li>一双防滑、好走的鞋比什么都重要；新鞋别穿出门。</li>
+          <li>小背包放证件/药/水，大箱子放酒店；换乘时只背小包。</li>
+        </ul>
+      </div>
+      <div class="checklist-box">
+        <h3>交通与住宿</h3>
+        <ul>
+          <li>12306 用“敬老版”；需要帮助可预约“重点旅客服务”。</li>
+          <li>高铁提前 30—60 分钟到；换乘留 30 分钟以上；贵阳东 34 分钟要快步走。</li>
+          <li>飞机提前 2 小时；选靠过道座位；可申请轮椅/引导。</li>
+          <li>酒店选电梯、低楼层、安静、近地铁/公交；订可取消的，连住不换。</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout">
+      <div class="callout-title">“随性”不是随便，是这样执行</div>
+      <ul class="tight">
+        <li><strong>每天只定一个主项目。</strong>早上醒了再决定去不去；不想去就换备选，或者干脆在酒店/茶馆/海边坐半天。</li>
+        <li><strong>每 2—3 天留一个“什么都不做”的半天。</strong>洗衣服、睡午觉、逛菜市场，都算旅行。</li>
+        <li><strong>不为了“来都来了”硬撑。</strong>排队超过 30 分钟的网红店/景点，直接放弃；父母舒服比打卡重要。</li>
+        <li><strong>吃饭跟着本地人走。</strong>菜市场周边、小区门口的小馆，通常比景区核心区好吃便宜；辣度提前说。</li>
+        <li><strong>每天给家人发一次定位。</strong>走散时约定“回到酒店大堂”或“景区游客中心”，不要互相找。</li>
+      </ul>
+    </div>
+
+    <div class="checklist-box">
+      <h3>让爸妈自己勾一勾</h3>
+      <p class="small muted">把这张表给爸妈看，选出来的就是他们的“真需求”，比我们猜的准。</p>
+      <div class="check-grid">
+        <label><input type="checkbox"> 我想看古镇老街</label>
+        <label><input type="checkbox"> 我想看江/山</label>
+        <label><input type="checkbox"> 我想看大海</label>
+        <label><input type="checkbox"> 我想住海岛</label>
+        <label><input type="checkbox"> 我想看瀑布</label>
+        <label><input type="checkbox"> 我想吃海鲜</label>
+        <label><input type="checkbox"> 我想吃火锅</label>
+        <label><input type="checkbox"> 我想喝茶发呆</label>
+        <label><input type="checkbox"> 每天走 1 小时就够</label>
+        <label><input type="checkbox"> 每天能走 2—3 小时</label>
+        <label><input type="checkbox"> 不能爬台阶</label>
+        <label><input type="checkbox"> 最多坐 3 小时车</label>
+        <label><input type="checkbox"> 最多坐 5 小时车</label>
+        <label><input type="checkbox"> 最多坐 8 小时车</label>
+        <label><input type="checkbox"> 想住临江/海边</label>
+        <label><input type="checkbox"> 想住市区方便</label>
+        <label><input type="checkbox"> 想吃清淡</label>
+        <label><input type="checkbox"> 能吃微辣</label>
+      </div>
+    </div>
+
+    <div class="callout callout-warn">
+      <div class="callout-title">安全底线</div>
+      <ul class="tight">
+        <li>不参加低价团，不买“药材/银饰/玉石/保健品”；景区“免费拍照/祈福”别接。</li>
+        <li>不夜里走偏僻路；不坐无牌黑车；包车先拍车牌发给家人。</li>
+        <li>海鲜适量，不喝冰啤；父母有慢性病，饮食清淡、按时吃药。</li>
+        <li>紧急电话：110 / 120 / 12345；景区游客中心、酒店前台都能帮忙。</li>
+        <li>每天给家人发定位；走散约定集合点；手机保持有电。</li>
+      </ul>
+    </div>
+
+    <div class="checklist-box">
+      <h3>旅途小记</h3>
+      <p class="small muted">今天去了哪里、吃了什么、花了多少钱，随手记一笔；回家翻看，比照片还有意思。</p>
+      <div class="note-lines"><span></span><span></span><span></span><span></span><span></span></div>
+    </div>
+  </section>
+
+  <!-- ================= 出发卡 ================= -->
+  <section class="section page-break" id="card">
+    <div class="section-head">
+      <div>
+        <div class="section-kicker">出发卡</div>
+        <h2>把这张卡填好，留给家里</h2>
+      </div>
+      <div class="section-stamp">打印出来 · 放在随身包</div>
+    </div>
+
+    <div class="print-card">
+      <h3>爸妈旅行信息卡</h3>
+      <div class="print-grid">
+        <div class="field"><strong>去程车次/航班</strong>　</div>
+        <div class="field"><strong>返程车次/航班</strong>　</div>
+        <div class="field"><strong>第一晚酒店 / 电话</strong>　</div>
+        <div class="field"><strong>第二晚酒店 / 电话</strong>　</div>
+        <div class="field"><strong>当地紧急联系人</strong>　</div>
+        <div class="field"><strong>保险单号 / 电话</strong>　</div>
+        <div class="field"><strong>常用药清单</strong>　</div>
+        <div class="field"><strong>过敏/病史备注</strong>　</div>
+        <div class="field"><strong>每天大致安排</strong>　</div>
+        <div class="field"><strong>走散集合点</strong>　</div>
+      </div>
+      <p class="small muted" style="margin-top:18px">建议把这张卡拍照发给子女，再打印一份放在随身包里；酒店地址和车次截图也存到手机相册。</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p><strong>说明：</strong>本攻略编制于 2026 年 10 月 25 日，适用于 10 月 26—27 日出发、7—14 天的慢游安排。车次、票价、船班、景区开放时间和门票政策会调整，出发前请以 12306、航司、景区和船公司公告为准。</p>
+    <p><strong>官方查询：</strong><a href="https://www.12306.cn/" target="_blank" rel="noopener">中国铁路 12306</a> · <a href="https://www.laiu8.cn/" target="_blank" rel="noopener">涠洲岛船票官网（来游吧）</a> · <a href="https://www.weather.com.cn/" target="_blank" rel="noopener">中国天气网</a></p>
+    <p>愿爸妈一路慢慢走，吃好、睡好、不赶路。</p>
+  </footer>
+
+</div>
+</body>
+</html>

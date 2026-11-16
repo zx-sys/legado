@@ -20,8 +20,12 @@ import io.legado.app.utils.buildMainHandler
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicLong
 
 internal fun pendingSpeechPageMoves(currentPageIndex: Int, targetPageIndex: Int): Int =
@@ -47,6 +51,9 @@ class TTSReadAloudService : BaseReadAloudService() {
     private var ttsInitGeneration = 0L
     private val ttsUtteranceListener = TTSUtteranceListener()
     private var speakJob: Coroutine<*>? = null
+    private var chapterEndWatchdogJob: Job? = null
+    @Volatile
+    private var lastUtteranceProgressAt = 0L
     private val playbackSessionId = AtomicLong()
     private val callbackHandler by lazy { buildMainHandler() }
     private val TAG = "TTSReadAloudService"
@@ -61,6 +68,7 @@ class TTSReadAloudService : BaseReadAloudService() {
     }
 
     override fun onDestroy() {
+        chapterEndWatchdogJob?.cancel()
         super.onDestroy()
         clearTTS()
     }
@@ -126,6 +134,9 @@ class TTSReadAloudService : BaseReadAloudService() {
         }
         super.play()
         MediaHelp.playSilentSound(this@TTSReadAloudService)
+        chapterEndWatchdogJob?.cancel()
+        chapterLoadPending = false
+        lastUtteranceProgressAt = System.currentTimeMillis()
         speakJob?.cancel()
         val startSpeak = nowSpeak
         val startParagraphPos = paragraphStartPos
@@ -173,6 +184,9 @@ class TTSReadAloudService : BaseReadAloudService() {
                         }
                         AppLog.put("tts朗读出错:$chunk")
                     }
+                    if (i == contentList.lastIndex && chunkEnd == textEnd) {
+                        armChapterEndWatchdog(sessionId, i, speechChapter.chapter.index)
+                    }
                     isAddedText = true
                     chunkStart = chunkEnd
                 }
@@ -189,8 +203,36 @@ class TTSReadAloudService : BaseReadAloudService() {
         }
     }
 
+    /**
+     * 个别 TTS 引擎在章末最后一个分片结束后不回调 onDone, 服务会一直停在章末。
+     * 这里在最后一个分片入队后看门: 引擎已不在朗读且长时间没有进度回调时, 主动进入下一章。
+     */
+    private fun armChapterEndWatchdog(sessionId: Long, lastParagraph: Int, chapterIndex: Int) {
+        chapterEndWatchdogJob?.cancel()
+        lastUtteranceProgressAt = System.currentTimeMillis()
+        val graceMs = 12_000L
+        chapterEndWatchdogJob = lifecycleScope.launch {
+            delay(graceMs)
+            while (isActive && isRun && !pause && isCurrentPlayback(sessionId) &&
+                textChapter?.chapter?.index == chapterIndex && !chapterLoadPending
+            ) {
+                val idleMs = System.currentTimeMillis() - lastUtteranceProgressAt
+                if (nowSpeak >= lastParagraph &&
+                    textToSpeech?.isSpeaking != true &&
+                    idleMs >= graceMs
+                ) {
+                    AppLog.put("TTS 章末没有收到完成回调, 自动进入下一章")
+                    nextChapter(auto = true)
+                    return@launch
+                }
+                delay(3_000L)
+            }
+        }
+    }
+
     @Synchronized
     override fun playStop() {
+        chapterEndWatchdogJob?.cancel()
         playbackSessionId.incrementAndGet()
         speakJob?.cancel()
         textToSpeech?.runCatching {
@@ -239,6 +281,7 @@ class TTSReadAloudService : BaseReadAloudService() {
         private var rangeCallbackLogged = false
 
         override fun onStart(s: String) {
+            lastUtteranceProgressAt = System.currentTimeMillis()
             dispatchCurrentCallback(s) {
                 val msg = "onStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$s"
                 LogUtils.d(TAG, msg)
@@ -258,6 +301,7 @@ class TTSReadAloudService : BaseReadAloudService() {
         }
 
         override fun onDone(s: String) {
+            lastUtteranceProgressAt = System.currentTimeMillis()
             dispatchCurrentCallback(s) {
                 LogUtils.d(TAG, "onDone utteranceId:$s")
                 if (s.substringAfterLast(':') != "false") nextParagraph()
@@ -266,6 +310,7 @@ class TTSReadAloudService : BaseReadAloudService() {
 
         override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
             super.onRangeStart(utteranceId, start, end, frame)
+            lastUtteranceProgressAt = System.currentTimeMillis()
             dispatchCurrentCallback(utteranceId) {
                 val msg =
                     "onRangeStart nowSpeak:$nowSpeak pageIndex:$pageIndex utteranceId:$utteranceId start:$start end:$end frame:$frame"
@@ -281,6 +326,7 @@ class TTSReadAloudService : BaseReadAloudService() {
         }
 
         override fun onError(utteranceId: String?, errorCode: Int) {
+            lastUtteranceProgressAt = System.currentTimeMillis()
             dispatchCurrentCallback(utteranceId) {
                 LogUtils.d(
                     TAG,

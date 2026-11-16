@@ -3,9 +3,43 @@ package io.legado.app.service
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SpeechFollowStateTest {
+
+    @Test
+    fun manualDetachStaysUntilExplicitRestore() {
+        val state = SpeechFollowState()
+
+        state.detachForManualNavigation()
+
+        assertTrue(state.isManuallyDetached)
+        assertFalse(state.followReadAloudPosition)
+
+        state.restoreForNewSpeechSession()
+
+        assertFalse(state.isManuallyDetached)
+        assertTrue(state.followReadAloudPosition)
+    }
+
+    @Test
+    fun pendingPositionChangeDoesNotClearManualDetach() {
+        val state = SpeechFollowState()
+        state.detachForManualNavigation()
+
+        val token = state.beginPositionChange()
+        state.restoreForNewSpeechSession()
+
+        assertTrue(state.isManuallyDetached)
+        assertFalse(state.followReadAloudPosition)
+
+        assertTrue(state.finishPositionChange(token))
+        state.restoreForNewSpeechSession()
+
+        assertFalse(state.isManuallyDetached)
+        assertTrue(state.followReadAloudPosition)
+    }
 
     @Test
     fun detachedFollowDoesNotApplySpeechProgressToVisibleReader() {

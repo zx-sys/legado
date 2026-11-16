@@ -57,9 +57,16 @@ class BookSourcePartHasJsTest {
     fun `adapter refreshes js badge without leaving hidden spacing`() {
         assertTrue(adapterSource.contains("oldItem.hasJs == newItem.hasJs"))
         assertTrue(adapterSource.contains("payload.putBoolean(\"upJs\", true)"))
+        // 徽标只在阅读源/校验源/普通源三种状态下切换, 不留下占位间距。
         assertEquals(
             2,
-            Regex(Regex.escape("tvJsBadge.gone(!item.hasJs)"))
+            Regex(Regex.escape("tvJsBadge.visible()"))
+                .findAll(adapterSource)
+                .count()
+        )
+        assertEquals(
+            1,
+            Regex(Regex.escape("tvJsBadge.gone()"))
                 .findAll(adapterSource)
                 .count()
         )

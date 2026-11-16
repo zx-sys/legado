@@ -11,6 +11,13 @@ class SpeechFollowState {
     var followReadAloudPosition: Boolean = true
         private set
 
+    /**
+     * 用户主动脱离跟随后, 朗读进度事件不能自动把页面拉回朗读位置。
+     * 只有“回到朗读位置 / 从这读 / 新的朗读会话”才会清除。
+     */
+    var isManuallyDetached: Boolean = false
+        private set
+
     private var revision = 0L
     var pendingPosition: Long? = null
         private set
@@ -35,10 +42,14 @@ class SpeechFollowState {
 
     fun detachForManualNavigation() {
         followReadAloudPosition = false
+        isManuallyDetached = true
     }
 
     fun restoreForNewSpeechSession() {
-        if (pendingPosition == null) followReadAloudPosition = true
+        if (pendingPosition == null) {
+            followReadAloudPosition = true
+            isManuallyDetached = false
+        }
     }
 
     fun shouldSyncSpeechNavigation(): Boolean {

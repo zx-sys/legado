@@ -42,10 +42,11 @@ class ScrollReadPositionContractTest {
         val onPause = activity.substringAfter("override fun onPause()")
             .substringBefore("override fun onCompatCreateOptionsMenu")
         assertTrue(onPause.contains("updateScrollReadPosition()"))
-        assertTrue(onPause.contains("ReadBook.saveRead()"))
+        // 退出阅读页同步落库, 避免异步写未执行就丢进度。
+        assertTrue(onPause.contains("ReadBook.saveReadBlocking()"))
         assertTrue(
             onPause.indexOf("updateScrollReadPosition()") <
-                onPause.indexOf("ReadBook.saveRead()")
+                onPause.indexOf("ReadBook.saveReadBlocking()")
         )
         val readView = source("app/src/main/java/io/legado/app/ui/book/read/page/ReadView.kt")
         val savePosition = readView.substringAfter("fun updateScrollReadPosition(")
@@ -79,11 +80,9 @@ class ScrollReadPositionContractTest {
             "app/src/main/java/io/legado/app/ui/book/read/page/ContentTextView.kt"
         )
         assertTrue(contentView.contains("firstOrNull { it.chapterPosition == chapterPos }"))
-        assertTrue(
-            contentView.contains(
-                "chapterPos in it.chapterPosition..<it.chapterPosition + it.charSize"
-            )
-        )
+        // 段尾换行符也属于该行, 否则朗读停在段尾时不滚动。
+        assertTrue(contentView.contains("val lineEnd = it.chapterPosition + it.charSize"))
+        assertTrue(contentView.contains("chapterPos in it.chapterPosition..<lineEnd"))
         assertTrue(contentView.contains("line === textPage.lines.firstOrNull()"))
         assertTrue(contentView.contains("scroll((ChapterProvider.paddingTop - line.lineTop).toInt())"))
         val readPosition = contentView.substringAfter("fun getReadPosition()")
