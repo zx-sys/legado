@@ -37,6 +37,7 @@ import io.legado.app.help.book.getExportFileName
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocalModified
 import io.legado.app.help.book.isPdf
+import io.legado.app.help.book.isPrivateShelf
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.OkHttpModelLoader
@@ -301,6 +302,7 @@ class ExportBookService : BaseService() {
                 val book = appDb.bookDao.getBook(bookUrl)
                 try {
                     book ?: throw NoStackTraceException("获取${bookUrl}书籍出错")
+                    if (book.isPrivateShelf) throw NoStackTraceException("获取${bookUrl}书籍出错")
                     refreshChapterList(book)
                     notificationContentText = getString(
                         R.string.export_book_notification_content,

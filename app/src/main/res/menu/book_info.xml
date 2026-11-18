@@ -36,6 +36,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_move_to_private"
+        android:icon="@drawable/ic_lock_outline"
+        android:title="@string/move_to_private_shelf"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_top"
         android:title="@string/to_top"
         app:showAsAction="never" />

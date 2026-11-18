@@ -41,6 +41,12 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/menu_private_shelf"
+        android:icon="@drawable/ic_lock_outline"
+        android:title="@string/private_shelf"
+        app:showAsAction="never" />
+
+    <item
         android:id="@+id/menu_group_manage"
         android:icon="@drawable/ic_groups"
         android:title="@string/group_manage"

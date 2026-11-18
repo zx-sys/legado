@@ -39,6 +39,7 @@ import io.legado.app.help.HighlightStyle
 import io.legado.app.help.LauncherIconHelp
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.normalizeLegacyPersistedCover
+import io.legado.app.help.book.removePrivateShelfType
 import io.legado.app.help.book.upType
 import io.legado.app.help.config.BookshelfReadProgressMode
 import io.legado.app.help.config.LocalConfig
@@ -264,6 +265,8 @@ object Restore {
             it.forEach { book ->
                 if (lanTransfer) book.variable = null
                 book.upType()
+                // Restored data is never allowed to create a hidden private-shelf row.
+                book.removePrivateShelfType()
                 book.normalizeLegacyPersistedCover()
                 book.customCoverUrl = book.customCoverUrl?.let { coverPath ->
                     remapRestoredCoverPath(coverPath, backupRoot, appCtx.externalFiles)

@@ -99,7 +99,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 callBack.onItemClick(item)
             }
             binding.root.onLongClick {
-                callBack.onItemLongClick(item)
+                callBack.onItemLongClick(item, binding.root)
             }
         }
 
@@ -168,7 +168,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 callBack.onItemClick(item)
             }
             binding.root.onLongClick {
-                callBack.onItemLongClick(item)
+                callBack.onItemLongClick(item, binding.root)
             }
         }
 
@@ -226,7 +226,7 @@ class BooksAdapterList(context: Context, callBack: CallBack) :
                 callBack.onItemClick(item.group)
             }
             binding.root.onLongClick {
-                callBack.onItemLongClick(item.group)
+                callBack.onItemLongClick(item.group, binding.root)
             }
         }
 

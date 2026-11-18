@@ -101,7 +101,7 @@ class BooksAdapterList(
 
             onLongClick {
                 getItem(holder.layoutPosition)?.let {
-                    callBack.openBookInfo(it)
+                    callBack.openBookInfo(it, holder.itemView)
                 }
             }
         }

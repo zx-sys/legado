@@ -8,9 +8,12 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.ReadRecord
+import io.legado.app.help.book.isPrivateShelf
+import io.legado.app.help.book.mergeBookType
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.privacy.PrivateShelfBookCache
 import io.legado.app.help.storage.BackupServer
 import io.legado.app.model.ReadBook
 import io.legado.app.utils.postEvent
@@ -92,6 +95,7 @@ object SyncManager {
         force: Boolean = false,
     ) {
         if (!ServerSync.isConfigured) return
+        if (book.isPrivateShelf) return
         if (!force && isQuiet()) return
         val item = SyncProgress(
             bookUrl = book.bookUrl,
@@ -110,6 +114,7 @@ object SyncManager {
 
     fun enqueueRecord(record: ReadRecord) {
         if (!ServerSync.isConfigured || isQuiet()) return
+        if (PrivateShelfBookCache.isPrivate(record.bookName, record.author)) return
         val item = SyncRecord(
             bookName = record.bookName,
             author = record.author,
@@ -139,8 +144,10 @@ object SyncManager {
         schedulePush()
     }
 
-    fun enqueueBook(book: Book, removed: Boolean = false) {
-        if (!ServerSync.isConfigured || isQuiet()) return
+    fun enqueueBook(book: Book, removed: Boolean = false, force: Boolean = false) {
+        if (!ServerSync.isConfigured) return
+        if (!force && isQuiet()) return
+        if (!removed && book.isPrivateShelf) return
         val updatedAt = System.currentTimeMillis()
         scope.launch {
             val item = toSyncBook(book, removed, updatedAt)
@@ -149,6 +156,11 @@ object SyncManager {
             }
             schedulePush()
         }
+    }
+
+    /** Privacy books are local-only, but their server copy must be tombstoned explicitly. */
+    fun enqueueBookTombstone(book: Book) {
+        enqueueBook(book, removed = true, force = true)
     }
 
     fun enqueueGroup(group: BookGroup, removed: Boolean = false) {
@@ -172,11 +184,14 @@ object SyncManager {
     fun bootstrap() = scope.launch {
         if (!ServerSync.isConfigured || isQuiet()) return@launch
         if (!firstPullDone) return@launch
+        PrivateShelfBookCache.ensureLoaded()
         runCatching {
             val phone = BackupServer.phone
             if (LocalConfig.getString(BOOTSTRAP_PHONE_KEY, null) != phone) {
                 // 仅在该类数据服务器端尚无内容时整体采用本机数据, 避免旧备份覆盖新设备
-                appDb.bookDao.getUnsyncedBooks().forEach { book ->
+                appDb.bookDao.getUnsyncedBooks()
+                    .filterNot { it.isPrivateShelf }
+                    .forEach { book ->
                     val item = toSyncBook(book, false, System.currentTimeMillis())
                     synchronized(lock) {
                         pendingBooks[bookKey(book.name, book.author)] = item
@@ -211,8 +226,20 @@ object SyncManager {
         }
     }
 
-    private suspend fun toSyncBook(book: Book, removed: Boolean, updatedAt: Long): SyncBook {
-        val groupName = if (book.group > 0) {
+    /** Flush queued writes, then pull once so restored records merge with the server. */
+    fun syncNow(onFinished: (() -> Unit)? = null) {
+        scope.launch {
+            runCatching {
+                flush()
+                pull()
+            }.onFailure {
+                AppLog.put("同步隐私书架变更失败\n${it.localizedMessage}", it)
+            }
+            onFinished?.invoke()
+        }
+    }
+
+    private suspend fun toSyncBook(book: Book, removed: Boolean, updatedAt: Long): SyncBook {        val groupName = if (book.group > 0) {
             appDb.bookGroupDao.getByID(book.group)?.groupName.orEmpty()
         } else {
             ""
@@ -306,6 +333,7 @@ object SyncManager {
      */
     suspend fun pull(applyConfigs: Boolean = false) {
         if (!ServerSync.isConfigured) return
+        PrivateShelfBookCache.ensureLoaded()
         lastPullAt = System.currentTimeMillis()
         // 设备时钟异常时不要把游标带进未来
         val cursor = LocalConfig.syncCursor
@@ -402,6 +430,8 @@ object SyncManager {
         if (item.bookUrl.isBlank()) return
         val current = appDb.bookDao.getBook(item.name, item.author)
             ?: appDb.bookDao.getBook(item.bookUrl)
+        // A local privacy row must never be deleted or resurrected by the server.
+        if (current?.isPrivateShelf == true) return
         if (item.removed) {
             if (current != null && current.syncTime <= item.updatedAt) {
                 appDb.bookDao.delete(current)
@@ -451,7 +481,8 @@ object SyncManager {
         intro = item.intro.ifBlank { null }
         customIntro = item.customIntro.ifBlank { null }
         charset = item.charset.ifBlank { null }
-        type = if (item.type != 0) item.type else type
+        val incomingType = if (item.type != 0) item.type else type
+        type = mergeBookType(type, incomingType)
         group = groupId
         wordCount = item.wordCount.ifBlank { null }
         variable = item.variable.ifBlank { null }
@@ -481,6 +512,7 @@ object SyncManager {
     }
 
     private fun applyProgress(item: SyncProgress) {
+        if (PrivateShelfBookCache.isPrivateBookUrl(item.bookUrl)) return
         if (ReadBook.book?.bookUrl == item.bookUrl) {
             deferredProgress[item.bookUrl] = item
             return
@@ -490,6 +522,7 @@ object SyncManager {
 
     private fun applyProgressNow(item: SyncProgress) {
         val book = appDb.bookDao.getBook(item.bookUrl) ?: return
+        if (book.isPrivateShelf) return
         if (!shouldApplyRemoteProgress(book.durChapterTime, item.updatedAt)) {
             // 本地更新: 保留本地并回传, 不能让旧的服务端进度覆盖。
             if (book.durChapterTime > item.updatedAt) {
@@ -524,6 +557,7 @@ object SyncManager {
     }
 
     private fun applyRecord(item: SyncRecord) {
+        if (PrivateShelfBookCache.isPrivate(item.bookName, item.author)) return
         val deviceId = AppConst.androidId
         val current = appDb.readRecordDao.getRecord(deviceId, item.bookName, item.author)
         if (current == null) {
@@ -598,7 +632,7 @@ object SyncManager {
             intro = intro.orEmpty(),
             customIntro = customIntro.orEmpty(),
             charset = charset.orEmpty(),
-            type = type,
+            type = type and BookType.privateShelf.inv(),
             groupName = groupName,
             latestChapterTitle = latestChapterTitle.orEmpty(),
             latestChapterTime = latestChapterTime,

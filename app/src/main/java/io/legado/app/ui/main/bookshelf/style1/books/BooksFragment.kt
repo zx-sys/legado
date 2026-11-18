@@ -7,6 +7,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import androidx.core.view.isGone
 import androidx.fragment.app.activityViewModels
+import androidx.appcompat.widget.PopupMenu
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -26,6 +27,7 @@ import io.legado.app.databinding.FragmentBooksBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryColor
+import io.legado.app.help.privacy.PrivateShelfActions
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.main.MainViewModel
 import io.legado.app.utils.cnCompare
@@ -34,6 +36,7 @@ import io.legado.app.utils.observeEvent
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -302,10 +305,31 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books),
         startActivityForBook(book)
     }
 
-    override fun openBookInfo(book: Book) {
-        startActivity<BookInfoActivity> {
-            putExtra("name", book.name)
-            putExtra("author", book.author)
+    override fun openBookInfo(book: Book, anchor: View) {
+        PopupMenu(requireContext(), anchor).apply {
+            menuInflater.inflate(R.menu.bookshelf_book_long_press, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.menu_book_info -> {
+                        startActivity<BookInfoActivity> {
+                            putExtra("name", book.name)
+                            putExtra("author", book.author)
+                        }
+                        true
+                    }
+
+                    R.id.menu_move_to_private -> {
+                        viewLifecycleOwner.lifecycleScope.launch {
+                            PrivateShelfActions.moveIn(listOf(book))
+                            toastOnUi(R.string.private_shelf_move_in_done)
+                        }
+                        true
+                    }
+
+                    else -> false
+                }
+            }
+            show()
         }
     }
 

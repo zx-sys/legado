@@ -13,6 +13,7 @@ import io.legado.app.help.CacheManager
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isPrivateShelf
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.glide.ImageLoader
@@ -64,7 +65,7 @@ object BookController {
      */
     val bookshelf: ReturnData
         get() {
-            val books = appDb.bookDao.all
+            val books = appDb.bookDao.allVisible
             val returnData = ReturnData()
             return if (books.isEmpty()) {
                 returnData.setErrorMsg("还没有添加小说")
@@ -132,6 +133,7 @@ object BookController {
                     cachedImageContext = it
                 }
             } ?: return returnData.setErrorMsg("bookUrl不对")
+        if (imageContext.book.isPrivateShelf) return returnData.setErrorMsg("bookUrl不对")
         val bitmap = runBlocking {
             ImageProvider.cacheImage(imageContext.book, src, imageContext.bookSource)
             ImageProvider.getImage(imageContext.book, src, width)
@@ -151,6 +153,9 @@ object BookController {
             }
             val book = appDb.bookDao.getBook(bookUrl)
                 ?: return returnData.setErrorMsg("未在数据库找到对应书籍，请先添加")
+            if (book.isPrivateShelf) {
+                return returnData.setErrorMsg("未在数据库找到对应书籍，请先添加")
+            }
             if (book.isLocal) {
                 val toc = LocalBook.getChapterList(book)
                 appDb.bookChapterDao.delByBook(book.bookUrl)
@@ -185,6 +190,9 @@ object BookController {
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("参数url不能为空，请指定书籍地址")
         }
+        if (appDb.bookDao.getBook(bookUrl)?.isPrivateShelf == true) {
+            return returnData.setErrorMsg("未在数据库找到对应书籍，请先添加")
+        }
         val chapterList = appDb.bookChapterDao.getChapterList(bookUrl)
         if (chapterList.isEmpty()) {
             return refreshToc(parameters)
@@ -206,6 +214,9 @@ object BookController {
             return returnData.setErrorMsg("参数index不能为空, 请指定目录序号")
         }
         val book = appDb.bookDao.getBook(bookUrl)
+        if (book?.isPrivateShelf == true) {
+            return returnData.setErrorMsg("未在数据库找到对应书籍，请先添加")
+        }
         val chapter = runBlocking {
             var chapter = appDb.bookChapterDao.getChapter(bookUrl, index)
             var wait = 0
@@ -251,6 +262,11 @@ object BookController {
     suspend fun saveBook(postData: String?): ReturnData {
         val returnData = ReturnData()
         GSON.fromJsonObject<Book>(postData).getOrNull()?.let { book ->
+            if (appDb.bookDao.getBook(book.bookUrl)?.isPrivateShelf == true ||
+                appDb.bookDao.getBook(book.name, book.author)?.isPrivateShelf == true
+            ) {
+                return returnData.setErrorMsg("书不存在")
+            }
             book.save()
             SyncManager.enqueueProgress(
                 book,
@@ -269,6 +285,11 @@ object BookController {
     fun deleteBook(postData: String?): ReturnData {
         val returnData = ReturnData()
         GSON.fromJsonObject<Book>(postData).getOrNull()?.let { book ->
+            if (appDb.bookDao.getBook(book.bookUrl)?.isPrivateShelf == true ||
+                appDb.bookDao.getBook(book.name, book.author)?.isPrivateShelf == true
+            ) {
+                return returnData.setErrorMsg("书不存在")
+            }
             book.delete()
             return returnData.setData("")
         }
@@ -284,6 +305,7 @@ object BookController {
             .onFailure { it.printOnDebug() }
             .getOrNull()?.let { bookProgress ->
                 appDb.bookDao.getBook(bookProgress.name, bookProgress.author)?.let { book ->
+                    if (book.isPrivateShelf) return returnData.setErrorMsg("书不存在")
                     book.durChapterIndex = bookProgress.durChapterIndex
                     book.durChapterPos = bookProgress.durChapterPos
                     book.durChapterTitle = bookProgress.durChapterTitle

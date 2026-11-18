@@ -49,13 +49,14 @@ interface BookDao {
         """
         select * from books where type & ${BookType.text} > 0
         and type & ${BookType.local} = 0
+        and type & ${BookType.privateShelf} = 0
         and ((SELECT sum(groupId) FROM book_groups where groupId > 0) & `group`) = 0
         and (select show from book_groups where groupId = ${BookGroup.IdNetNone}) != 1
         """
     )
     fun flowRoot(): Flow<List<Book>>
 
-    @Query("SELECT * FROM books order by durChapterTime desc")
+    @Query("SELECT * FROM books where type & ${BookType.privateShelf} = 0 order by durChapterTime desc")
     fun flowAll(): Flow<List<Book>>
 
     @Query(
@@ -65,25 +66,30 @@ interface BookDao {
             AS hasUserGroup,
         latestChapterTime, durChapterTime, `order`, persistedCoverUrl
         FROM books WHERE type & ${BookType.notShelf} = 0
+        and type & ${BookType.privateShelf} = 0
         """
     )
     fun flowBookshelfBooks(): Flow<List<BookshelfBook>>
 
-    @Query("SELECT origin FROM books WHERE type & ${BookType.notShelf} = 0 AND type & ${BookType.local} = 0")
+    @Query(
+        "SELECT origin FROM books WHERE type & ${BookType.notShelf} = 0 " +
+            "AND type & ${BookType.local} = 0 AND type & ${BookType.privateShelf} = 0"
+    )
     fun flowBookshelfSourceOrigins(): Flow<List<String>>
 
-    @Query("SELECT * FROM books WHERE type & ${BookType.audio} > 0")
+    @Query("SELECT * FROM books WHERE type & ${BookType.audio} > 0 and type & ${BookType.privateShelf} = 0")
     fun flowAudio(): Flow<List<Book>>
 
-    @Query("SELECT * FROM books WHERE type & ${BookType.video} > 0")
+    @Query("SELECT * FROM books WHERE type & ${BookType.video} > 0 and type & ${BookType.privateShelf} = 0")
     fun flowVideo(): Flow<List<Book>>
 
-    @Query("SELECT * FROM books WHERE type & ${BookType.local} > 0")
+    @Query("SELECT * FROM books WHERE type & ${BookType.local} > 0 and type & ${BookType.privateShelf} = 0")
     fun flowLocal(): Flow<List<Book>>
 
     @Query(
         """
         select * from books where type & ${BookType.audio} = 0 and type & ${BookType.local} = 0 and type & ${BookType.video} = 0
+        and type & ${BookType.privateShelf} = 0
         and ((SELECT sum(groupId) FROM book_groups where groupId > 0) & `group`) = 0
         """
     )
@@ -92,24 +98,31 @@ interface BookDao {
     @Query(
         """
         select * from books where type & ${BookType.local} > 0
+        and type & ${BookType.privateShelf} = 0
         and ((SELECT sum(groupId) FROM book_groups where groupId > 0) & `group`) = 0
         """
     )
     fun flowLocalNoGroup(): Flow<List<Book>>
 
-    @Query("SELECT * FROM books WHERE (`group` & :group) > 0")
+    @Query("SELECT * FROM books WHERE (`group` & :group) > 0 and type & ${BookType.privateShelf} = 0")
     fun flowByUserGroup(group: Long): Flow<List<Book>>
 
-    @Query("SELECT * FROM books WHERE name like '%'||:key||'%' or author like '%'||:key||'%'")
+    @Query(
+        "SELECT * FROM books WHERE (name like '%'||:key||'%' or author like '%'||:key||'%') " +
+            "and type & ${BookType.privateShelf} = 0"
+    )
     fun flowSearch(key: String): Flow<List<Book>>
 
-    @Query("SELECT * FROM books where type & ${BookType.updateError} > 0 order by durChapterTime desc")
+    @Query(
+        "SELECT * FROM books where type & ${BookType.updateError} > 0 " +
+            "and type & ${BookType.privateShelf} = 0 order by durChapterTime desc"
+    )
     fun flowUpdateError(): Flow<List<Book>>
 
-    @Query("SELECT * FROM books WHERE (`group` & :group) > 0")
+    @Query("SELECT * FROM books WHERE (`group` & :group) > 0 and type & ${BookType.privateShelf} = 0")
     fun getBooksByGroup(group: Long): List<Book>
 
-    @Query("SELECT * FROM books WHERE `name` in (:names)")
+    @Query("SELECT * FROM books WHERE `name` in (:names) and type & ${BookType.privateShelf} = 0")
     fun findByName(vararg names: String): List<Book>
 
     @Query("select * from books where originName = :fileName")
@@ -136,7 +149,10 @@ interface BookDao {
     @Query("update books set `group` = `group` - :groupId where `group` & :groupId > 0")
     fun clearGroup(groupId: Long)
 
-    @Query("select * from books where syncTime = 0 and type & ${BookType.notShelf} = 0")
+    @Query(
+        "select * from books where syncTime = 0 and type & ${BookType.notShelf} = 0 " +
+            "and type & ${BookType.privateShelf} = 0"
+    )
     fun getUnsyncedBooks(): List<Book>
 
     @Query("""select distinct bs.* from books, book_sources bs 
@@ -149,19 +165,35 @@ interface BookDao {
     @get:Query("select count(bookUrl) from books where (SELECT sum(groupId) FROM book_groups)")
     val noGroupSize: Int
 
-    @get:Query("SELECT * FROM books where type & ${BookType.local} = 0")
+    @get:Query(
+        "SELECT * FROM books where type & ${BookType.local} = 0 " +
+            "and type & ${BookType.privateShelf} = 0"
+    )
     val webBooks: List<Book>
 
-    @get:Query("SELECT * FROM books where type & ${BookType.local} = 0 and canUpdate = 1")
+    @get:Query(
+        "SELECT * FROM books where type & ${BookType.local} = 0 and canUpdate = 1 " +
+            "and type & ${BookType.privateShelf} = 0"
+    )
     val hasUpdateBooks: List<Book>
 
     @get:Query("SELECT * FROM books")
     val all: List<Book>
 
     @get:Query(
-        "SELECT * FROM books WHERE type & ${BookType.notShelf} = 0 ORDER BY `order`"
+        "SELECT * FROM books WHERE type & ${BookType.notShelf} = 0 " +
+            "and type & ${BookType.privateShelf} = 0 ORDER BY `order`"
     )
     val allShelfByOrder: List<Book>
+
+    @get:Query("SELECT * FROM books where type & ${BookType.privateShelf} > 0 ORDER BY durChapterTime desc")
+    val privateShelfBooks: List<Book>
+
+    @Query("SELECT * FROM books where type & ${BookType.privateShelf} > 0 ORDER BY durChapterTime desc")
+    fun flowPrivateShelfBooks(): Flow<List<Book>>
+
+    @get:Query("SELECT * FROM books where type & ${BookType.privateShelf} = 0")
+    val allVisible: List<Book>
 
     @Query("SELECT bookUrl, name, origin, originName, type FROM books")
     fun getCacheCleanupBooks(): List<BookCacheInfo>
@@ -180,11 +212,15 @@ interface BookDao {
     @Query("SELECT * FROM books where type & :type > 0 and type & ${BookType.local} = 0")
     fun getByTypeOnLine(type: Int): List<Book>
 
-    @get:Query("SELECT * FROM books where type & ${BookType.text} > 0 ORDER BY durChapterTime DESC limit 1")
+    @get:Query(
+        "SELECT * FROM books where type & ${BookType.text} > 0 " +
+            "and type & ${BookType.privateShelf} = 0 ORDER BY durChapterTime DESC limit 1"
+    )
     val lastReadBook: Book?
 
     @get:Query(
         "SELECT * FROM books where type & ${BookType.notShelf} = 0 " +
+            "and type & ${BookType.privateShelf} = 0 " +
             "ORDER BY (durChapterIndex > 0 OR durChapterPos > 0) DESC, " +
             "durChapterTime DESC limit 1"
     )
@@ -199,13 +235,17 @@ interface BookDao {
     @get:Query("SELECT COUNT(*) FROM books")
     val allBookCount: Int
 
-    @Query("SELECT COUNT(*) FROM books where type & ${BookType.notShelf} = 0")
+    @Query(
+        "SELECT COUNT(*) FROM books where type & ${BookType.notShelf} = 0 " +
+            "and type & ${BookType.privateShelf} = 0"
+    )
     fun flowShelfBookCount(): Flow<Int>
 
     @get:Query(
         "SELECT count(*) FROM books where " +
             "(durChapterIndex > 0 OR durChapterPos > 0) " +
-            "and type & ${BookType.notShelf} = 0"
+            "and type & ${BookType.notShelf} = 0 " +
+            "and type & ${BookType.privateShelf} = 0"
     )
     val readingCount: Int
 
@@ -419,7 +459,10 @@ interface BookDao {
     @Query("update books set durChapterPos = :pos where bookUrl = :bookUrl")
     fun upProgress(bookUrl: String, pos: Int)
 
-    @Query("update books set type = :type, `order` = :order where bookUrl = :bookUrl")
+    @Query(
+        "update books set type = :type, `order` = :order where bookUrl = :bookUrl " +
+            "and type & ${BookType.privateShelf} = 0"
+    )
     fun updateShelfState(bookUrl: String, type: Int, order: Int)
 
     @Query("update books set `group` = :newGroupId where `group` = :oldGroupId")

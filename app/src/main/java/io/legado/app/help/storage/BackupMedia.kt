@@ -42,12 +42,16 @@ internal fun prepareBackupMediaDirectories(
     includePersistedCovers: Boolean = true,
     includeOtherCovers: Boolean = true,
     includeBackgrounds: Boolean = true,
+    excludedCoverPaths: Set<String> = emptySet(),
 ): List<File> {
     val directories = arrayListOf<File>()
     val coverRoot = File(externalFilesRoot, "covers").canonicalFile
     val stagedCoverRoot = File(backupRoot, "covers")
     stagedCoverRoot.deleteRecursively()
-    if (includePersistedCovers && includeOtherCovers) {
+    val excluded = excludedCoverPaths.mapNotNull {
+        runCatching { File(it).canonicalPath }.getOrNull()
+    }.toSet()
+    if (includePersistedCovers && includeOtherCovers && excluded.isEmpty()) {
         coverRoot.takeIf { it.hasFiles() }?.let(directories::add)
     } else if (includePersistedCovers || includeOtherCovers) {
         coverRoot.takeIf { it.isDirectory }?.walkTopDown()
@@ -56,6 +60,7 @@ internal fun prepareBackupMediaDirectories(
                 val persisted = isLegacyPersistedCoverPath(source.absolutePath)
                 if (persisted) includePersistedCovers else includeOtherCovers
             }
+            ?.filter { it.canonicalPath !in excluded }
             ?.forEach { source ->
                 val target = File(stagedCoverRoot, source.relativeTo(coverRoot).path)
                 target.parentFile?.mkdirs()

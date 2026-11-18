@@ -134,6 +134,9 @@ class MoreConfigDialog : BasePrefDialogFragment() {
                 PreferKey.readBgImageTypeNight,
                 PreferKey.readBgImagePathNight -> upBgSummary()
 
+                PreferKey.paragraphReadMode -> {
+                    (activity as? ReadBookActivity)?.updateParagraphMode()
+                }
                 PreferKey.readBodyToLh -> activity?.recreate()
                 PreferKey.hideStatusBar -> {
                     ReadBookConfig.hideStatusBar = getPrefBoolean(PreferKey.hideStatusBar)

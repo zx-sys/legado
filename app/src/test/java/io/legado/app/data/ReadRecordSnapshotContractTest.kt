@@ -63,7 +63,8 @@ class ReadRecordSnapshotContractTest {
     fun `history backup keeps read record file enabled`() {
         val backup = projectFile("src/main/java/io/legado/app/help/storage/Backup.kt")
         assertTrue(backup.contains("addAll(listOf(\"readRecord.json\", \"searchHistory.json\"))"))
-        assertTrue(backup.contains("prepareReadRecordBackup(appDb.readRecordDao.all"))
+        assertTrue(backup.contains("prepareReadRecordBackup("))
+        assertTrue(backup.contains("appDb.readRecordDao.all.withoutPrivateShelf"))
         assertTrue(backup.contains("\"readRecord.json\", backupPath"))
     }
 

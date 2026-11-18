@@ -31,6 +31,8 @@ import io.legado.app.databinding.ItemReadRecordDisplayBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.book.ReadRecordCoverCache
+import io.legado.app.help.privacy.PrivateShelfBookCache
+import io.legado.app.help.privacy.withoutPrivateShelf
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
 import io.legado.app.lib.dialogs.alert
@@ -204,11 +206,14 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
         dataJob?.cancel()
         dataJob = lifecycleScope.launch {
             val (allRecords, readRecords, books) = withContext(IO) {
-                val bookshelf = appDb.bookDao.all.sortedBy { it.durChapterTime }
+                val privateRefs = PrivateShelfBookCache.refsSnapshot()
+                val bookshelf = appDb.bookDao.all
+                    .withoutPrivateShelf()
+                    .sortedBy { it.durChapterTime }
                     .associateBy { it.name to it.author }
-                val all = appDb.readRecordDao.allShow
+                val all = appDb.readRecordDao.allShow.withoutPrivateShelf(privateRefs)
                 val filtered = if (searchKey.isNullOrBlank()) all
-                    else appDb.readRecordDao.search(searchKey)
+                    else appDb.readRecordDao.search(searchKey).withoutPrivateShelf(privateRefs)
                 val sorted = filtered.let { records ->
                     when (sortMode) {
                         1 -> records.sortedByDescending { it.readTime }

@@ -27,6 +27,7 @@ import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isNotShelf
 import io.legado.app.help.book.isSameNameAuthor
 import io.legado.app.help.book.isWebFile
+import io.legado.app.help.book.preservePrivateShelfBit
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.savePreservingCustomCoverUrl
 import io.legado.app.help.book.update
@@ -483,6 +484,9 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
             if (book.order == 0) {
                 book.order = appDb.bookDao.minOrder - 1
             }
+            val existing = appDb.bookDao.getBook(book.bookUrl)
+                ?: appDb.bookDao.getBook(book.name, book.author)
+            book.preservePrivateShelfBit(existing)
             appDb.bookDao.getBook(book.name, book.author)?.let {
                 book.durChapterIndex = it.durChapterIndex
                 book.durChapterPos = it.durChapterPos
@@ -520,6 +524,9 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
                 if (book.order == 0) {
                     book.order = appDb.bookDao.minOrder - 1
                 }
+                val existing = appDb.bookDao.getBook(book.bookUrl)
+                    ?: appDb.bookDao.getBook(book.name, book.author)
+                book.preservePrivateShelfBit(existing)
                 appDb.bookDao.getBook(book.name, book.author)?.let {
                     book.durChapterIndex = it.durChapterIndex
                     book.durChapterPos = it.durChapterPos

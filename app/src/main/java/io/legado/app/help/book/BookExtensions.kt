@@ -229,6 +229,27 @@ fun Book.upType() {
     }
 }
 
+val Book.isPrivateShelf: Boolean
+    get() = isType(BookType.privateShelf)
+
+fun Book.addPrivateShelfType() = addType(BookType.privateShelf)
+
+fun Book.removePrivateShelfType() = removeType(BookType.privateShelf)
+
+/** Keeps the local privacy flag while accepting the other bits from an incoming entity. */
+internal fun mergeBookType(localType: Int, incomingType: Int): Int =
+    (incomingType and BookType.privateShelf.inv()) or
+        (localType and BookType.privateShelf)
+
+fun Book.preservePrivateShelfBit(existing: Book?): Book {
+    if (existing?.isPrivateShelf == true) addPrivateShelfType()
+    return this
+}
+
+/** Server payloads must never learn that a book is private; the flag is local-only. */
+fun Book.toSyncCopy(): Book =
+    if (isPrivateShelf) copy(type = type and BookType.privateShelf.inv()) else this
+
 fun Book.sync(currentBook: Book, toc: List<BookChapter>) {
     val chapterIndex = BookHelp.getDurChapter(currentBook, toc)
     currentBook.updateTo(this)
@@ -275,6 +296,7 @@ fun Book.updateTo(newBook: Book): Book {
     newBook.canUpdate = canUpdate
     newBook.readConfig = readConfig
     newBook.syncTime = syncTime
+    // privateShelf 不在 allBookType 中, 因此由旧值保留
     newBook.type = (newBook.type and BookType.allBookType) or
         (type and BookType.allBookType.inv())
     val variableMap = variableMap.toMutableMap()

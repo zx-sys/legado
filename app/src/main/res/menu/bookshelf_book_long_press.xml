@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/menu_book_info"
+        android:title="@string/book_info" />
+
+    <item
+        android:id="@+id/menu_move_to_private"
+        android:title="@string/move_to_private_shelf" />
+</menu>

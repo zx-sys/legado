@@ -16,6 +16,8 @@ import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.viewbindingdelegate.viewBinding
+import io.legado.app.help.privacy.PrivateShelfBookCache
+import io.legado.app.help.privacy.withoutPrivateShelf
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
@@ -47,8 +49,9 @@ class AllBookmarkActivity : VMBaseActivity<ActivityAllBookmarkBinding, AllBookma
         lifecycleScope.launch {
             appDb.bookmarkDao.flowAll().catch {
                 AppLog.put("所有书签界面获取数据失败\n${it.localizedMessage}", it)
-            }.flowOn(IO).collect {
-                adapter.setItems(it)
+            }.flowOn(IO).collect { bookmarks ->
+                val refs = withContext(IO) { PrivateShelfBookCache.refsSnapshot() }
+                adapter.setItems(bookmarks.withoutPrivateShelf(refs))
             }
         }
     }

@@ -1,5 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="paragraph_read_mode">Paragraph reading mode</string>
+    <string name="paragraph_read_mode_summary">Read complete paragraphs and images as separate screen reader items. Applies to all books.</string>
+    <string name="paragraph_image">Image %1$d</string>
+    <string name="paragraph_read_menu">Reading menu</string>
+    <string name="private_shelf">Private shelf</string>
+    <string name="private_shelf_set_password">Set private shelf password</string>
+    <string name="private_shelf_password_rule">Use at least 3 letters or digits</string>
+    <string name="private_shelf_password_hint">Password</string>
+    <string name="private_shelf_confirm_hint">Confirm password</string>
+    <string name="private_shelf_password_invalid">Enter at least 3 letters or digits</string>
+    <string name="private_shelf_password_mismatch">Passwords do not match</string>
+    <string name="private_shelf_password_wrong">Wrong password</string>
+    <string name="private_shelf_forgot">Forgot password</string>
+    <string name="private_shelf_reset">Reset private shelf</string>
+    <string name="private_shelf_reset_confirm">This deletes every private book and its bookmarks, highlights and reading records, and clears the password. The normal shelf is not affected.</string>
+    <string name="private_shelf_reset_done">Private shelf cleared</string>
+    <string name="move_to_private_shelf">Move to private shelf</string>
+    <string name="move_to_private_confirm">Move %1$d book(s) to the private shelf?</string>
+    <string name="move_out_private_shelf">Move out of private shelf</string>
+    <string name="private_shelf_empty">No private books</string>
+    <string name="private_shelf_select_mode">Select</string>
+    <string name="private_shelf_move_out_confirm">Move %1$d book(s) out of the private shelf?</string>
+    <string name="private_shelf_delete_confirm">Delete %1$d private book(s) and their bookmarks, highlights and reading records?</string>
+    <string name="private_shelf_moved">Moved %1$d book(s)</string>
+    <string name="private_shelf_deleted">Deleted</string>
+    <string name="private_shelf_sync_local_only">Moved out (sync is not configured)</string>
+    <string name="private_shelf_move_in_done">Moved to private shelf</string>
     <!--App-->
     <string name="app_name">Legado</string>
     <string name="app_name_a">Legado·A</string>
@@ -244,6 +271,7 @@
     <string name="read_aloud_pause">Speak Paused</string>
     <string name="read_aloud_timer">Speaking(%d min left)</string>
     <string name="read_aloud_timer_chapter">Speaking(%d chapters left)</string>
+    <string name="read_aloud_chapter_progress">Ch.%1$d/%2$d</string>
     <string name="playing_timer">Playing(%d min left)</string>
     <string name="playing_timer_chapter">Playing(%d episodes left)</string>
     <string name="sleep_timer_title">Sleep timer</string>

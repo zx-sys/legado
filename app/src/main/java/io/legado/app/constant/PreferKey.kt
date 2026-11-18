@@ -4,6 +4,8 @@ package io.legado.app.constant
 object PreferKey {
     const val tabletFoldOptimization = "tabletFoldOptimization"
 
+    const val paragraphReadMode = "paragraphReadMode"
+
     const val myMoreItems = "myMoreItems"
     const val language = "language"
     const val fontScale = "fontScale"

@@ -2,6 +2,7 @@ package io.legado.app.ui.main.bookshelf.style1.books
 
 import android.content.Context
 import android.os.Bundle
+import android.view.View
 import androidx.recyclerview.widget.DiffUtil
 import androidx.viewbinding.ViewBinding
 import io.legado.app.base.adapter.DiffRecyclerAdapter
@@ -94,7 +95,7 @@ abstract class BaseBooksAdapter<VB : ViewBinding>(context: Context) :
 
     interface CallBack {
         fun open(book: Book)
-        fun openBookInfo(book: Book)
+        fun openBookInfo(book: Book, anchor: View)
         fun isUpdate(bookUrl: String): Boolean
     }
 }

@@ -15,7 +15,7 @@ class ReadAloudBackgroundProgressTest {
         val service = projectFile(
             "src/main/java/io/legado/app/service/BaseReadAloudService.kt"
         ).readText()
-        val loadSuccess = service.substringAfter("}.onSuccess(Main) { canContinue ->")
+        val loadSuccess = service.substringAfter("}.onSuccess(Main) { nextTextChapter ->")
             .substringBefore("}.onError(Main)")
 
         assertTrue(loadSuccess.contains("saveSpeechProgressToReader(force = true)"))

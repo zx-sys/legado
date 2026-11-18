@@ -47,11 +47,13 @@ import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isImage
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalTxt
+import io.legado.app.help.book.isPrivateShelf
 import io.legado.app.help.book.isVideo
 import io.legado.app.help.book.isWebFile
 import io.legado.app.help.book.readProgress
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.update
+import io.legado.app.help.privacy.PrivateShelfActions
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.webView.PooledWebView
@@ -309,6 +311,8 @@ class BookInfoActivity :
                     !it.isLocal &&
                     it.canUpdate
             } == true
+        menu.findItem(R.id.menu_move_to_private)?.isVisible =
+            viewModel.inBookshelf && viewModel.bookData.value?.isPrivateShelf != true
         menu.findItem(R.id.menu_delete_alert)?.isChecked =
             LocalConfig.bookInfoDeleteAlert
         return super.onMenuOpened(featureId, menu)
@@ -372,6 +376,16 @@ class BookInfoActivity :
                     putExtra("type", "bookSource")
                     putExtra("key", it.bookSourceUrl)
                     putExtra("bookUrl", book?.bookUrl)
+                }
+            }
+
+            R.id.menu_move_to_private -> {
+                viewModel.bookData.value?.let { book ->
+                    lifecycleScope.launch {
+                        PrivateShelfActions.moveIn(listOf(book))
+                        toastOnUi(R.string.private_shelf_move_in_done)
+                        finish()
+                    }
                 }
             }
 

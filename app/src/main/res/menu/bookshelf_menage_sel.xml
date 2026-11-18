@@ -22,6 +22,10 @@
         android:title="@string/remove_group" />
 
     <item
+        android:id="@+id/menu_move_to_private"
+        android:title="@string/move_to_private_shelf" />
+
+    <item
         android:id="@+id/menu_change_source"
         android:title="@string/change_source_batch" />
 

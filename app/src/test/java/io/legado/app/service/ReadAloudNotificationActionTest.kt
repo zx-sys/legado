@@ -29,6 +29,25 @@ class ReadAloudNotificationActionTest {
         assertTrue(!prev.contains("prevP()"))
     }
 
+    @Test
+    fun `media notification shows chapter progress`() {
+        val service = projectFile(
+            "src/main/java/io/legado/app/service/BaseReadAloudService.kt"
+        ).readText()
+        val progress = service.substringAfter("private fun readAloudChapterProgress()")
+            .substringBefore("private fun readAloudNotificationTitle()")
+        assertTrue(progress.contains("R.string.read_aloud_chapter_progress"))
+        assertTrue(progress.contains("sessionChapterCount()"))
+
+        val metadata = service.substringAfter("private fun upMediaMetadata()")
+            .substringBefore("private fun initBroadcastReceiver()")
+        assertTrue(metadata.contains("readAloudNotificationTitle()"))
+
+        val notification = service.substringAfter("private fun createNotification()")
+            .substringBefore("builder.setLargeIcon(cover)")
+        assertTrue(notification.contains("readAloudNotificationTitle()"))
+    }
+
     private fun projectFile(pathInApp: String): File {
         return listOf(File(pathInApp), File("app/$pathInApp"))
             .firstOrNull { it.isFile }

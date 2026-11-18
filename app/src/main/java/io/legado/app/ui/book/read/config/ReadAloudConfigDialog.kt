@@ -102,7 +102,8 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
         ) {
             when (key) {
                 PreferKey.readAloudByPage, PreferKey.streamReadAloudAudio -> {
-                    if (BaseReadAloudService.isRun) {
+                    // 段落模式按段落接管朗读，分页相关设置变化无需重启朗读。
+                    if (BaseReadAloudService.isRun && !AppConfig.paragraphReadMode) {
                         postEvent(EventBus.MEDIA_BUTTON, false)
                     }
                 }

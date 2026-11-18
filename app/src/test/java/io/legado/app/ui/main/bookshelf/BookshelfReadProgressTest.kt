@@ -263,7 +263,11 @@ class BookshelfReadProgressTest {
         val query = source.substring(queryStart, propertyIndex)
 
         assertTrue(query.contains("type & \${BookType.notShelf} = 0"))
-        assertFalse(query.replace("BookType.notShelf", "").contains("BookType."))
+        assertFalse(
+            query.replace("BookType.notShelf", "")
+                .replace("BookType.privateShelf", "")
+                .contains("BookType.")
+        )
         assertTrue(query.contains("durChapterIndex > 0 OR durChapterPos > 0"))
         assertTrue(query.contains("durChapterTime DESC limit 1"))
     }
@@ -277,7 +281,11 @@ class BookshelfReadProgressTest {
 
         assertTrue(query.contains("(durChapterIndex > 0 OR durChapterPos > 0)"))
         assertTrue(query.contains("and type & \${BookType.notShelf} = 0"))
-        assertFalse(query.replace("BookType.notShelf", "").contains("BookType."))
+        assertFalse(
+            query.replace("BookType.notShelf", "")
+                .replace("BookType.privateShelf", "")
+                .contains("BookType.")
+        )
         assertFalse(query.contains("durChapterTime"))
     }
 

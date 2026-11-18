@@ -327,6 +327,7 @@ class BookshelfManageActivity :
 
             R.id.menu_add_to_group -> selectGroup(addToGroupRequestCode, 0)
             R.id.menu_remove_to_group -> selectGroup(removeToGroupRequestCode, 0)
+            R.id.menu_move_to_private -> alertMoveToPrivate()
             R.id.menu_change_source -> showDialogFragment<SourcePickerDialog>()
             R.id.menu_clear_cache -> viewModel.clearCache(adapter.selection)
             R.id.menu_persist_covers -> viewModel.persistNetworkCovers(adapter.selection)
@@ -433,6 +434,22 @@ class BookshelfManageActivity :
                 viewModel.deleteBook(adapter.selection, checkBox.isChecked)
             }
             noButton()
+        }
+    }
+
+    private fun alertMoveToPrivate() {
+        val books = adapter.selection
+        if (books.isEmpty()) return
+        alert(
+            title = getString(R.string.move_to_private_shelf),
+            message = getString(R.string.move_to_private_confirm, books.size),
+        ) {
+            okButton {
+                viewModel.moveToPrivate(books) {
+                    adapter.selectAll(false)
+                }
+            }
+            cancelButton()
         }
     }
 

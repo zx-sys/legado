@@ -7,6 +7,7 @@ import io.legado.app.constant.AppConst
 import io.legado.app.data.appDb
 import io.legado.app.help.book.ReadRecordCoverCache
 import io.legado.app.help.book.ContentProcessor
+import io.legado.app.help.book.isPrivateShelf
 import io.legado.app.help.sync.SyncManager
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -70,6 +71,7 @@ fun ReadRecord.updateSnapshot(
 }
 
 fun ReadRecord.saveWithCover(book: Book?, elapsed: Long? = null) {
+    if (book?.isPrivateShelf == true) return
     val snapshotBook = book?.takeIf { it.name == bookName && it.author == author }
     refreshChapterTitle(snapshotBook)
     var saved = this

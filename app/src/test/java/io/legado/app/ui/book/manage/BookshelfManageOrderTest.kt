@@ -43,9 +43,10 @@ class BookshelfManageOrderTest {
         ).readText().substringAfter("fun updateBookOrder").substringBefore("fun deleteBook")
 
         assertTrue(
-            dao.contains(
-                "SELECT * FROM books WHERE type & \${BookType.notShelf} = 0 ORDER BY `order`"
-            )
+            dao.contains("SELECT * FROM books WHERE type & \${BookType.notShelf} = 0 ")
+        )
+        assertTrue(
+            dao.contains("and type & \${BookType.privateShelf} = 0 ORDER BY `order`")
         )
         assertTrue(dao.contains("UPDATE books SET `order` = :order WHERE bookUrl = :bookUrl"))
         assertTrue(adapter.contains("callBack.updateBookOrder(getItems(), needsOrderReset)"))

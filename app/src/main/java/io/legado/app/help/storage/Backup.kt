@@ -17,6 +17,8 @@ import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReplacePreviewConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.privacy.PrivateShelfBookCache
+import io.legado.app.help.privacy.withoutPrivateShelf
 import io.legado.app.model.BookCover
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -270,8 +272,11 @@ object Backup {
         } else {
             emptyList()
         }
+        PrivateShelfBookCache.ensureLoaded()
+        val privateRefs = PrivateShelfBookCache.refsSnapshot()
         val (books, memos) = appDb.runInTransaction(Callable {
-            appDb.bookDao.all to appDb.bookMemoDao.all()
+            appDb.bookDao.all.withoutPrivateShelf() to
+                appDb.bookMemoDao.all().withoutPrivateShelf(privateRefs)
         })
         writeListToJson(
             books.map { book ->
@@ -285,8 +290,12 @@ object Backup {
             backupPath,
         )
         writeListToJson(memos, "bookMemo.json", backupPath, writeEmpty = true)
-        writeListToJson(appDb.bookmarkDao.all, "bookmark.json", backupPath)
-        writeListToJson(appDb.bookHighlightDao.all, "highlight.json", backupPath)
+        writeListToJson(appDb.bookmarkDao.all.withoutPrivateShelf(privateRefs), "bookmark.json", backupPath)
+        writeListToJson(
+            appDb.bookHighlightDao.all.withoutPrivateShelf(privateRefs),
+            "highlight.json",
+            backupPath,
+        )
         writeListToJson(
             appDb.highlightRuleDao.all,
             "highlightRule.json",
@@ -305,7 +314,12 @@ object Backup {
         val includeReadRecordCovers = BackupConfig.readRecordCoverContentKey in enabledContentKeys &&
             BackupConfig.historyContentKey in enabledContentKeys
         writeListToJson(
-            prepareReadRecordBackup(appDb.readRecordDao.all, appCtx.externalFiles, File(backupPath), includeReadRecordCovers),
+            prepareReadRecordBackup(
+                appDb.readRecordDao.all.withoutPrivateShelf(privateRefs),
+                appCtx.externalFiles,
+                File(backupPath),
+                includeReadRecordCovers,
+            ),
             "readRecord.json", backupPath,
         )
         writeListToJson(appDb.searchKeywordDao.all, "searchHistory.json", backupPath)
@@ -350,6 +364,17 @@ object Backup {
         }
         currentCoroutineContext().ensureActive()
         val preferenceSnapshot = HashMap<String, Any?>(appCtx.defaultSharedPreferences.all)
+        val privateBooks = appDb.bookDao.privateShelfBooks
+        val privateCoverPaths = privateBooks.asSequence()
+            .flatMap { sequenceOf(it.coverUrl, it.customCoverUrl, it.persistedCoverUrl) }
+            .filterNotNull()
+            .filter { it.isNotBlank() }
+            .toSet()
+        val privateBookUrls = privateBooks.mapTo(hashSetOf()) { it.bookUrl }
+        val lastAloudBookUrl = preferenceSnapshot["readAloudLastBookUrl"] as? String
+        if (lastAloudBookUrl != null && lastAloudBookUrl in privateBookUrls) {
+            preferenceSnapshot.remove("readAloudLastBookUrl")
+        }
         (preferenceSnapshot[PreferKey.coverFont] as? String)?.takeIf { it.isNotBlank() }?.let {
             if (!File(it).exists()) preferenceSnapshot[PreferKey.coverFont] = ""
         }
@@ -415,6 +440,7 @@ object Backup {
                 backupPersistedCovers,
                 backupOtherCovers,
                 backupBackgrounds,
+                excludedCoverPaths = privateCoverPaths,
             ).map { it.absolutePath }
         )
         FileUtils.delete(workingZipFile.absolutePath)

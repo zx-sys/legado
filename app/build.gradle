@@ -219,6 +219,18 @@ android {
     }
 }
 
+def mockitoAgent = configurations.create('mockitoAgent') {
+    canBeConsumed = false
+    transitive = false
+}
+
+tasks.withType(Test).configureEach {
+    // Attach explicitly on Java 21 instead of relying on runtime self-attachment.
+    jvmArgumentProviders.add({
+        ["-javaagent:${mockitoAgent.asPath}"]
+    } as org.gradle.process.CommandLineArgumentProvider)
+}
+
 tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     kotlinOptions {
         jvmTarget = "21"
@@ -235,6 +247,8 @@ dependencies {
     // 本地中英双语神经 TTS (sherpa-onnx + vits-melo-tts-zh_en)
     implementation(files("libs/sherpa-onnx-1.13.8.aar"))
     testImplementation(libs.junit)
+    testImplementation(libs.mockito.core)
+    add(mockitoAgent.name, libs.mockito.core)
     androidTestImplementation(libs.bundles.androidTest)
     //kotlin
     //noinspection GradleDependency,DifferentStdlibGradleVersion

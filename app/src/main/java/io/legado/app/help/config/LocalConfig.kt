@@ -33,6 +33,28 @@ by appCtx.getSharedPreferences("local", Context.MODE_PRIVATE) {
         }
 
     /**
+     * 隐私书架密码的加盐哈希, 仅本机保存, 不参与同步与备份。
+     */
+    var privateShelfPassword: String?
+        get() = getString("privateShelfPassword", null)
+        set(value) {
+            if (value != null) {
+                putString("privateShelfPassword", value)
+            } else {
+                remove("privateShelfPassword")
+            }
+        }
+
+    /**
+     * 移出隐私书架后尚未确认补推成功的书籍, 下次启动时重试。
+     */
+    var pendingPrivacyReupload: Set<String>
+        get() = getStringSet("pendingPrivacyReupload", null) ?: emptySet()
+        set(value) {
+            edit { putStringSet("pendingPrivacyReupload", value) }
+        }
+
+    /**
      * 清理已移除功能留下的配置，并迁移仍需要的旧键。
      */
     fun cleanupRemovedPreferences() {

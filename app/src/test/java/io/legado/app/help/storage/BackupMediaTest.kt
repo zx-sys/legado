@@ -301,6 +301,28 @@ class BackupMediaTest {
         assertFalse(externalRoot.resolve(".covers.previous").exists())
     }
 
+    @Test
+    fun privateCoverPathsAreExcludedFromStagedCovers() = withTempDirectory { root ->
+        val externalRoot = root.resolve("external").apply { mkdirs() }
+        val backupRoot = root.resolve("backup").apply { mkdirs() }
+        val keep = externalRoot.resolve("covers/keep.cover").apply {
+            parentFile?.mkdirs()
+            writeText("keep")
+        }
+        val secret = externalRoot.resolve("covers/secret.cover").apply { writeText("secret") }
+
+        prepareBackupMediaDirectories(
+            externalFilesRoot = externalRoot,
+            backupRoot = backupRoot,
+            referencedBackgroundPaths = emptyList(),
+            excludedCoverPaths = setOf(secret.absolutePath),
+        )
+
+        assertTrue(backupRoot.resolve("covers/keep.cover").isFile)
+        assertFalse(backupRoot.resolve("covers/secret.cover").exists())
+        assertTrue(keep.isFile)
+    }
+
     private fun withTempDirectory(block: (java.io.File) -> Unit) {
         val root = Files.createTempDirectory("backup-media-test").toFile()
         try {

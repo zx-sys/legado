@@ -1,4 +1,31 @@
 <resources>
+    <string name="paragraph_read_mode">段落阅读模式</string>
+    <string name="paragraph_read_mode_summary">每段正文和图片作为独立的读屏焦点，对所有书籍生效</string>
+    <string name="paragraph_image">图片，第 %1$d 张</string>
+    <string name="paragraph_read_menu">阅读菜单</string>
+    <string name="private_shelf">隐私书架</string>
+    <string name="private_shelf_set_password">设置隐私书架密码</string>
+    <string name="private_shelf_password_rule">至少 3 位字母或数字</string>
+    <string name="private_shelf_password_hint">密码</string>
+    <string name="private_shelf_confirm_hint">确认密码</string>
+    <string name="private_shelf_password_invalid">请输入至少 3 位字母或数字</string>
+    <string name="private_shelf_password_mismatch">两次密码不一致</string>
+    <string name="private_shelf_password_wrong">密码错误</string>
+    <string name="private_shelf_forgot">忘记密码</string>
+    <string name="private_shelf_reset">重置隐私书架</string>
+    <string name="private_shelf_reset_confirm">将删除全部隐私书及其书签、高亮、阅读记录，并清空密码；普通书架不受影响。</string>
+    <string name="private_shelf_reset_done">隐私书架已清空</string>
+    <string name="move_to_private_shelf">移入隐私书架</string>
+    <string name="move_to_private_confirm">将选中的 %1$d 本书移入隐私书架？</string>
+    <string name="move_out_private_shelf">移出隐私书架</string>
+    <string name="private_shelf_empty">暂无隐私书</string>
+    <string name="private_shelf_select_mode">多选</string>
+    <string name="private_shelf_move_out_confirm">将选中的 %1$d 本书移出隐私书架？</string>
+    <string name="private_shelf_delete_confirm">删除选中的 %1$d 本隐私书及其书签、高亮、阅读记录？</string>
+    <string name="private_shelf_moved">已移出 %1$d 本书</string>
+    <string name="private_shelf_deleted">已删除</string>
+    <string name="private_shelf_sync_local_only">已移出（未配置同步，仅本机）</string>
+    <string name="private_shelf_move_in_done">已移入隐私书架</string>
     <!--App-->
     <string name="app_name">阅读</string>
     <string name="app_name_a">阅读·A</string>
@@ -241,6 +268,7 @@
     <string name="read_aloud_pause">朗读暂停</string>
     <string name="read_aloud_timer">正在朗读（还剩 %d 分钟）</string>
     <string name="read_aloud_timer_chapter">正在朗读（还剩 %d 章）</string>
+    <string name="read_aloud_chapter_progress">第 %1$d/%2$d 章</string>
     <string name="playing_timer">正在播放（还剩 %d 分钟）</string>
     <string name="playing_timer_chapter">正在播放（还剩 %d 集）</string>
     <string name="sleep_timer_title">停止设置</string>

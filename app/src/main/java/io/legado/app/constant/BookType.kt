@@ -53,9 +53,14 @@ object BookType {
      */
     const val notShelf = 0b100_0000_0000
 
+    /**
+     * 2048 隐私书架: 所有常规入口不可见, 不参与同步与备份
+     */
+    const val privateShelf = 0b1000_0000_0000
+
     @Target(AnnotationTarget.VALUE_PARAMETER)
     @Retention(AnnotationRetention.SOURCE)
-    @IntDef(flag = true,value = [video, text, updateError, audio, image, webFile, local, archive, notShelf])
+    @IntDef(flag = true,value = [video, text, updateError, audio, image, webFile, local, archive, notShelf, privateShelf])
     annotation class Type
 
     /**

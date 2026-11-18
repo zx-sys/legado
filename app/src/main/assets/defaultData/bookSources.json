@@ -208,9 +208,9 @@
     "bookSourceType": 0,
     "bookSourceUrl": "https://asw227.com",
     "customOrder": 1,
-    "enabled": true,
+    "enabled": false,
     "enabledCookieJar": true,
-    "enabledExplore": true,
+    "enabledExplore": false,
     "enabledSearch": true,
     "header": "{\n  \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36\",\n  \"Accept\": \"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7\",\n  \"Accept-Language\": \"zh-CN,zh;q=0.9,en;q=0.8\",\n  \"Connection\": \"keep-alive\",\n  \"Upgrade-Insecure-Requests\": \"1\"\n}",
     "searchUrl": "https://asw227.com/search.php?kw={{key}}",
@@ -300,8 +300,8 @@
     "bookSourceName": "笔趣阁②onede(香书)",
     "bookSourceType": 0,
     "bookSourceUrl": "http://wap.xbiqugu.la",
-    "enabled": true,
-    "enabledExplore": true,
+    "enabled": false,
+    "enabledExplore": false,
     "enabledSearch": true,
     "exploreUrl": "[{\"title\":\"玄幻\",\"url\":\"/wapsort/1_{{page}}/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"修真\",\"url\":\"/wapsort/2_{{page}}/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"都市\",\"url\":\"/wapsort/3_{{page}}/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"历史\",\"url\":\"/wapsort/4_{{page}}/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"网游\",\"url\":\"/wapsort/5_{{page}}/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"科幻\",\"url\":\"/wapsort/6_{{page}}/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"其他\",\"url\":\"/wapsort/7_{{page}}/\",\"style\":{\"layout_flexBasisPercent\":0.25,\"layout_flexGrow\":1}},{\"title\":\"全本\",\"url\":\"/wapfull/{{page}}.html\",\"style\":{\"layout_flexBasisPercent\":1,\"layout_flexGrow\":1}}]",
     "header": "{\"User-Agent\":\"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36\"}",
@@ -701,9 +701,9 @@
     "bookSourceUrl": "https://www.huiysj.com/",
     "bookUrlPattern": "https://www.huiysj.com/kuaishou/.*/index.html",
     "customOrder": 4,
-    "enabled": true,
+    "enabled": false,
     "enabledCookieJar": false,
-    "enabledExplore": true,
+    "enabledExplore": false,
     "exploreUrl": "玄幻修真::https://www.huiysj.com/book/1/{{page}}.html\n重生穿越::https://www.huiysj.com/book/2/{{page}}.html\n都市小说::https://www.huiysj.com/book/3/{{page}}.html\n军史小说::https://www.huiysj.com/book/4/{{page}}.html\n网游小说::https://www.huiysj.com/book/5/{{page}}.html\n科幻小说::https://www.huiysj.com/book/6/{{page}}.html\n灵异小说::https://www.huiysj.com/book/7/{{page}}.html\n言情小说::https://www.huiysj.com/book/8/{{page}}.html\n其他小说::https://www.huiysj.com/book/9/{{page}}.html",
     "header": "{\"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\"}",
     "lastUpdateTime": "1783186551584",
@@ -753,9 +753,9 @@
     "bookUrlPattern": "https://www.huiysj.com/kuaishou/.*/index.html",
     "customButton": false,
     "customOrder": 4,
-    "enabled": true,
+    "enabled": false,
     "enabledCookieJar": false,
-    "enabledExplore": true,
+    "enabledExplore": false,
     "eventListener": false,
     "exploreUrl": "玄幻修真::/book/1/{{page}}.html\n重生穿越::/book/2/{{page}}.html\n都市小说::/book/3/{{page}}.html\n军史小说::/book/4/{{page}}.html\n网游小说::/book/5/{{page}}.html\n科幻小说::/book/6/{{page}}.html\n灵异小说::/book/7/{{page}}.html\n言情小说::/book/8/{{page}}.html\n其他小说::/book/9/{{page}}.html",
     "header": "{\"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\"}",
@@ -805,9 +805,9 @@
     "bookSourceType": 0,
     "bookSourceUrl": "https://manwaqu.cc",
     "customOrder": 0,
-    "enabled": true,
+    "enabled": false,
     "enabledCookieJar": true,
-    "enabledExplore": true,
+    "enabledExplore": false,
     "exploreUrl": "@js:\nvar result = [];\nvar push = (title, typeId, tag, size) => result.push({\n    title: title,\n    url: \"/api/cate/,\" + JSON.stringify({\n        \"body\": \"{\\\"page\\\":{\\\"page\\\":{{page}},\\\"pageSize\\\":36},\\\"category\\\":\\\"video\\\",\\\"sort\\\":0,\\\"comic\\\":{\\\"status\\\":-1,\\\"day\\\":0,\\\"year\\\":0,\\\"tag\\\":\\\"\\\"},\\\"video\\\":{\\\"typeId\\\":\" + typeId + \",\\\"tag\\\":\\\"\" + tag + \"\\\",\\\"area\\\":\\\"\\\",\\\"lang\\\":\\\"\\\",\\\"status\\\":-1,\\\"year\\\":0},\\\"novel\\\":{\\\"status\\\":-1,\\\"day\\\":0,\\\"sortId\\\":0}}\",\n        \"method\": \"POST\"\n    }),\n    style: {\n        layout_flexGrow: 1,\n        layout_flexBasisPercent: size\n    }\n});\n\n// typeId名称映射\nvar types = [\"\", \"国产\", \"日韩\", \"欧美\", \"港台\", \"电影\", \"里番\"];\n// 全部tag列表（含空=全部）\nvar tags = [\"全部\", \"动画\", \"喜剧\", \"奇幻\", \"剧情\", \"冒险\", \"动作\", \"科幻\", \"爱情\", \"儿童\", \"短片\", \"家庭\", \"悬疑\", \"运动\"];\n\nfor (var t = 1; t <= 6; t++) {\n    for (var g = 0; g < tags.length; g++) {\n        var title = types[t] + '-' + tags[g];\n        var tag = (g === 0) ? '' : tags[g];\n        var size = (g === 0) ? 1 : 0.25;\n        push(title, t, tag, size);\n    }\n}\n\nJSON.stringify(result);",
     "header": "{  \"User-Agent\": \"Mozilla/5.0 (Linux; Android 8.1.0; JKM-AL00b Build/HUAWEIJKM-AL00b; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/66.0.3359.126 MQQBrowser/6.2 TBS/044807 Mobile Safari/537.36\"}",
     "lastUpdateTime": "1782892002284",
@@ -972,7 +972,7 @@
     },
     "searchUrl": "http://www.chensiwx.info/ar.php?keyWord={{key}}",
     "ruleSearch": {
-      "bookList": ".txt-list li",
+      "bookList": ".txt-list li:has(.s2 a)",
       "name": ".s2@text",
       "author": ".s4@text",
       "kind": ".s1@text&&.s5@text##\\[|\\]",
@@ -993,7 +993,7 @@
       "chapterList": ".section-list.fix li",
       "chapterName": "{{@@tag.a@text}}\n@js:result\n.replace(\"••\",\"\")\n.replace(/^(\\d+).第/,'第')\n.replace(/^(正文|VIP章节|最新章节)?(\\s+|_)|[\\(\\{（｛【].*[求含理更谢乐发推票盟补加字Kk\\/].*/g,'')\n.replace(/^(\\d+)[、．]第.+章/,'第$1章')\n.replace(/^(\\d+)、\\d+、/,'第$1章 ')\n.replace(/^(\\d+)、\\d+/,'第$1章')\n.replace(/^(第.+章)\\s?\\d+/,'$1')\n.replace(/^(\\d+)、/,'第$1章 ')\n.replace(/^(第.+章)\\s?第.+章/,'$1')\n.replace(/第\\s(.+)\\s章/,'第$1章')\n.replace(/.*(chapter|Chapter)\\s?(\\d+)\\s?/,'$1 $2 ')\n.replace(/\\(.+\\)/,'')\n.replace(/\\[|。/,'')\n.replace(/第([零一二两三四五六七八九十百千]+)章/g,java.toNumChapter(result))\n##(章)([^\\s]+)(\\s·)##$1 $2$3",
       "chapterUrl": "a@href",
-      "nextTocUrl": "text.下一页@href"
+      "nextTocUrl": ".listpage select option@value"
     },
     "ruleContent": {
       "content": "#content@html##第([\\s\\S]*?)\\)|（本章未完，请点击下一页继续阅读）|{{chapter.title}}",
@@ -1497,7 +1497,7 @@
       "name": "$.title"
     },
     "ruleToc": {
-      "chapterList": "<js>(function(){var SB=[0x63,0x7c,0x77,0x7b,0xf2,0x6b,0x6f,0xc5,0x30,0x01,0x67,0x2b,0xfe,0xd7,0xab,0x76,0xca,0x82,0xc9,0x7d,0xfa,0x59,0x47,0xf0,0xad,0xd4,0xa2,0xaf,0x9c,0xa4,0x72,0xc0,0xb7,0xfd,0x93,0x26,0x36,0x3f,0xf7,0xcc,0x34,0xa5,0xe5,0xf1,0x71,0xd8,0x31,0x15,0x04,0xc7,0x23,0xc3,0x18,0x96,0x05,0x9a,0x07,0x12,0x80,0xe2,0xeb,0x27,0xb2,0x75,0x09,0x83,0x2c,0x1a,0x1b,0x6e,0x5a,0xa0,0x52,0x3b,0xd6,0xb3,0x29,0xe3,0x2f,0x84,0x53,0xd1,0x00,0xed,0x20,0xfc,0xb1,0x5b,0x6a,0xcb,0xbe,0x39,0x4a,0x4c,0x58,0xcf,0xd0,0xef,0xaa,0xfb,0x43,0x4d,0x33,0x85,0x45,0xf9,0x02,0x7f,0x50,0x3c,0x9f,0xa8,0x51,0xa3,0x40,0x8f,0x92,0x9d,0x38,0xf5,0xbc,0xb6,0xda,0x21,0x10,0xff,0xf3,0xd2,0xcd,0x0c,0x13,0xec,0x5f,0x97,0x44,0x17,0xc4,0xa7,0x7e,0x3d,0x64,0x5d,0x19,0x73,0x60,0x81,0x4f,0xdc,0x22,0x2a,0x90,0x88,0x46,0xee,0xb8,0x14,0xde,0x5e,0x0b,0xdb,0xe0,0x32,0x3a,0x0a,0x49,0x06,0x24,0x5c,0xc2,0xd3,0xac,0x62,0x91,0x95,0xe4,0x79,0xe7,0xc8,0x37,0x6d,0x8d,0xd5,0x4e,0xa9,0x6c,0x56,0xf4,0xea,0x65,0x7a,0xae,0x08,0xba,0x78,0x25,0x2e,0x1c,0xa6,0xb4,0xc6,0xe8,0xdd,0x74,0x1f,0x4b,0xbd,0x8b,0x8a,0x70,0x3e,0xb5,0x66,0x48,0x03,0xf6,0x0e,0x61,0x35,0x57,0xb9,0x86,0xc1,0x1d,0x9e,0xe1,0xf8,0x98,0x11,0x69,0xd9,0x8e,0x94,0x9b,0x1e,0x87,0xe9,0xce,0x55,0x28,0xdf,0x8c,0xa1,0x89,0x0d,0xbf,0xe6,0x42,0x68,0x41,0x99,0x2d,0x0f,0xb0,0x54,0xbb,0x16];function _xt(a){return ((a<<1)^((a&128)?27:0))&255;}function _ml(a,b){var r=0;while(b){if(b&1)r^=a;a=_xt(a);b>>=1;}return r&255;}function _ek(k){var w=new Array(176);var i;for(i=0;i<16;i++)w[i]=k[i];var rc=1;for(i=16;i<176;i+=4){var t0=w[i-4],t1=w[i-3],t2=w[i-2],t3=w[i-1];if(i%16===0){var tp=t0;t0=SB[t1]^rc;t1=SB[t2];t2=SB[t3];t3=SB[tp];rc=_xt(rc);}w[i]=w[i-16]^t0;w[i+1]=w[i-15]^t1;w[i+2]=w[i-14]^t2;w[i+3]=w[i-13]^t3;}return w;}function _sr(s){var t=s.slice(0);for(var r=0;r<4;r++){for(var q=0;q<4;q++){s[r+4*q]=t[r+4*((q+r)&3)];}}return s;}function _eb(w,s){var i,r,q;for(i=0;i<16;i++)s[i]^=w[i];for(r=1;r<10;r++){for(i=0;i<16;i++)s[i]=SB[s[i]];_sr(s);for(q=0;q<4;q++){var a0=s[4*q],a1=s[4*q+1],a2=s[4*q+2],a3=s[4*q+3];s[4*q]=_ml(a0,2)^_ml(a1,3)^a2^a3;s[4*q+1]=a0^_ml(a1,2)^_ml(a2,3)^a3;s[4*q+2]=a0^a1^_ml(a2,2)^_ml(a3,3);s[4*q+3]=_ml(a0,3)^a1^a2^_ml(a3,2);}for(i=0;i<16;i++)s[i]^=w[16*r+i];}for(i=0;i<16;i++)s[i]=SB[s[i]];_sr(s);for(i=0;i<16;i++)s[i]^=w[160+i];return s;}function _u8(t){var o=[];var s=String(t);for(var i=0;i<s.length;i++){var u=s.charCodeAt(i);if(u<128)o.push(u);else if(u<2048)o.push(192|(u>>6),128|(u&63));else if(u>=55296&&u<=56319&&i+1<s.length){var u2=s.charCodeAt(i+1);var cp=65536+((u-55296)<<10)+(u2-56320);i++;o.push(240|(cp>>18),128|((cp>>12)&63),128|((cp>>6)&63),128|(cp&63));}else o.push(224|(u>>12),128|((u>>6)&63),128|(u&63));}return o;}var _B='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';function _b64(b){var o='';for(var i=0;i<b.length;i+=3){var b0=b[i],b1=b[i+1],b2=b[i+2];var n=(b0<<16)|((b1===undefined?0:b1)<<8)|(b2===undefined?0:b2);o+=_B[(n>>18)&63]+_B[(n>>12)&63];o+=(b1===undefined)?'=':_B[(n>>6)&63];o+=(b2===undefined)?'=':_B[n&63];}return o;}function _enc(plain,kstr,ivstr){var k=_u8(kstr),iv=_u8(ivstr),w=_ek(k),d=_u8(plain),pad=16-(d.length%16),i,j;for(i=0;i<pad;i++)d.push(pad);var pv=iv.slice(0),out=[];for(i=0;i<d.length;i+=16){var blk=new Array(16);for(j=0;j<16;j++)blk[j]=d[i+j]^pv[j];_eb(w,blk);for(j=0;j<16;j++){out.push(blk[j]);pv[j]=blk[j];}}return _b64(out);}var K='a3dc22cf70418a51',V='394c2c3202da6270';function tok(o){return encodeURIComponent(_enc(JSON.stringify(o),K,V));}function pick(o,k){if(o===null||o===undefined)return null;try{var v=o[k];if(v!==undefined&&v!==null&&v!=='')return v;}catch(e){}try{if(o.get){var w=o.get(k);if(w!==undefined&&w!==null&&w!=='')return w;}}catch(e){}try{var g='get'+k.charAt(0).toUpperCase()+k.slice(1);if(typeof o[g]==='function'){var z=o[g]();if(z!==undefined&&z!==null&&z!=='')return z;}}catch(e){}return null;}function jparse(s){s=String(s);if(s.length&&s.charCodeAt(0)===65279)s=s.slice(1);return JSON.parse(s);}function itemVal(k){var o=null;try{o=(typeof result==='string')?jparse(result):result;}catch(e){o=null;}return pick(o,k);}var list=null,bid=null;try{var root=jparse(src);if(root&&root.list&&root.list.length){list=root.list;}}catch(e){}var hunts=[String(baseUrl||'')];try{if(typeof book!=='undefined'&&book){hunts.push(String(book.bookUrl||''));hunts.push(String(book.tocUrl||''));}}catch(e){}for(var h=0;h<hunts.length;h++){var m=hunts[h].match(/[?&]id=(\\d+)/);if(m){bid=m[1];break;}}if(!bid){try{var mm=String(src||'').match(/\"(?:id|dirid)\"\\s*:\\s*\"?\\s*(\\d+)/);if(mm){bid=mm[1];}}catch(e){}}if((!list||!list.length)&&bid){try{var body=java.ajax('https://apibi.cc/api/booklist?id='+bid);var r2=jparse(body);if(r2&&r2.list){list=r2.list;}}catch(e){}}if(!list)list=[];if(!bid)bid='0';var res=[];for(var i=0;i<list.length;i++){res.push('<a href=\"https://apibi.cc/api/chapter?token='+tok({id:Number(bid),chapterid:i+1})+'\">'+list[i]+'</a>');}return res;})()</js>",
+      "chapterList": "<js>(function(){\nvar src=String(result);\nvar root=null; try{root=JSON.parse(src)}catch(e){}\nvar list=(root&&root.list)?root.list:[];\nvar bid='0';\nvar u=String(baseUrl||''); var p=u.indexOf('id=');\nif(p>=0){bid=u.substring(p+3).split('&')[0];}\nif(!bid||bid==='0'){\n  var q=src.indexOf(String.fromCharCode(34)+'dirid'+String.fromCharCode(34));\n  if(q<0) q=src.indexOf(String.fromCharCode(34)+'id'+String.fromCharCode(34));\n  if(q>=0){var tail=src.substring(q); var c=tail.indexOf(':'); tail=tail.substring(c+1); var s2='';\n    for(var i=0;i<tail.length;i++){var ch=tail.charAt(i); if(ch>='0'&&ch<='9')s2+=ch; else if(s2)break;} if(s2)bid=s2;}\n}\nif(!bid)bid='0';\nif(!list.length&&bid!=='0'){\n  try{var r2=JSON.parse(String(java.ajax('https://apibi.cc/api/booklist?id='+bid))); if(r2&&r2.list)list=r2.list;}catch(e){}\n}\nif(!list.length) return [];\nvar Cipher=Packages.javax.crypto.Cipher, SK=Packages.javax.crypto.spec.SecretKeySpec, IV=Packages.javax.crypto.spec.IvParameterSpec;\nvar Base64=Packages.java.util.Base64, URLEncoder=Packages.java.net.URLEncoder, Cs=Packages.java.nio.charset.StandardCharsets;\nvar K='a3dc22cf70418a51', V='394c2c3202da6270';\nvar c=Cipher.getInstance('AES/CBC/PKCS5Padding');\nc.init(Cipher.ENCRYPT_MODE, new SK(new Packages.java.lang.String(K).getBytes(Cs.UTF_8),'AES'), new IV(new Packages.java.lang.String(V).getBytes(Cs.UTF_8)));\nvar out=[];\nfor(var i=0;i<list.length;i++){\n  var pt=new Packages.java.lang.String(JSON.stringify({id:Number(bid),chapterid:i+1}));\n  var enc=Base64.getEncoder().encodeToString(c.doFinal(pt.getBytes(Cs.UTF_8)));\n  var tk=String(URLEncoder.encode(enc,'UTF-8'));\n  out.push('<a href=\"https://apibi.cc/api/chapter?token='+tk+'\">'+list[i]+'</a>');\n}\nreturn out;\n})()</js>",
       "chapterName": "@css:a@text",
       "chapterUrl": "@css:a@href"
     },
@@ -1623,9 +1623,9 @@
     "bookSourceType": 0,
     "bookSourceUrl": "https://www.quanben.io",
     "customOrder": 0,
-    "enabled": true,
+    "enabled": false,
     "enabledCookieJar": false,
-    "enabledExplore": true,
+    "enabledExplore": false,
     "exploreUrl": "@js:\nlet url = String(source.getVariable()!=\"\"?source.getVariable():source.getKey()).replace(/\\/$/, '') \nlet arr = []\nlet push = (title, url, type) => arr.push({\n  title: title,\n  url: url,\n  style: {\n    layout_flexGrow: 1,\n    layout_flexBasisPercent: type\n  }\n})\n\npush(\"🏷️全部分类🏷️\", \"\", 1)\nlet res = org.jsoup.Jsoup.parse(java.ajax(url))\nlet lis = res.select('.nav a');\nfor (let i = 0; i < lis.length; i++) {\n    let text = lis[i].text();\n    let href = url + String(lis[i].attr('href')).replace(/\\.html/g,\"_\\{\\{page\\}\\}\\.html\");\n    push(text, href, 0.25);\n}\nJSON.stringify(arr)",
     "header": "{\n  \"User-Agent\":\"Mozilla/5.0 (Linux; Android 12; Yolo) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/4.0 Chrome/100.0.2987.108 Mobile Safari/537.36\"\n}",
     "lastUpdateTime": "1790433421581",
@@ -1663,9 +1663,9 @@
     "bookSourceUrl": "https://www.zzbook.net",
     "bookUrlPattern": "https?://www\\.zzbook\\.net/go/\\d+/\\d+/",
     "customOrder": 0,
-    "enabled": true,
+    "enabled": false,
     "enabledCookieJar": true,
-    "enabledExplore": true,
+    "enabledExplore": false,
     "exploreUrl": "首页推荐::<js>zzGet(java,cookie,'/')</js>\n玄幻::<js>zzGet(java,cookie,'/list/1/1/')</js>\n重生::<js>zzGet(java,cookie,'/list/2/1/')</js>\n都市::<js>zzGet(java,cookie,'/list/3/1/')</js>\n军史::<js>zzGet(java,cookie,'/list/4/1/')</js>\n网游::<js>zzGet(java,cookie,'/list/5/1/')</js>\n科幻::<js>zzGet(java,cookie,'/list/6/1/')</js>\n灵异::<js>zzGet(java,cookie,'/list/7/1/')</js>\n言情::<js>zzGet(java,cookie,'/list/8/1/')</js>\n其他::<js>zzGet(java,cookie,'/list/9/1/')</js>",
     "header": "{\"User-Agent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\"}",
     "jsLib": "function zzKey(){\n  return 'ge_js_validator_20';\n}\nfunction zzHome(){\n  return 'https://www.zzbook.net/';\n}\nfunction zzJar(ck){\n  try{\n    var v = ck.getKey(zzHome(), zzKey());\n    return v ? String(v) : '';\n  }catch(e){ }\n  return '';\n}\nfunction zzMint(jv, ck){\n  var cached = zzJar(ck);\n  var s = '';\n  try{ s = String(jv.ajax(zzHome()) || ''); }catch(e){ s = ''; }\n  if(s.indexOf('hotcontent') >= 0){\n    return cached;\n  }\n  var m = s.match(/ge_js_validator_\\d+=[^;\"']+/);\n  if(m){\n    try{ ck.setCookie(zzHome(), m[0]); }catch(e){ }\n    var i = m[0].indexOf('=');\n    if(i > 0){ return m[0].substring(i + 1); }\n  }\n  return cached;\n}\nfunction zzHead(v){\n  if(!v){ return ',{\"webView\":true,\"webViewDelayTime\":2500}'; }\n  return ',{\"headers\":{\"Cookie\":\"' + zzKey() + '=' + v + '\"}}';\n}\nfunction zzGet(jv, ck, path){\n  var u = 'https://www.zzbook.net' + path;\n  var v = zzMint(jv, ck);\n  try{ jv.log('[zzbook] get ' + path + ' ck=' + (v ? 'Y' : 'N')); }catch(e){ }\n  return u + zzHead(v);\n}\nfunction zzPost(jv, ck){\n  var v = zzMint(jv, ck);\n  try{ jv.log('[zzbook] search ck=' + (v ? 'Y' : 'N')); }catch(e){ }\n  var o = '{\"method\":\"POST\",\"body\":\"s={{key}}\"';\n  if(v){ o += ',\"headers\":{\"Cookie\":\"' + zzKey() + '=' + v + '\"}'; }\n  else { o += ',\"webView\":true,\"webViewDelayTime\":2500'; }\n  return 'https://www.zzbook.net/search.html,' + o + '}';\n}\nfunction zzToc(jv, ck, u){\n  var v = zzMint(jv, ck);\n  try{ jv.log('[zzbook] toc ck=' + (v ? 'Y' : 'N')); }catch(e){ }\n  return String(u) + zzHead(v);\n}",
@@ -1762,7 +1762,7 @@
       "chapterName": "a@text",
       "chapterUrl": "a@href"
     },
-    "searchUrl": "@js:\nvar ck='';\ntry{ck=String(java.getCookie('https://www.shenwen.org')||'');}catch(e){}\nvar parts=ck.split(';');\nvar keep=[];\nfor(var i=0;i<parts.length;i++){\n  var p=String(parts[i]).trim();\n  if(p.length===0){continue;}\n  if(p.indexOf('user_id')===0){keep.push(p);}\n  else if(p.indexOf('user_name')===0){keep.push(p);}\n  else if(p.indexOf('320cae9b112ceefc02d1f1bf69093c11')===0){keep.push(p);}\n}\nck=keep.join('; ');\nvar options={\n  method:'POST',\n  body:'s='+java.encodeURI(key),\n  headers:{\n    'Content-Type':'application/x-www-form-urlencoded',\n    'Referer':'https://www.shenwen.org/',\n    'Cookie':ck\n  }\n};\n'https://www.shenwen.org/search.html,'+JSON.stringify(options);",
+    "searchUrl": "@js:\nvar ck='';\ntry{ck=String(java.getCookie('https://www.shenwen.org')||'');}catch(e){}\nvar parts=ck.split(';');\nvar keep=[];\nfor(var i=0;i<parts.length;i++){\n  var p=String(parts[i]).trim();\n  if(p.length===0){continue;}\n  if(p.indexOf('user_id')===0){keep.push(p);}\n  else if(p.indexOf('user_name')===0){keep.push(p);}\n  else if(p.indexOf('320cae9b112ceefc02d1f1bf69093c11')===0){keep.push(p);}\n}\nck=keep.join('; ');\nvar options={\n  method:'POST',\n  body:'s='+java.encodeURI(key),\n  webView:true,webViewDelayTime:6000,headers:{\n    'Content-Type':'application/x-www-form-urlencoded',\n    'Referer':'https://www.shenwen.org/',\n    'Cookie':ck\n  }\n};\n'https://www.shenwen.org/search.html,'+JSON.stringify(options);",
     "weight": 0
   },
   {
@@ -1939,7 +1939,7 @@
       "name": "meta[property=og:novel:book_name]@content"
     },
     "ruleContent": {
-      "content": "<js>\nvar html = String(result);\n// 1. 从 HTML 提取 ch() 里的全部 POST 参数\nvar mu = html.match(/\"url\"\\s*:\\s*\"([^\"]+)\"/);\nvar mn = html.match(/\"novel\"\\s*:\\s*\"([^\"]+)\"/);\nvar mc = html.match(/\"chapter\"\\s*:\\s*\"([^\"]+)\"/);\nvar mt = html.match(/\"t\"\\s*:\\s*(\\d+)/);\nvar mn2 = html.match(/\"n\"\\s*:\\s*\"([^\"]+)\"/);\nvar ms = html.match(/\"sign\"\\s*:\\s*\"([^\"]+)\"/);\nif (!mu || !ms || !mn || !mc || !mt || !mn2) {\n  java.log('参数提取失败');\n  '正文参数提取失败，请刷新重试';\n} else {\n  // 2. 清洗 HTML：只删恶意劫持脚本，保留其他资源让 onPageFinished 正常触发\n  html = html.replace(/<script[^>]*src=\"[^\"]*(comprelu|dsygc)[^\"]*\"[^>]*><\\/script>/gi, '');\n  // 3. 注入 8 秒 window.stop() 兜底，强制触发 onPageFinished\n  var forceStop = '<script>setTimeout(function(){try{if(window.stop)window.stop();}catch(e){}},8000);<\\/script>';\n  html = html.replace(/<head[^>]*>/i, '<head>' + forceStop);\n  // 4. 构造完全同步的注入脚本：原生同步 XHR，不依赖 jQuery，不依赖 Promise\n  var bodyJs = 'url=' + mu[1] + '&mobile=1&isk=1&novel=' + mn[1] + '&chapter=' + mc[1] + '&t=' + mt[1] + '&n=' + mn2[1] + '&sign=' + ms[1];\n  var script = '(function(){try{'\n    + 'var body=\"' + bodyJs.replace(/\"/g, '\\\\\"') + '\";'\n    + 'var xhr=new XMLHttpRequest();'\n    + 'xhr.open(\"POST\",\"/conapi.php\",false);'\n    + 'xhr.setRequestHeader(\"Content-Type\",\"application/x-www-form-urlencoded; charset=UTF-8\");'\n    + 'xhr.setRequestHeader(\"X-Requested-With\",\"XMLHttpRequest\");'\n    + 'xhr.send(body);'\n    + 'if(xhr.status!==200)return \"HTTP:\"+xhr.status;'\n    + 'var r=JSON.parse(xhr.responseText);'\n    + 'if(r.success==1&&r.content)return r.content;'\n    + 'return \"FAIL:\"+String(r.content||\"unknown\");'\n    + '}catch(e){return \"ERR:\"+e.message;}})()';\n  java.log('清洗后 html len=' + html.length + ' bodyJs len=' + bodyJs.length);\n  var res = '';\n  try { res = String(java.webView(html, baseUrl, script)); } catch(e) { java.log('webView err:' + e); res = ''; }\n  java.log('webView res len=' + res.length + ' head=' + res.substring(0, 100));\n  if (res.indexOf('ERR:') === 0 || res.indexOf('FAIL:') === 0 || res.indexOf('HTTP:') === 0 || res.length < 30) {\n    '正文加载失败: ' + res.substring(0, 100);\n  } else {\n    var lines = res.split('\\n');\n    var out = [];\n    for (var i = 0; i < lines.length; i++) {\n      var L = lines[i].trim();\n      if (L.length > 0) { out.push('<p>' + L + '</p>'); }\n    }\n    out.join('\\n');\n  }\n}\n</js>"
+      "content": "<js>\nvar html = String(result);\n// 1. 从 HTML 提取 ch() 里的全部 POST 参数\nvar mu = html.match(/\"url\"\\s*:\\s*\"([^\"]+)\"/);\nvar mn = html.match(/\"novel\"\\s*:\\s*\"([^\"]+)\"/);\nvar mc = html.match(/\"chapter\"\\s*:\\s*\"([^\"]+)\"/);\nvar mt = html.match(/\"t\"\\s*:\\s*(\\d+)/);\nvar mn2 = html.match(/\"n\"\\s*:\\s*\"([^\"]+)\"/);\nvar ms = html.match(/\"sign\"\\s*:\\s*\"([^\"]+)\"/);\nif (!mu || !ms || !mn || !mc || !mt || !mn2) {\n  java.log('参数提取失败');\n  '正文参数提取失败，请刷新重试';\n} else {\n  // 2. 清洗 HTML：只删恶意劫持脚本，保留其他资源让 onPageFinished 正常触发\n  html = html.replace(/<script[^>]*src=\"[^\"]*(comprelu|dsygc)[^\"]*\"[^>]*><\\/script>/gi, '');\n  // 3. 注入 8 秒 window.stop() 兜底，强制触发 onPageFinished\n  var forceStop = '<script>setTimeout(function(){try{if(window.stop)window.stop();}catch(e){}},8000);<\\/script>';\n  html = html.replace(/<head[^>]*>/i, '<head>' + forceStop);\n  // 4. 构造完全同步的注入脚本：原生同步 XHR，不依赖 jQuery，不依赖 Promise\n  var bodyJs = 'url=' + encodeURIComponent(mu[1]) + '&mobile=1&isk=1&novel=' + encodeURIComponent(mn[1]) + '&chapter=' + encodeURIComponent(mc[1]) + '&t=' + encodeURIComponent(mt[1]) + '&n=' + encodeURIComponent(mn2[1]) + '&sign=' + encodeURIComponent(ms[1]);\n  var script = '(function(){try{'\n    + 'var body=\"' + bodyJs.replace(/\"/g, '\\\\\"') + '\";'\n    + 'var xhr=new XMLHttpRequest();'\n    + 'xhr.open(\"POST\",\"/conapi.php\",false);'\n    + 'xhr.setRequestHeader(\"Content-Type\",\"application/x-www-form-urlencoded; charset=UTF-8\");'\n    + 'xhr.setRequestHeader(\"X-Requested-With\",\"XMLHttpRequest\");'\n    + 'xhr.send(body);'\n    + 'if(xhr.status!==200)return \"HTTP:\"+xhr.status;'\n    + 'var r=JSON.parse(xhr.responseText);'\n    + 'if(r.success==1&&r.content)return r.content;'\n    + 'return \"FAIL:\"+String(r.content||\"unknown\");'\n    + '}catch(e){return \"ERR:\"+e.message;}})()';\n  java.log('清洗后 html len=' + html.length + ' bodyJs len=' + bodyJs.length);\n  var res = '';\n  try { res = String(java.webView(html, baseUrl, script)); } catch(e) { java.log('webView err:' + e); res = ''; }\n  java.log('webView res len=' + res.length + ' head=' + res.substring(0, 100));\n  if (res.indexOf('ERR:') === 0 || res.indexOf('FAIL:') === 0 || res.indexOf('HTTP:') === 0 || res.length < 30) {\n    '正文加载失败: ' + res.substring(0, 100);\n  } else {\n    var lines = res.split('\\n');\n    var out = [];\n    for (var i = 0; i < lines.length; i++) {\n      var L = lines[i].trim();\n      if (L.length > 0) { out.push('<p>' + L + '</p>'); }\n    }\n    out.join('\\n');\n  }\n}\n</js>"
     },
     "ruleExplore": {
       "author": "class.author@text",

@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.view.View
 import android.view.ViewConfiguration
+import androidx.appcompat.widget.PopupMenu
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.isGone
 import androidx.lifecycle.Lifecycle
@@ -36,7 +37,9 @@ import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.setTintMutate
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
+import io.legado.app.help.privacy.PrivateShelfActions
 import io.legado.app.utils.startActivityForBook
+import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -316,11 +319,32 @@ class BookshelfFragment2() : BaseBookshelfFragment(R.layout.fragment_bookshelf2)
         }
     }
 
-    override fun onItemLongClick(item: Any) {
+    override fun onItemLongClick(item: Any, anchor: View) {
         when (item) {
-            is Book -> startActivity<BookInfoActivity> {
-                putExtra("name", item.name)
-                putExtra("author", item.author)
+            is Book -> PopupMenu(requireContext(), anchor).apply {
+                menuInflater.inflate(R.menu.bookshelf_book_long_press, menu)
+                setOnMenuItemClickListener { menuItem ->
+                    when (menuItem.itemId) {
+                        R.id.menu_book_info -> {
+                            startActivity<BookInfoActivity> {
+                                putExtra("name", item.name)
+                                putExtra("author", item.author)
+                            }
+                            true
+                        }
+
+                        R.id.menu_move_to_private -> {
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                PrivateShelfActions.moveIn(listOf(item))
+                                toastOnUi(R.string.private_shelf_move_in_done)
+                            }
+                            true
+                        }
+
+                        else -> false
+                    }
+                }
+                show()
             }
 
             is BookGroup -> showDialogFragment(GroupEditDialog(item))

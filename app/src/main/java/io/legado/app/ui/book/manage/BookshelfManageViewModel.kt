@@ -23,6 +23,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
+import io.legado.app.help.privacy.PrivateShelfActions
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.model.SourceCallBack
@@ -74,6 +75,14 @@ class BookshelfManageViewModel(application: Application) : BaseViewModel(applica
     fun updateBook(vararg book: Book) {
         execute {
             appDb.bookDao.updatePreservingCustomCoverUrl(*book)
+        }
+    }
+
+    fun moveToPrivate(books: List<Book>, success: (Int) -> Unit) {
+        execute {
+            PrivateShelfActions.moveIn(books)
+        }.onSuccess {
+            success(it.moved)
         }
     }
 

@@ -333,6 +333,12 @@
         <activity
             android:name=".ui.book.bookmark.AllBookmarkActivity"
             android:launchMode="singleTop" />
+        <!-- 隐私书架 -->
+        <activity
+            android:name=".ui.book.private.PrivateShelfActivity"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="behind" />
         <!-- 缓存界面 -->
         <activity
             android:name=".ui.book.cache.CacheActivity"

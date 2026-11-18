@@ -1,6 +1,7 @@
 package io.legado.app.ui.main.bookshelf.style2
 
 import android.content.Context
+import android.view.View
 import android.os.Bundle
 import android.os.Parcelable
 import android.view.LayoutInflater
@@ -162,7 +163,7 @@ abstract class BaseBooksAdapter<VH : RecyclerView.ViewHolder>(
 
     interface CallBack {
         fun onItemClick(item: Any)
-        fun onItemLongClick(item: Any)
+        fun onItemLongClick(item: Any, anchor: View)
         fun isUpdate(bookUrl: String): Boolean
         fun getItems(): List<Any>
     }

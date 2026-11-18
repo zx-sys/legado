@@ -39,6 +39,8 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ResourceThemeGeneration
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.privacy.PrivateShelfActions
+import io.legado.app.help.privacy.PrivateShelfBookCache
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig.applyDayNight
 import io.legado.app.help.config.ThemeConfig.applyDayNightInit
@@ -97,6 +99,8 @@ class App : Application() {
             LogUtils.d("App", "onCreate")
             LogUtils.logDeviceInfo()
             LocalConfig.cleanupRemovedPreferences()
+            PrivateShelfBookCache.startObserving(this)
+            PrivateShelfActions.reuploadPendingPrivacyBooks()
             //预下载Cronet so
             if (AppConfig.isCronet) {
                 runCatching { Cronet.preDownload() }

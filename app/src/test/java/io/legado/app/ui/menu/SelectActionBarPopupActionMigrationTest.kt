@@ -113,6 +113,7 @@ class SelectActionBarPopupActionMigrationTest {
                 "@+id/menu_update_disable",
                 "@+id/menu_add_to_group",
                 "@+id/menu_remove_to_group",
+                "@+id/menu_move_to_private",
                 "@+id/menu_change_source",
                 "@+id/menu_clear_cache",
                 "@+id/menu_persist_covers",

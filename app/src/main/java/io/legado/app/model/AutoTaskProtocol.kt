@@ -12,6 +12,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.isLocal
+import io.legado.app.help.book.isPrivateShelf
 import io.legado.app.help.book.update
 import io.legado.app.model.jsSource.JsSourceEngine
 import io.legado.app.model.localBook.LocalBook
@@ -113,6 +114,7 @@ object AutoTaskProtocol {
         val book = appDb.bookDao.getBook(bookUrl)
             ?: findMovedBook(action)
             ?: error("refreshToc book was not found")
+        if (book.isPrivateShelf) error("refreshToc book was not found")
         val respectCanUpdate = boolean(action, "respectCanUpdate", false)
         if (!canRefreshBookToc(book.canUpdate, respectCanUpdate)) {
             return context.getString(
@@ -211,7 +213,7 @@ object AutoTaskProtocol {
         if (string(action, "generatedBy") != AutoTask.BOOK_UPDATE_GENERATOR) return null
         val name = string(action, "bookName") ?: return null
         val author = string(action, "bookAuthor").orEmpty()
-        return appDb.bookDao.getBook(name, author)
+        return appDb.bookDao.getBook(name, author)?.takeUnless { it.isPrivateShelf }
     }
 
     private suspend fun refreshBookToc(book: Book): List<BookChapter> {
