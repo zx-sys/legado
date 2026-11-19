@@ -2,6 +2,32 @@
 <androidx.preference.PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <io.legado.app.lib.prefs.PreferenceCategory
+        android:title="@string/ai_polish"
+        app:iconSpaceReserved="false">
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="aiPolishEnabled"
+            android:summary="@string/ai_polish_enabled_summary"
+            android:title="@string/ai_polish_enabled"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
+            android:key="aiPolishWifiOnly"
+            android:summary="@string/ai_polish_wifi_only_summary"
+            android:title="@string/ai_polish_wifi_only"
+            app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="true"
+            android:key="aiPolishKeepOriginal"
+            android:summary="@string/ai_polish_keep_original_summary"
+            android:title="@string/ai_polish_keep_original"
+            app:iconSpaceReserved="false" />
+    </io.legado.app.lib.prefs.PreferenceCategory>
+
     <io.legado.app.lib.prefs.NameListPreference
         android:defaultValue="auto"
         android:key="language"

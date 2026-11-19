@@ -46,6 +46,7 @@ import io.legado.app.help.config.ThemeConfig.applyDayNight
 import io.legado.app.help.config.ThemeConfig.applyDayNightInit
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.Cronet
+import io.legado.app.help.polish.PolishManager
 import io.legado.app.help.source.BookSourceSync
 import io.legado.app.help.source.CustomBookSourceSync
 import io.legado.app.help.source.SourceVerificationRegistry
@@ -112,6 +113,7 @@ class App : Application() {
                 .autoClear(false)
                 .enableLogger(BuildConfig.DEBUG || AppConfig.recordLog)
                 .setLogger(EventLogger())
+            PolishManager.init()
             DefaultData.upVersion()
             DefaultData.removeUnusableBookSourcesIfNeeded()
             DefaultData.addNewDefaultBookSourcesIfNeeded()

@@ -274,6 +274,9 @@ object BookHelp {
                 }
             }
             if (saved) {
+                File(
+                    downloadDir.getFile(cacheFolderName, token.folderName, fileName).path + ".orig"
+                ).delete()
                 //saveImages(bookSource, book, bookChapter, content)
                 postEvent(EventBus.SAVE_CONTENT, Pair(book, bookChapter))
             }
@@ -311,6 +314,33 @@ object BookHelp {
                 )
             }
         }
+    }
+
+    fun readOriginal(book: Book, chapter: BookChapter): String? {
+        val fileName = contentSaveFileName(book, chapter) ?: chapter.getFileName()
+        val backup = File(
+            downloadDir.getFile(cacheFolderName, book.getFolderName(), fileName).path + ".orig"
+        )
+        return if (backup.isFile) backup.readText() else getContent(book, chapter)
+    }
+
+    fun backupOriginal(book: Book, chapter: BookChapter): Boolean {
+        val fileName = contentSaveFileName(book, chapter) ?: chapter.getFileName()
+        val file = downloadDir.getFile(cacheFolderName, book.getFolderName(), fileName)
+        if (!file.isFile) return false
+        val backup = File(file.path + ".orig")
+        if (!backup.exists()) file.copyTo(backup, overwrite = false)
+        return true
+    }
+
+    fun restoreOriginal(book: Book, chapter: BookChapter): Boolean {
+        val fileName = contentSaveFileName(book, chapter) ?: chapter.getFileName()
+        val backup = File(
+            downloadDir.getFile(cacheFolderName, book.getFolderName(), fileName).path + ".orig"
+        )
+        if (!backup.isFile) return false
+        saveText(book, chapter, backup.readText())
+        return true
     }
 
     fun isContentReversed(book: Book, chapter: BookChapter): Boolean {

@@ -79,3 +79,31 @@ DATA_FILTER_CAHCE_TIME = 60 * 60 #缓存时间 1 小时
 
 #列权限
 FIELD_PERMISSION_CACHE = False #是否开启列权限缓存
+
+# ================================================= #
+# ************** DeepSeek 正文清洗  ************** #
+# ================================================= #
+DEEPSEEK_API_KEY = os.environ.get("LEGADO_DEEPSEEK_API_KEY", "")
+DEEPSEEK_BASE_URL = os.environ.get("LEGADO_DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+POLISH_MODEL = os.environ.get("LEGADO_POLISH_MODEL", "deepseek-flash")
+POLISH_DAILY_BUDGET_CNY = float(os.environ.get("LEGADO_POLISH_DAILY_BUDGET_CNY", "2"))
+POLISH_BOOK_BUDGET_CNY = float(os.environ.get("LEGADO_POLISH_BOOK_BUDGET_CNY", "0"))
+POLISH_HOLIDAYS = tuple(
+    x.strip() for x in os.environ.get("LEGADO_POLISH_HOLIDAYS", "").split(",") if x.strip()
+)
+POLISH_HOLIDAY_URL = os.environ.get(
+    "LEGADO_POLISH_HOLIDAY_URL",
+    "https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/{year}.json",
+)
+POLISH_PROFILE_LEARNING_ENABLED = (
+    os.environ.get("LEGADO_POLISH_PROFILE_LEARNING", "1") == "1"
+)
+POLISH_PROFILE_SAMPLE_LIMIT = int(
+    os.environ.get("LEGADO_POLISH_PROFILE_SAMPLE_LIMIT", "20")
+)
+POLISH_PROFILE_SAMPLE_CHARS = int(
+    os.environ.get("LEGADO_POLISH_PROFILE_SAMPLE_CHARS", "4000")
+)
+POLISH_PROFILE_SAMPLE_TTL_DAYS = int(
+    os.environ.get("LEGADO_POLISH_PROFILE_SAMPLE_TTL_DAYS", "30")
+)

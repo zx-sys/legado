@@ -1081,7 +1081,12 @@ object ReadBook : CoroutineScope by MainScope() {
         saveRead(true)
     }
 
-    fun setPageIndex(index: Int, syncReadAloudFollow: Boolean = false) {
+    fun setPageIndex(
+        index: Int,
+        syncReadAloudFollow: Boolean = false,
+        pauseReadAloudOnPageChange: Boolean = true,
+        updateReadAloud: Boolean = true,
+    ) {
         if (syncReadAloudFollow && !BaseReadAloudService.shouldSyncSpeechNavigation()) {
             return
         }
@@ -1090,9 +1095,10 @@ object ReadBook : CoroutineScope by MainScope() {
         durChapterPos = curTextChapter?.getReadLength(index) ?: index
         saveRead(true)
         curPageChanged(
-            pageChanged = true,
+            pageChanged = pauseReadAloudOnPageChange,
             syncReadAloudFollow = syncReadAloudFollow,
-            restartReadAloudFromVisiblePage = restartReadAloud
+            restartReadAloudFromVisiblePage = restartReadAloud,
+            updateReadAloud = updateReadAloud,
         )
     }
 

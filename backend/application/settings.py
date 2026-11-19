@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     'apps.code_generator',
     'apps.sysjob',
     'apps.legado',
+    'apps.polish',
 ]
 
 MIDDLEWARE = [

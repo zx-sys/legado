@@ -1696,6 +1696,17 @@
     <string name="rule_max_batch_size">最大批量数量（maxBatchSize）</string>
     <string name="time_hour">小时</string>
     <string name="custom_button">定制按钮</string>
+    <string name="ai_polish">AI 正文清洗</string>
+    <string name="ai_polish_enabled">启用 AI 清洗</string>
+    <string name="ai_polish_enabled_summary">上传已缓存章节，自动删广告、修缺字、识别拼接</string>
+    <string name="ai_polish_wifi_only">仅 WiFi 上传</string>
+    <string name="ai_polish_wifi_only_summary">避免移动流量</string>
+    <string name="ai_polish_keep_original">保留原文备份</string>
+    <string name="ai_polish_keep_original_summary">改写前保存 .orig，可随时还原</string>
+    <string name="ai_polish_notice_contaminated">本章疑似付费残缺/拼接，未做润色，建议换源</string>
+    <string name="ai_polish_status">已清洗 %1$d 章，疑似拼接 %2$d 章</string>
+    <string name="ai_polish_immediate">立即清洗</string>
+    <string name="ai_polish_restore">还原原文</string>
     <string name="welcome_show_time">欢迎页显示时间</string>
     <string name="welcome_show_time_summary">设为0不显示欢迎页</string>
     <string name="domain">域名</string>

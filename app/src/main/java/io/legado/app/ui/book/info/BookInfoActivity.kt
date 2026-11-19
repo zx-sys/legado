@@ -54,6 +54,7 @@ import io.legado.app.help.book.readProgress
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.update
 import io.legado.app.help.privacy.PrivateShelfActions
+import io.legado.app.help.polish.PolishManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.webView.PooledWebView
@@ -444,6 +445,10 @@ class BookInfoActivity :
                 }
                 item.isChecked = !item.isChecked
                 if (!item.isChecked) longToastOnUi(R.string.need_more_time_load_content)
+            }
+
+            R.id.menu_ai_polish -> viewModel.getBook()?.let {
+                AiPolishDialog.show(this, it)
             }
 
             R.id.menu_delete_alert -> LocalConfig.bookInfoDeleteAlert = !item.isChecked
@@ -1433,6 +1438,13 @@ class BookInfoActivity :
              glideImageGetter.stop()
          }
      }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.getBook()?.let { book ->
+            lifecycleScope.launch(IO) { PolishManager.syncAndApply(book) }
+        }
+    }
 
     override fun onDestroy() {
         introRenderJob?.cancel()

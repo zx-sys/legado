@@ -10,6 +10,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import io.legado.app.constant.PreferKey
+import io.legado.app.data.dao.AiChapterPatchDao
+import io.legado.app.data.dao.AiSourceProfileDao
 import io.legado.app.data.dao.BookChapterDao
 import io.legado.app.data.dao.BookDao
 import io.legado.app.data.dao.BookGroupDao
@@ -33,6 +35,8 @@ import io.legado.app.data.dao.RuleSubDao
 import io.legado.app.data.dao.SearchBookDao
 import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.TxtTocRuleDao
+import io.legado.app.data.entities.AiChapterPatch
+import io.legado.app.data.entities.AiSourceProfileEntity
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookGroup
@@ -73,7 +77,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 114,
+    version = 115,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -81,7 +85,7 @@ val appDb by lazy {
         RssStar::class, TxtTocRule::class, ReadRecord::class, Cache::class,
         RuleSub::class, DictRule::class, KeyboardAssist::class,
         AutoTaskRule::class, BookHighlight::class, HighlightRule::class, BookSourceCheckState::class,
-        BookMemo::class],
+        BookMemo::class, AiChapterPatch::class, AiSourceProfileEntity::class],
     views = [BookSourcePart::class],
     autoMigrations = [
         AutoMigration(from = 43, to = 44),
@@ -145,7 +149,8 @@ val appDb by lazy {
         AutoMigration(from = 102, to = 103),
         AutoMigration(from = 103, to = 104),
         AutoMigration(from = 110, to = 111),
-        AutoMigration(from = 111, to = 112)
+        AutoMigration(from = 111, to = 112),
+        AutoMigration(from = 114, to = 115)
     ]
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -158,6 +163,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val highlightRuleDao: HighlightRuleDao
     abstract val bookSourceDao: BookSourceDao
     abstract val bookChapterDao: BookChapterDao
+    abstract val aiChapterPatchDao: AiChapterPatchDao
+    abstract val aiSourceProfileDao: AiSourceProfileDao
     abstract val replaceRuleDao: ReplaceRuleDao
     abstract val searchBookDao: SearchBookDao
     abstract val searchKeywordDao: SearchKeywordDao

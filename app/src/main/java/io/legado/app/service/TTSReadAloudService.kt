@@ -21,6 +21,7 @@ import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -40,6 +41,21 @@ internal fun speechChunkEnd(text: String, start: Int, limit: Int): Int {
     if (Character.isHighSurrogate(text[end - 1]) && Character.isLowSurrogate(text[end])) end--
     return end
 }
+
+internal fun shouldAdvanceParagraphChapterAtEnd(
+    paragraphMode: Boolean,
+    isRun: Boolean,
+    paused: Boolean,
+    currentPlayback: Boolean,
+    sameChapter: Boolean,
+    chapterLoadPending: Boolean,
+    nowSpeak: Int,
+    lastParagraph: Int,
+    engineSpeaking: Boolean,
+    idleMs: Long,
+    graceMs: Long,
+): Boolean = paragraphMode && isRun && !paused && currentPlayback && sameChapter &&
+    !chapterLoadPending && nowSpeak >= lastParagraph && !engineSpeaking && idleMs >= graceMs
 
 /**
  * 本地朗读
@@ -243,6 +259,7 @@ class TTSReadAloudService : BaseReadAloudService() {
 
     private fun playParagraphQueue(sessionId: Long) {
         MediaHelp.playSilentSound(this)
+        chapterEndWatchdogJob?.cancel()
         speakJob?.cancel()
         val queuedItems = paragraphSpeechItems
         val firstSpeak = nowSpeak
@@ -265,12 +282,55 @@ class TTSReadAloudService : BaseReadAloudService() {
                 }
                 added = true
             }
+        }.onSuccess(Main) {
+            if (paragraphMode && queuedItems.isNotEmpty() && isCurrentPlayback(sessionId)) {
+                armParagraphChapterEndWatchdog(
+                    sessionId,
+                    queuedItems.lastIndex,
+                    textChapter?.chapter?.index ?: -1,
+                )
+            }
         }.onError {
             if (isCurrentPlayback(sessionId)) {
                 AppLog.put("tts朗读出错\n${it.localizedMessage}", it, true)
                 callbackHandler.post {
                     if (isCurrentPlayback(sessionId)) pauseReadAloud()
                 }
+            }
+        }
+    }
+
+    private fun armParagraphChapterEndWatchdog(
+        sessionId: Long,
+        lastParagraph: Int,
+        chapterIndex: Int,
+    ) {
+        chapterEndWatchdogJob?.cancel()
+        lastUtteranceProgressAt = System.currentTimeMillis()
+        val graceMs = 12_000L
+        chapterEndWatchdogJob = lifecycleScope.launch {
+            delay(graceMs)
+            while (isActive && isRun && !pause && isCurrentPlayback(sessionId)) {
+                val idleMs = System.currentTimeMillis() - lastUtteranceProgressAt
+                if (shouldAdvanceParagraphChapterAtEnd(
+                        paragraphMode = paragraphMode,
+                        isRun = isRun,
+                        paused = pause,
+                        currentPlayback = isCurrentPlayback(sessionId),
+                        sameChapter = textChapter?.chapter?.index == chapterIndex,
+                        chapterLoadPending = chapterLoadPending,
+                        nowSpeak = nowSpeak,
+                        lastParagraph = lastParagraph,
+                        engineSpeaking = textToSpeech?.isSpeaking == true,
+                        idleMs = idleMs,
+                        graceMs = graceMs,
+                    )
+                ) {
+                    AppLog.put("段落朗读章末没有收到完成回调, 自动进入下一章")
+                    nextChapter(auto = true)
+                    return@launch
+                }
+                delay(3_000L)
             }
         }
     }

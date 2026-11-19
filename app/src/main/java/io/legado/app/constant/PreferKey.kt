@@ -312,4 +312,9 @@ object PreferKey {
     const val editAutoComplete = "editAutoComplete"
     const val showBoardLine = "showBoardLine"
     const val bottomBarSkin = "bottomBarSkin"
+
+    const val aiPolishEnabled = "aiPolishEnabled"
+    const val aiPolishWifiOnly = "aiPolishWifiOnly"
+    const val aiPolishKeepOriginal = "aiPolishKeepOriginal"
+    const val aiPolishLastSync = "aiPolishLastSync"
 }

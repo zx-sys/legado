@@ -11,6 +11,8 @@ import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.exception.RegexTimeoutException
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ReadBookConfig
+import io.legado.app.help.polish.PolishProfileCache
+import io.legado.app.help.polish.SourceProfileApplier
 import io.legado.app.utils.ChineseUtils
 import io.legado.app.utils.escapeRegex
 import io.legado.app.utils.replace
@@ -141,6 +143,14 @@ class ContentProcessor private constructor(
         contentReplaceRulesOverride: List<ReplaceRule>? = null,
     ): BookContent {
         var mContent = content
+        if (AppConfig.aiPolishEnabled && book.origin.isNotEmpty()) {
+            val patch = appDb.aiChapterPatchDao.getChapter(book.bookUrl, chapter.index)
+            if (patch == null || patch.appliedAt == 0L) {
+                PolishProfileCache.get(book.origin)?.let { profile ->
+                    mContent = SourceProfileApplier.apply(mContent, profile).text
+                }
+            }
+        }
         var sameTitleRemoved = false
         var effectiveReplaceRules: ArrayList<ReplaceRule>? = null
         val replaceEnabled = replaceEnabledOverride ?: (useReplace && book.getUseReplaceRule())

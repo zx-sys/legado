@@ -982,7 +982,11 @@ class ReadView(context: Context, attrs: AttributeSet) :
             }
         }
         val resetOffset = curPage.textPage.chapterIndex != targetChapter || curPage.textPage.index != page
-        ReadBook.setPageIndex(page)
+        ReadBook.setPageIndex(
+            page,
+            pauseReadAloudOnPageChange = false,
+            updateReadAloud = false,
+        )
         ReadBook.durChapterPos = seekPosition
         markReadPositionChanged()
         upContent(resetPageOffset = resetOffset)

@@ -42,6 +42,7 @@ object SettingsSync {
         // 阅读会话/控件位置
         "readAloudLastPosition", "readAloudLastBookUrl", "readAloudLastChapterIndex",
         "readAloudControlsX", "readAloudControlsY",
+        "aiPolishLastSync",
         // 调试/构建
         "Cronet", "autoUpdateVariant", "recordHeapDump", "recordLog", "recordHttpLog",
     )

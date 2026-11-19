@@ -29,6 +29,12 @@ from apps.legado.views_app import (
     TtsEngineDownloadView,
     TtsEngineListView,
 )
+from apps.polish.views_app import (
+    PolishJobsView,
+    PolishPatchesView,
+    PolishSourceProfileView,
+    PolishStatusView,
+)
 
 router = routers.SimpleRouter()
 router.register(r"users", LegadoUserViewSet, basename="legado-user")
@@ -83,6 +89,22 @@ app_urlpatterns = [
         "app/book-source-config",
         BookSourceConfigView.as_view(),
         name="legado-app-book-source-config",
+    ),
+    path("app/polish/jobs", PolishJobsView.as_view(), name="legado-app-polish-jobs"),
+    path(
+        "app/polish/patches",
+        PolishPatchesView.as_view(),
+        name="legado-app-polish-patches",
+    ),
+    path(
+        "app/polish/status",
+        PolishStatusView.as_view(),
+        name="legado-app-polish-status",
+    ),
+    path(
+        "app/polish/source-profile",
+        PolishSourceProfileView.as_view(),
+        name="legado-app-polish-source-profile",
     ),
 ]
 

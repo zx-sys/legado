@@ -1168,6 +1168,18 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     val autoUpdateVariant get() = appCtx.getPrefBoolean("autoUpdateVariant", true)
+
+    var aiPolishEnabled: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.aiPolishEnabled, false)
+        set(value) = appCtx.putPrefBoolean(PreferKey.aiPolishEnabled, value)
+
+    var aiPolishWifiOnly: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.aiPolishWifiOnly, true)
+        set(value) = appCtx.putPrefBoolean(PreferKey.aiPolishWifiOnly, value)
+
+    var aiPolishKeepOriginal: Boolean
+        get() = appCtx.getPrefBoolean(PreferKey.aiPolishKeepOriginal, true)
+        set(value) = appCtx.putPrefBoolean(PreferKey.aiPolishKeepOriginal, value)
 }
 
 internal fun normalizeJsSourceApiToken(value: String?): String? {

@@ -60,6 +60,7 @@ import io.legado.app.help.book.isMobi
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.polish.PolishManager
 import io.legado.app.help.sync.SyncManager
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadTipConfig
@@ -679,6 +680,9 @@ class ReadBookActivity : BaseReadBookActivity(),
         upSystemUiVisibility()
         registerReceiver(timeBatteryReceiver, timeBatteryReceiver.filter)
         binding.readView.upTime()
+        ReadBook.book?.let { book ->
+            lifecycleScope.launch(IO) { PolishManager.syncAndApply(book) }
+        }
         updateParagraphMode()
         if (paragraphModeActive) {
             paragraphReaderSession = newParagraphReaderSession()
@@ -1813,6 +1817,11 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
             loadStates = false
             loadReviewSummaryIfNeeded()
+            ReadBook.book?.let { book ->
+                PolishManager.noticeIfContaminated(book, ReadBook.durChapterIndex) { text ->
+                    toastOnUi(text)
+                }
+            }
             success?.invoke()
         }
     }
@@ -2070,7 +2079,11 @@ class ReadBookActivity : BaseReadBookActivity(),
             ReadBook.durChapterPos = chapterStart
             val pageIndex = textChapter.getPageIndexByCharIndex(chapterStart)
             if (pageIndex < 0) return@launch
-            ReadBook.setPageIndex(pageIndex)
+            ReadBook.setPageIndex(
+                pageIndex,
+                pauseReadAloudOnPageChange = false,
+                updateReadAloud = false,
+            )
             ReadBook.durChapterPos = chapterStart
             ReadAloud.restoreReadAloudFollow()
             textChapter.getPage(pageIndex)?.upPageAloudSpan(chapterStart - textChapter.getReadLength(pageIndex))
@@ -2092,7 +2105,11 @@ class ReadBookActivity : BaseReadBookActivity(),
             } ?: return
             val page = chapter.getPageIndexByCharIndex(position)
             if (page < 0) return
-            ReadBook.setPageIndex(page)
+            ReadBook.setPageIndex(
+                page,
+                pauseReadAloudOnPageChange = false,
+                updateReadAloud = false,
+            )
             ReadBook.durChapterPos = position
             ReadAloud.restoreReadAloudFollow()
             upContent(resetPageOffset = true)
