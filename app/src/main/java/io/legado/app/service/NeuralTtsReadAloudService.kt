@@ -13,16 +13,15 @@ import io.legado.app.help.MediaHelp
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.tts.LocalTtsConfigFactory
+import io.legado.app.help.tts.LocalTtsProgressTracker
 import io.legado.app.help.tts.RemoteTtsEngines
 import io.legado.app.help.tts.parseTtsSelection
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
-import io.legado.app.ui.book.read.page.entities.TextParagraph
 import io.legado.app.utils.servicePendingIntent
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -54,7 +53,9 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
     private var speakerId = 0
     private var ttsInitJob: Coroutine<*>? = null
     private var speakJob: Coroutine<*>? = null
+    private var progressJob: Coroutine<*>? = null
     private val playbackSessionId = AtomicLong()
+    private val progressTracker = LocalTtsProgressTracker()
 
     override fun play() {
         if (contentList.isEmpty()) {
@@ -122,6 +123,8 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
         val sessionId = playbackSessionId.incrementAndGet()
         stopRequested = false
         speakJob?.cancel()
+        progressJob?.cancel()
+        progressTracker.reset()
         releaseAudioTrack()
         val sampleRate = engine.sampleRate()
         val track = runCatching { createAudioTrack(sampleRate) }.getOrElse {
@@ -130,6 +133,7 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
         }
         audioTrack = track
         track.play()
+        startProgressTicker(sessionId)
 
         val startSpeak = nowSpeak
         val startPos = paragraphStartPos
@@ -156,63 +160,55 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
                     }
                     val text = paragraphText.substring(firstOffset)
                     val chunkStart = paragraph.chapterPosition + firstOffset
-                    nowSpeak = i
-                    paragraphStartPos = firstOffset
-                    readAloudNumber = chunkStart
-                    upTtsProgress(chunkStart)
 
                     if (text.matches(AppPattern.notReadAloudRegex)) {
-                        finishChunk(paragraph, paragraphText)
                         continue
                     }
                     val speakText = text.replace(AppPattern.notReadAloudRegex, "")
                     if (speakText.isBlank()) {
-                        finishChunk(paragraph, paragraphText)
                         continue
                     }
 
-                    val expectedSamples = (
-                        text.length / (8f * speed) * sampleRate
-                        ).toInt().coerceAtLeast(1)
-                    var writtenSamples = 0L
-                    var lastProgressAt = 0L
+                    progressTracker.startSegment(i, chunkStart, text.length)
+                    var writeFailed = false
                     val callback = FloatCallback(fun(samples: FloatArray): Int {
-                        if (stopRequested || !isCurrent(sessionId)) return 0
-                        val currentTrack = audioTrack
-                        if (currentTrack != null) {
-                            var offset = 0
-                            var zeroWrites = 0
-                            while (offset < samples.size) {
-                                if (stopRequested || !isCurrent(sessionId) || !isRun || pause) {
+                        if (stopRequested || !isCurrent(sessionId) || !isRun) return 0
+                        val currentTrack = audioTrack ?: return 0
+                        var offset = 0
+                        var idleWrites = 0
+                        while (offset < samples.size) {
+                            if (stopRequested || !isCurrent(sessionId) || !isRun) return 0
+                            if (pause) {
+                                // 暂停只冻结播放，不丢弃当前段剩余音频。
+                                LockSupport.parkNanos(20_000_000)
+                                continue
+                            }
+                            val written = runCatching {
+                                currentTrack.write(
+                                    samples,
+                                    offset,
+                                    samples.size - offset,
+                                    AudioTrack.WRITE_NON_BLOCKING
+                                )
+                            }.getOrElse { -1 }
+                            if (written < 0) {
+                                writeFailed = true
+                                return 0
+                            }
+                            if (written == 0) {
+                                // 缓冲已满或欠载：短等待后重试，不能因此丢掉整段。
+                                if (++idleWrites > 1_000) {
+                                    AppLog.putDebug("本地 TTS 写入停滞, 放弃当前段")
+                                    writeFailed = true
                                     return 0
                                 }
-                                val written = runCatching {
-                                    currentTrack.write(
-                                        samples,
-                                        offset,
-                                        samples.size - offset,
-                                        AudioTrack.WRITE_BLOCKING
-                                    )
-                                }.getOrElse { -1 }
-                                if (written < 0) return 0
-                                if (written == 0) {
-                                    // 高速播放时缓冲欠载会让 write 返回 0，直接中止合成会只读半句。
-                                    if (++zeroWrites > 200) return 0
-                                    LockSupport.parkNanos(5_000_000)
-                                    continue
-                                }
-                                zeroWrites = 0
-                                offset += written
+                                LockSupport.parkNanos(5_000_000)
+                                continue
                             }
+                            idleWrites = 0
+                            offset += written
                         }
-                        writtenSamples += samples.size
-                        val now = System.currentTimeMillis()
-                        if (now - lastProgressAt >= 200L) {
-                            lastProgressAt = now
-                            val fraction = (writtenSamples.toFloat() / expectedSamples)
-                                .coerceIn(0f, 1f)
-                            upTtsProgress(chunkStart + (text.length * fraction).toInt())
-                        }
+                        progressTracker.addFrames(offset)
                         return 1
                     })
                     engine.generateWithConfigAndCallback(
@@ -220,10 +216,13 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
                         config = GenerationConfig(sid = speakerId, speed = speed),
                         callback = callback,
                     )
-                    if (!isCurrent(sessionId)) return@execute
-                    finishChunk(paragraph, paragraphText)
+                    if (writeFailed || !isCurrent(sessionId) || !isRun) return@execute
                 }
-                if (isCurrent(sessionId)) {
+                // 章末先把缓冲里的音频放完，再切下一章，避免最后一句被 flush 截断。
+                if (isCurrent(sessionId) && isRun) {
+                    waitPlaybackDrained(sessionId, sampleRate)
+                }
+                if (isCurrent(sessionId) && isRun) {
                     withContext(Dispatchers.Main) {
                         nextChapter(auto = true)
                     }
@@ -240,10 +239,52 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
         }
     }
 
-    private fun finishChunk(paragraph: TextParagraph, paragraphText: String) {
-        readAloudNumber = paragraph.chapterPosition + paragraphText.length
-        paragraphStartPos = paragraphText.length
-        upTtsProgress(readAloudNumber)
+    /**
+     * 进度以 AudioTrack 播放头为准：合成比实时快，写入帧数会领先实际播放位置。
+     */
+    private fun startProgressTicker(sessionId: Long) {
+        progressJob = execute {
+            var lastPosition = -1
+            while (isCurrent(sessionId) && isRun) {
+                if (!pause) {
+                    val track = audioTrack
+                    val playhead = track?.let {
+                        runCatching { it.playbackHeadPosition.toLong() }.getOrDefault(-1L)
+                    } ?: -1L
+                    if (playhead >= 0L) {
+                        progressTracker.locate(playhead)?.let { played ->
+                            nowSpeak = played.paragraphIndex
+                            paragraphStartPos = played.offsetInParagraph
+                            readAloudNumber = played.charPosition
+                            if (played.charPosition != lastPosition) {
+                                lastPosition = played.charPosition
+                                upTtsProgress(played.charPosition)
+                            }
+                        }
+                    }
+                }
+                delay(PROGRESS_INTERVAL_MS)
+            }
+        }
+    }
+
+    private suspend fun waitPlaybackDrained(sessionId: Long, sampleRate: Int) {
+        val target = progressTracker.synthesizedFrames()
+        var playingElapsed = 0L
+        while (isCurrent(sessionId) && isRun) {
+            val track = audioTrack ?: return
+            val playhead = runCatching { track.playbackHeadPosition.toLong() }.getOrDefault(-1L)
+            if (playhead < 0L || playhead >= target) {
+                AppLog.putDebug("本地 TTS 章末排空 playhead=$playhead/$target")
+                return
+            }
+            if (!pause) {
+                playingElapsed += DRAIN_POLL_MS
+                val timeout = LocalTtsProgressTracker.drainTimeoutMs(target - playhead, sampleRate)
+                if (playingElapsed > timeout) return
+            }
+            delay(DRAIN_POLL_MS)
+        }
     }
 
     override fun playStop() {
@@ -251,6 +292,9 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
         stopRequested = true
         speakJob?.cancel()
         speakJob = null
+        progressJob?.cancel()
+        progressJob = null
+        progressTracker.reset()
         releaseAudioTrack()
     }
 
@@ -258,6 +302,23 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
         super.pauseReadAloud(abandonFocus)
         audioTrack?.let { track ->
             runCatching { track.pause() }
+            emitPausedProgress(track)
+            if (track.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                AppLog.putDebug("本地TTS暂停后播放器仍在播放")
+            }
+        }
+    }
+
+    /**
+     * 暂停时补发一次当前位置：阅读页重绘后仍要保留暂停位置的朗读高亮。
+     */
+    private fun emitPausedProgress(track: AudioTrack) {
+        val playhead = runCatching { track.playbackHeadPosition.toLong() }.getOrDefault(-1L)
+        progressTracker.locate(playhead)?.let { played ->
+            nowSpeak = played.paragraphIndex
+            paragraphStartPos = played.offsetInParagraph
+            readAloudNumber = played.charPosition
+            upTtsProgress(played.charPosition)
         }
     }
 
@@ -322,6 +383,11 @@ class NeuralTtsReadAloudService : BaseReadAloudService() {
 
     private fun isCurrent(sessionId: Long): Boolean {
         return playbackSessionId.get() == sessionId
+    }
+
+    private companion object {
+        const val PROGRESS_INTERVAL_MS = 200L
+        const val DRAIN_POLL_MS = 60L
     }
 
     override fun onDestroy() {
