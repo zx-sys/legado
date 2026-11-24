@@ -195,6 +195,23 @@ class ReadAloudManualPagePolicyTest {
     }
 
     @Test
+    fun `detached highlight is wired without restoring follow`() {
+        val activity = readProjectFile(
+            "src/main/java/io/legado/app/ui/book/read/ReadBookActivity.kt"
+        )
+        val progress = activity.substringAfter("observeEventSticky<Int>(EventBus.TTS_PROGRESS)")
+            .substringBefore("observeEvent<ParagraphTtsStart>")
+        assertTrue(progress.contains("renderDetachedAloudHighlight(chapterStart)"))
+
+        val render = activity.substringAfter("private fun renderDetachedAloudHighlight")
+            .substringBefore("private fun clearVisibleAloudSpan")
+        assertTrue(render.contains("shouldRenderDetachedHighlight"))
+        assertTrue(render.contains("upPageAloudSpan"))
+        assertFalse(render.contains("restoreReadAloudFollow"))
+        assertFalse(render.contains("ReadBook.durChapterPos ="))
+    }
+
+    @Test
     fun `chapter navigation restarts after the new chapter is ready`() {
         val readBook = readProjectFile("src/main/java/io/legado/app/model/ReadBook.kt")
         val activity = readProjectFile(
