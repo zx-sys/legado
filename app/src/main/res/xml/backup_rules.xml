@@ -6,4 +6,10 @@
     <exclude
         domain="sharedpref"
         path="js_source_api_credentials.xml.bak" />
+    <exclude
+        domain="sharedpref"
+        path="deepseek_api_credentials.xml" />
+    <exclude
+        domain="sharedpref"
+        path="deepseek_api_credentials.xml.bak" />
 </full-backup-content>

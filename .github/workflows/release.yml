@@ -78,7 +78,7 @@ jobs:
           echo "开始进行${{ env.product }}构建"
           chmod +x gradlew
           if [[ "${{ env.product }}" == "app" ]]; then
-            ./gradlew assemble${{ env.product }}release -ParmOnly=true --build-cache --parallel --daemon --warning-mode all
+            ./gradlew assemble${{ env.product }}release -ParmOnly=true -Pserver.sync=true --build-cache --parallel --daemon --warning-mode all
             mkdir -p ${{ github.workspace }}/apk/
             bash $GITHUB_WORKSPACE/.github/scripts/collect-apks.sh \
               $GITHUB_WORKSPACE/app/build/outputs/apk \
@@ -88,7 +88,7 @@ jobs:
               "" \
               arm
           fi
-          ./gradlew assemble${{ env.product }}release --build-cache --parallel --daemon --warning-mode all
+          ./gradlew assemble${{ env.product }}release -Pserver.sync=true --build-cache --parallel --daemon --warning-mode all
 
       - name: Organize the Files
         run: |

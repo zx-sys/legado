@@ -36,6 +36,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val paragraphReadMode get() = appCtx.getPrefBoolean(PreferKey.paragraphReadMode, false)
     private const val JS_SOURCE_API_PREFS = "js_source_api_credentials"
     private const val JS_SOURCE_API_TOKEN = "token"
+    private const val DEEPSEEK_API_PREFS = "deepseek_api_credentials"
+    private const val DEEPSEEK_API_KEY = "key"
 
     val isCronet: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.cronet)
@@ -1180,6 +1182,22 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     var aiPolishKeepOriginal: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.aiPolishKeepOriginal, true)
         set(value) = appCtx.putPrefBoolean(PreferKey.aiPolishKeepOriginal, value)
+
+    /** 仅保存在本机独立偏好文件, 不参与备份、系统云备份与配置同步 */
+    var deepseekApiKey: String?
+        get() = appCtx.getSharedPreferences(DEEPSEEK_API_PREFS, MODE_PRIVATE)
+            .getString(DEEPSEEK_API_KEY, null)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        set(value) {
+            val prefs = appCtx.getSharedPreferences(DEEPSEEK_API_PREFS, MODE_PRIVATE)
+            val key = value?.trim()?.takeIf { it.isNotEmpty() }
+            if (key == null) {
+                prefs.edit().remove(DEEPSEEK_API_KEY).apply()
+            } else {
+                prefs.edit().putString(DEEPSEEK_API_KEY, key).apply()
+            }
+        }
 }
 
 internal fun normalizeJsSourceApiToken(value: String?): String? {

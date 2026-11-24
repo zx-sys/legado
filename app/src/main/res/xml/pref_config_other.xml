@@ -26,6 +26,12 @@
             android:summary="@string/ai_polish_keep_original_summary"
             android:title="@string/ai_polish_keep_original"
             app:iconSpaceReserved="false" />
+
+        <io.legado.app.lib.prefs.EditTextPreference
+            android:key="deepseekApiKey"
+            android:summary="@string/deepseek_api_key_summary"
+            android:title="@string/deepseek_api_key"
+            app:iconSpaceReserved="false" />
     </io.legado.app.lib.prefs.PreferenceCategory>
 
     <io.legado.app.lib.prefs.NameListPreference

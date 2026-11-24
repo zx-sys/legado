@@ -87,7 +87,18 @@ object SyncSocket {
         ensureStarted()
     }
 
+    @Synchronized
+    fun stop() {
+        retryJob?.cancel()
+        retryJob = null
+        runCatching { webSocket?.close(1000, "stop") }
+        webSocket = null
+        connecting = false
+        retryDelay = 2_000L
+    }
+
     private fun scheduleRetry() {
+        if (!ServerSync.isConfigured) return
         retryJob?.cancel()
         retryJob = scope.launch {
             delay(retryDelay)

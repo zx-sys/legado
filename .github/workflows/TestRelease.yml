@@ -164,7 +164,7 @@ jobs:
           fi
 
           chmod +x gradlew
-          ./gradlew :$product:assembleRelease -ParmOnly=true \
+          ./gradlew :$product:assembleRelease -ParmOnly=true -Pserver.sync=true \
             --build-cache --parallel --daemon --warning-mode all
           mkdir -p "$GITHUB_WORKSPACE/apk"
           bash "$GITHUB_WORKSPACE/.github/scripts/collect-apks.sh" \
@@ -172,7 +172,7 @@ jobs:
             "$GITHUB_WORKSPACE/apk" \
             "$product" "$VERSION" "$typeName" arm
 
-          ./gradlew :$product:assembleRelease \
+          ./gradlew :$product:assembleRelease -Pserver.sync=true \
             --build-cache --parallel --daemon --warning-mode all
           bash "$GITHUB_WORKSPACE/.github/scripts/collect-apks.sh" \
             "$GITHUB_WORKSPACE/app/build/outputs/apk" \

@@ -13,6 +13,7 @@ import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.core.net.toUri
 import androidx.core.view.MenuProvider
+import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
@@ -38,7 +39,11 @@ import io.legado.app.help.storage.ImportOldData
 import io.legado.app.help.storage.LanBackupSession
 import io.legado.app.help.storage.LanBackupTransfer
 import io.legado.app.help.storage.Restore
+import io.legado.app.help.sync.SyncManager
+import io.legado.app.help.sync.SyncPolicy
+import io.legado.app.help.sync.SyncSocket
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.prefs.SwitchPreference
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.permission.Permissions
 import io.legado.app.lib.permission.PermissionsCompat
@@ -56,6 +61,8 @@ import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.isContentScheme
+import io.legado.app.utils.putPrefBoolean
+import io.legado.app.utils.putPrefString
 import io.legado.app.utils.launch
 import io.legado.app.utils.setEdgeEffectColor
 import io.legado.app.utils.showDialogFragment
@@ -150,6 +157,9 @@ class BackupConfigFragment : PreferenceFragment(),
             getPrefString(PreferKey.backupServerUrl)
         )
         upPreferenceSummary(PreferKey.backupPath, getPrefString(PreferKey.backupPath))
+        findPreference<SwitchPreference>(PreferKey.serverConfigSync)?.isChecked =
+            SyncPolicy.configSyncRequested
+        applySyncVisibility()
         updateAutoBackupSummary()
         findPreference<io.legado.app.lib.prefs.Preference>(PreferKey.restoreNow)
             ?.onLongClick {
@@ -200,6 +210,101 @@ class BackupConfigFragment : PreferenceFragment(),
             PreferKey.deviceName -> upPreferenceSummary(key, AppConfig.deviceName)
             PreferKey.backupPhone,
             PreferKey.backupServerUrl -> upPreferenceSummary(key, getPrefString(key))
+
+            PreferKey.serverConfigSync -> {
+                applySyncVisibility()
+                if (sharedPreferences?.getBoolean(key, false) == true) {
+                    enableConfigSync()
+                } else {
+                    SyncSocket.stop()
+                }
+            }
+        }
+    }
+
+    private fun applySyncVisibility() {
+        findPreference<Preference>("backupAccountCategory")?.title =
+            getString(
+                if (SyncPolicy.dataSyncEnabled) R.string.backup_account
+                else R.string.config_sync_category
+            )
+        findPreference<SwitchPreference>(PreferKey.serverConfigSync)?.let {
+            it.isVisible = SyncPolicy.showConfigSyncSwitch
+            val requested = SyncPolicy.configSyncRequested
+            if (it.isChecked != requested) it.isChecked = requested
+        }
+        val showAccount = SyncPolicy.dataSyncEnabled || SyncPolicy.configSyncRequested
+        findPreference<Preference>(PreferKey.backupServerUrl)?.isVisible = showAccount
+        findPreference<Preference>(PreferKey.backupPhone)?.isVisible = showAccount
+        if (!SyncPolicy.dataSyncEnabled) {
+            findPreference<Preference>(PreferKey.autoCheckNewBackup)?.isVisible = false
+            findPreference<Preference>(PreferKey.onlyLatestBackup)?.isVisible = false
+            findPreference<Preference>("backupNow")?.summary =
+                getString(R.string.backup_now_local_summary)
+            findPreference<Preference>("restoreNow")?.summary =
+                getString(R.string.restore_local_summary)
+        }
+    }
+
+    private fun enableConfigSync() {
+        val phone = getPrefString(PreferKey.backupPhone)?.trim().orEmpty()
+        if (phone.isEmpty()) {
+            promptConfigSyncPhone()
+        } else {
+            bindConfigSync(phone)
+        }
+    }
+
+    private fun promptConfigSyncPhone() {
+        alert(R.string.config_sync_title, R.string.config_sync_bind_summary) {
+            val binding = DialogEditTextBinding.inflate(layoutInflater).apply {
+                editView.hint = getString(R.string.bind_account_phone_hint)
+                editView.inputType = InputType.TYPE_CLASS_PHONE
+                editView.setText(getPrefString(PreferKey.backupPhone))
+            }
+            customView { binding.root }
+            okButton {
+                val phone = binding.editView.text?.toString()
+                    ?.replace(Regex("[\\s\\-()]"), "")
+                    .orEmpty()
+                if (phone.isEmpty()) {
+                    putPrefBoolean(PreferKey.serverConfigSync, false)
+                    toastOnUi(R.string.config_sync_phone_required)
+                    applySyncVisibility()
+                    return@okButton
+                }
+                if (!Regex("^\\+?\\d{6,20}$").matches(phone)) {
+                    putPrefBoolean(PreferKey.serverConfigSync, false)
+                    toastOnUi(R.string.bind_account_invalid)
+                    applySyncVisibility()
+                    return@okButton
+                }
+                putPrefString(PreferKey.backupPhone, phone)
+                upPreferenceSummary(PreferKey.backupPhone, phone)
+                bindConfigSync(phone)
+            }
+            cancelButton {
+                putPrefBoolean(PreferKey.serverConfigSync, false)
+            }
+        }
+    }
+
+    private fun bindConfigSync(phone: String) {
+        Coroutine.async {
+            runCatching { BackupServer.bindAccount(phone) }
+                .onSuccess {
+                    appCtx.toastOnUi(R.string.config_sync_enabled_toast)
+                    SyncManager.activateConfigSync()
+                    SyncSocket.restart()
+                }
+                .onFailure {
+                    AppLog.put("配置同步绑定失败\n${it.localizedMessage}", it)
+                    putPrefBoolean(PreferKey.serverConfigSync, false)
+                    appCtx.toastOnUi(
+                        getString(R.string.config_sync_bind_failed) + "\n" + it.localizedMessage
+                    )
+                    view?.post { applySyncVisibility() }
+                }
         }
     }
 
@@ -250,9 +355,10 @@ class BackupConfigFragment : PreferenceFragment(),
         "${getString(R.string.default_path)}\n${requireContext().externalFiles.absolutePath}"
 
     private fun updateAutoBackupSummary() {
+        val uploadServer = SyncPolicy.dataSyncEnabled && AppConfig.autoBackupServer
         findPreference<Preference>(PreferKey.autoBackup)?.summary = if (AppConfig.autoBackup) {
             getString(R.string.auto_backup_destination_summary,
-                getString(if (AppConfig.autoBackupServer) R.string.backup_local_server else R.string.backup_local_only),
+                getString(if (uploadServer) R.string.backup_local_server else R.string.backup_local_only),
                 AppConfig.autoBackupIntervalDays)
         } else getString(R.string.auto_backup_disabled)
     }
@@ -260,7 +366,9 @@ class BackupConfigFragment : PreferenceFragment(),
     private fun configureAutoBackup() {
         val binding = DialogAutoBackupBinding.inflate(layoutInflater)
         binding.enabled.isChecked = AppConfig.autoBackup
-        binding.destination.check(if (AppConfig.autoBackupServer) R.id.local_server else R.id.local_only)
+        binding.destination.isVisible = SyncPolicy.dataSyncEnabled
+        val useServer = SyncPolicy.dataSyncEnabled && AppConfig.autoBackupServer
+        binding.destination.check(if (useServer) R.id.local_server else R.id.local_only)
         binding.intervalDays.setText(AppConfig.autoBackupIntervalDays.toString())
         binding.intervalDays.doAfterTextChanged { binding.intervalDays.error = null }
         AlertDialog.Builder(requireContext())
@@ -278,7 +386,11 @@ class BackupConfigFragment : PreferenceFragment(),
                         }
                         requireContext().defaultSharedPreferences.edit()
                             .putBoolean(PreferKey.autoBackup, binding.enabled.isChecked)
-                            .putBoolean(PreferKey.autoBackupServer, binding.destination.checkedRadioButtonId == R.id.local_server)
+                            .putBoolean(
+                                PreferKey.autoBackupServer,
+                                SyncPolicy.dataSyncEnabled &&
+                                        binding.destination.checkedRadioButtonId == R.id.local_server
+                            )
                             .putInt(PreferKey.autoBackupIntervalDays, days).apply()
                         dismiss()
                     }
@@ -493,6 +605,11 @@ class BackupConfigFragment : PreferenceFragment(),
 
 
     fun backup() {
+        if (!SyncPolicy.dataSyncEnabled) {
+            manualBackupUploadServer = false
+            startBackup(false)
+            return
+        }
         requireContext().selector(R.string.backup, listOf(
             getString(R.string.backup_local_only), getString(R.string.backup_local_server),
         )) { _, index ->
@@ -566,6 +683,10 @@ class BackupConfigFragment : PreferenceFragment(),
     }
 
     fun restore() {
+        if (!SyncPolicy.dataSyncEnabled) {
+            restoreFromLocal()
+            return
+        }
         waitDialog.setText(R.string.loading)
         waitDialog.setOnCancelListener {
             restoreJob?.cancel()

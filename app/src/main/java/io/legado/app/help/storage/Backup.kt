@@ -19,6 +19,7 @@ import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.privacy.PrivateShelfBookCache
 import io.legado.app.help.privacy.withoutPrivateShelf
+import io.legado.app.help.sync.SyncPolicy
 import io.legado.app.model.BookCover
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -136,8 +137,8 @@ object Backup {
         backupRestoreMutex.withLock {
             if (AppConfig.autoBackup && shouldBackup()) {
                 withContext(IO) {
-                    val uploadServer =
-                        AppConfig.autoBackupServer && BackupServer.isConfigured
+                    val uploadServer = SyncPolicy.dataSyncEnabled &&
+                            AppConfig.autoBackupServer && BackupServer.isConfigured
                     check(
                         backup(
                             context,
@@ -470,7 +471,7 @@ object Backup {
                     copyBackup(workingZipFile, File(path), backupFileName)
                 }
             }
-            if (uploadServer) {
+            if (uploadServer && SyncPolicy.dataSyncEnabled) {
                 BackupServer.upload(workingZipFile, trigger, backupFileName)
             }
             currentCoroutineContext().ensureActive()

@@ -1819,4 +1819,18 @@
 
     <string name="read_aloud_drag_seek">听书时接管正文手势</string>
     <string name="read_aloud_drag_seek_summary">听书时上下滑动会退出跟随，直接滚动或翻页自由查看；开启“滑动听书时左右翻页”后，左右滑动可手动翻页；点击正文打开听书菜单</string>
+
+    <string name="config_sync_category">配置同步</string>
+    <string name="config_sync_title">仅同步配置到服务器</string>
+    <string name="config_sync_summary">默认关闭。开启后只同步应用设置、阅读设置和主题，书架、进度和阅读记录只保存在本机。</string>
+    <string name="config_sync_bind_summary">手机号只用来标识配置同步账号；不会上传书架、进度或阅读记录，也不会恢复云端备份。</string>
+    <string name="config_sync_phone_required">请先填写手机号</string>
+    <string name="config_sync_bind_failed">配置同步绑定失败</string>
+    <string name="config_sync_enabled_toast">已开启仅配置同步</string>
+    <string name="backup_now_local_summary">立即生成本地备份</string>
+    <string name="restore_local_summary">从本地 zip 恢复</string>
+    <string name="deepseek_api_key">DeepSeek API Key</string>
+    <string name="deepseek_api_key_summary">启用 AI 清洗前必须填写；只保存在本机，不上传、不备份</string>
+    <string name="deepseek_api_key_configured">已配置（仅本机保存）</string>
+    <string name="ai_polish_need_key">请先填写 DeepSeek API Key 再启用 AI 清洗</string>
 </resources>

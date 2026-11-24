@@ -63,6 +63,9 @@ object ReadAloud {
         } == true
     private var aloudClass: Class<*> = getReadAloudClass()
 
+    private fun targetServiceClass(): Class<*> =
+        BaseReadAloudService.currentServiceClass ?: aloudClass
+
     val followReadAloudPosition: Boolean
         get() = BaseReadAloudService.followReadAloudPosition
 
@@ -112,7 +115,7 @@ object ReadAloud {
             restoreReadAloudFollow()
         }
         val token = BaseReadAloudService.beginPositionChange()
-        val intent = Intent(context, aloudClass)
+        val intent = Intent(context, targetServiceClass())
         intent.putExtra("positionToken", token)
         intent.action = IntentAction.play
         intent.putExtra("bookUrl", ReadBook.book?.bookUrl)
@@ -153,7 +156,7 @@ object ReadAloud {
         preservePlaybackState: Boolean = false,
     ) {
         if (!BaseReadAloudService.isRun) restoreReadAloudFollow()
-        val intent = Intent(context, aloudClass).apply {
+        val intent = Intent(context, targetServiceClass()).apply {
             action = ACTION_PARAGRAPH_PLAY
             putExtra("position", position)
             putExtra("itemId", itemId)
@@ -173,7 +176,7 @@ object ReadAloud {
 
     fun changeParagraphChapter(context: Context, next: Boolean) {
         if (BaseReadAloudService.isRun && followReadAloudPosition) {
-            context.startForegroundServiceCompat(Intent(context, aloudClass).apply {
+            context.startForegroundServiceCompat(Intent(context, targetServiceClass()).apply {
                 action = ACTION_PARAGRAPH_CHAPTER
                 putExtra("next", next)
             })
@@ -190,7 +193,7 @@ object ReadAloud {
 
     fun pause(context: Context) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.pause
             context.startForegroundServiceCompat(intent)
         }
@@ -198,7 +201,7 @@ object ReadAloud {
 
     fun resume(context: Context) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.resume
             context.startForegroundServiceCompat(intent)
         }
@@ -206,7 +209,7 @@ object ReadAloud {
 
     fun stop(context: Context) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.stop
             context.startForegroundServiceCompat(intent)
         }
@@ -214,7 +217,7 @@ object ReadAloud {
 
     fun prevParagraph(context: Context) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.prevParagraph
             context.startForegroundServiceCompat(intent)
         }
@@ -222,7 +225,7 @@ object ReadAloud {
 
     fun nextParagraph(context: Context) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.nextParagraph
             context.startForegroundServiceCompat(intent)
         }
@@ -230,7 +233,7 @@ object ReadAloud {
 
     fun prevChapter(context: Context) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.prev
             context.startForegroundServiceCompat(intent)
         }
@@ -238,7 +241,7 @@ object ReadAloud {
 
     fun nextChapter(context: Context) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.next
             context.startForegroundServiceCompat(intent)
         }
@@ -246,7 +249,7 @@ object ReadAloud {
 
     fun upTtsSpeechRate(context: Context) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.upTtsSpeechRate
             context.startForegroundServiceCompat(intent)
         }
@@ -254,7 +257,7 @@ object ReadAloud {
 
     fun setTimer(context: Context, minute: Int) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.setTimer
             intent.putExtra("minute", minute)
             context.startForegroundServiceCompat(intent)
@@ -263,7 +266,7 @@ object ReadAloud {
 
     fun setChapterStop(context: Context, count: Int) {
         if (BaseReadAloudService.isRun) {
-            val intent = Intent(context, aloudClass)
+            val intent = Intent(context, targetServiceClass())
             intent.action = IntentAction.setChapterStop
             intent.putExtra("count", count)
             context.startForegroundServiceCompat(intent)

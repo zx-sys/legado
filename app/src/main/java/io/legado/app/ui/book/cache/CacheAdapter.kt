@@ -71,6 +71,11 @@ class CacheAdapter(context: Context, private val callBack: CallBack) :
                 }
             }
             upDownloadIv(ivDownload, item)
+            if (item.isLocal) {
+                ivClearCache.gone()
+            } else {
+                ivClearCache.visible()
+            }
             upExportInfo(tvMsg, progressExport, item)
         }
     }
@@ -92,6 +97,11 @@ class CacheAdapter(context: Context, private val callBack: CallBack) :
             }
             tvExport.setOnClickListener {
                 callBack.export(holder.layoutPosition)
+            }
+            ivClearCache.setOnClickListener {
+                if (getItem(holder.layoutPosition) != null) {
+                    callBack.clearCache(holder.layoutPosition)
+                }
             }
         }
     }
@@ -133,6 +143,7 @@ class CacheAdapter(context: Context, private val callBack: CallBack) :
     interface CallBack {
         val cacheChapters: HashMap<String, HashSet<String>>
         fun export(position: Int)
+        fun clearCache(position: Int)
         fun exportProgress(bookUrl: String): Int?
         fun exportMsg(bookUrl: String): String?
     }

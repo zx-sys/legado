@@ -42,6 +42,13 @@ internal fun speechChunkEnd(text: String, start: Int, limit: Int): Int {
     return end
 }
 
+/**
+ * 引擎偶尔会漏发最后一段的 onStart/onDone. 只要已经进到倒数第二段且长时间无回调,
+ * 就按章末处理; 完全没开始 (nowSpeak=0) 时不前进, 避免整章被跳过。
+ */
+internal fun isLastQueuedParagraphReached(nowSpeak: Int, lastParagraph: Int): Boolean =
+    nowSpeak >= lastParagraph || (lastParagraph - nowSpeak == 1 && nowSpeak > 0)
+
 internal fun shouldAdvanceParagraphChapterAtEnd(
     paragraphMode: Boolean,
     isRun: Boolean,
@@ -55,7 +62,8 @@ internal fun shouldAdvanceParagraphChapterAtEnd(
     idleMs: Long,
     graceMs: Long,
 ): Boolean = paragraphMode && isRun && !paused && currentPlayback && sameChapter &&
-    !chapterLoadPending && nowSpeak >= lastParagraph && !engineSpeaking && idleMs >= graceMs
+    !chapterLoadPending && isLastQueuedParagraphReached(nowSpeak, lastParagraph) &&
+    !engineSpeaking && idleMs >= graceMs
 
 /**
  * 本地朗读
@@ -176,6 +184,7 @@ class TTSReadAloudService : BaseReadAloudService() {
             if (textToSpeech == null) throw NoStackTraceException("tts is null")
             val contentList = queuedContent
             var isAddedText = false
+            var lastQueuedIndex = -1
             for (i in startSpeak until contentList.size) {
                 ensureActive()
                 if (!isCurrentPlayback(sessionId)) return@execute
@@ -210,13 +219,16 @@ class TTSReadAloudService : BaseReadAloudService() {
                             return@execute
                         }
                         AppLog.put("tts朗读出错:$chunk")
+                    } else {
+                        isAddedText = true
+                        lastQueuedIndex = i
                     }
-                    if (i == contentList.lastIndex && chunkEnd == textEnd) {
-                        armChapterEndWatchdog(sessionId, i, speechChapter.chapter.index)
-                    }
-                    isAddedText = true
                     chunkStart = chunkEnd
                 }
+            }
+            // 尾部段落可能被跳过, 不能只在最后一段成功入队时才武装看门狗。
+            if (isAddedText && lastQueuedIndex >= 0 && isCurrentPlayback(sessionId)) {
+                armChapterEndWatchdog(sessionId, lastQueuedIndex, speechChapter.chapter.index)
             }
             LogUtils.d(TAG, "朗读内容添加完成")
             if (!isAddedText && isCurrentPlayback(sessionId)) {
@@ -244,7 +256,7 @@ class TTSReadAloudService : BaseReadAloudService() {
                 textChapter?.chapter?.index == chapterIndex && !chapterLoadPending
             ) {
                 val idleMs = System.currentTimeMillis() - lastUtteranceProgressAt
-                if (nowSpeak >= lastParagraph &&
+                if (isLastQueuedParagraphReached(nowSpeak, lastParagraph) &&
                     textToSpeech?.isSpeaking != true &&
                     idleMs >= graceMs
                 ) {
@@ -366,6 +378,9 @@ class TTSReadAloudService : BaseReadAloudService() {
     override fun pauseReadAloud(abandonFocus: Boolean) {
         super.pauseReadAloud(abandonFocus)
         playStop()
+        if (textToSpeech?.isSpeaking == true) {
+            AppLog.putDebug("TTS暂停后引擎仍在出声")
+        }
     }
 
     /**

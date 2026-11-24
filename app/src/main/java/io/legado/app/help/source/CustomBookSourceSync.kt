@@ -11,6 +11,7 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.storage.BackupServer
 import io.legado.app.help.sync.ServerSync
+import io.legado.app.help.sync.SyncPolicy
 import io.legado.app.utils.GSON
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.fromJsonArray
@@ -102,7 +103,7 @@ object CustomBookSourceSync {
     }
 
     fun syncInBackground() {
-        if (!ServerSync.isConfigured) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured) return
         Coroutine.async {
             sync()
         }.onError {
@@ -111,7 +112,7 @@ object CustomBookSourceSync {
     }
 
     suspend fun sync() = mutex.withLock {
-        if (!ServerSync.isConfigured) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured) return
         val remote = fetch() ?: return
         remote.items.forEach { applyRemote(it) }
         uploadMissing(remote.items)
@@ -199,7 +200,7 @@ object CustomBookSourceSync {
 
     /** 新增/编辑自定义源后调用。 */
     fun onSourceSaved(source: BookSource) {
-        if (!ServerSync.isConfigured) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured) return
         val url = source.bookSourceUrl
         if (url.isBlank()) return
         val catalog = catalogUrls()
@@ -218,7 +219,7 @@ object CustomBookSourceSync {
     }
 
     fun onSourcesInserted(sources: List<BookSource>) {
-        if (!ServerSync.isConfigured || sources.isEmpty()) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured || sources.isEmpty()) return
         val catalog = catalogUrls()
         if (catalog.isEmpty()) return
         val managed = catalogManagedUrls()
@@ -241,7 +242,9 @@ object CustomBookSourceSync {
 
     /** 删除自定义源：写墓碑并同步到其它设备。 */
     fun onSourceDeleted(sourceUrl: String) {
-        if (applyingRemote || !ServerSync.isConfigured || sourceUrl.isBlank()) return
+        if (applyingRemote || !SyncPolicy.dataSyncEnabled ||
+            !ServerSync.isConfigured || sourceUrl.isBlank()
+        ) return
         val catalog = catalogUrls()
         val synced = loadSynced()
         if (catalog.isNotEmpty() && sourceUrl in catalogManagedUrls()) return
@@ -258,7 +261,7 @@ object CustomBookSourceSync {
 
     /** 启停自定义源后调用，让其它设备恢复同样的启用状态。 */
     fun onSourceEnabledChanged(urls: Collection<String>, enabled: Boolean) {
-        if (!ServerSync.isConfigured || urls.isEmpty()) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured || urls.isEmpty()) return
         val catalog = catalogUrls()
         val synced = loadSynced()
         val managed = catalogManagedUrls()

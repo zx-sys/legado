@@ -29,6 +29,7 @@ import io.legado.app.utils.UrlUtil
 import io.legado.app.utils.createFileIfNotExist
 import io.legado.app.utils.exists
 import io.legado.app.utils.GSON
+import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.getFile
 import io.legado.app.utils.isContentScheme
@@ -777,19 +778,39 @@ object BookHelp {
         return readContent(book, bookChapter, token.folderName, fileName)
     }
 
+    /**
+     * 缓存文件只按章节序号+标题命名; 目录刷新后同序号的章节 URL 可能已经换掉,
+     * 此时旧文件属于别的章节, 必须视为未缓存。
+     */
+    private fun isCachedChapterSourceCurrent(
+        bookChapter: BookChapter,
+        contentFile: File,
+    ): Boolean {
+        val sourceFile = File(contentFile.path + ".source")
+        if (!sourceFile.isFile) return true
+        val json = runCatching { sourceFile.readText() }.getOrNull() ?: return true
+        val savedChapterUrl = runCatching {
+            GSON.fromJsonObject<Map<String, String>>(json).getOrNull()?.get("chapterUrl")
+        }.getOrNull()
+        return shouldUseCachedChapterContent(savedChapterUrl, bookChapter.url)
+    }
+
     private fun readContent(
         book: Book,
         bookChapter: BookChapter,
         folderName: String,
         fileName: String,
-    ): String? = contentSaveFence.exclusive {
-        val file = downloadDir.getFile(
+    ): String? = contentSaveFence.exclusive {        val file = downloadDir.getFile(
             cacheFolderName,
             folderName,
             fileName,
         )
         val token = contentSaveToken(book, bookChapter)
         if (file.exists()) {
+            if (!isCachedChapterSourceCurrent(bookChapter, file)) {
+                // 目录里章节 URL 已变化, 旧正文可能属于别的章节, 丢弃后重新抓取。
+                return@exclusive null
+            }
             val string = file.readText()
             if (string.isEmpty()) {
                 return@exclusive null
@@ -1070,3 +1091,9 @@ internal fun findNearestChapterNumberIndex(
         .filter { chapterNumbers[it] == chapterNumber }
         .minByOrNull { abs(it - expectedIndex) }
 }
+
+/** 没有来源信息的旧缓存继续兼容; 有来源信息时必须与当前章节 URL 一致。 */
+internal fun shouldUseCachedChapterContent(
+    savedChapterUrl: String?,
+    currentChapterUrl: String,
+): Boolean = savedChapterUrl.isNullOrBlank() || savedChapterUrl == currentChapterUrl

@@ -317,4 +317,6 @@ object PreferKey {
     const val aiPolishWifiOnly = "aiPolishWifiOnly"
     const val aiPolishKeepOriginal = "aiPolishKeepOriginal"
     const val aiPolishLastSync = "aiPolishLastSync"
+    const val deepseekApiKey = "deepseekApiKey"
+    const val serverConfigSync = "serverConfigSync"
 }

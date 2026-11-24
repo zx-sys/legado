@@ -107,6 +107,17 @@ internal fun shouldLoadDetachedParagraphChapter(
     alreadyLoading: Boolean,
 ): Boolean = waiting && !following && !alreadyLoading
 
+/** 交接给阅读页启动新章节后, 迟迟没有播放接续时应由服务自行加载。 */
+internal fun shouldRecoverParagraphChapterHandoff(
+    isRun: Boolean,
+    paused: Boolean,
+    paragraphMode: Boolean,
+    waitingForChapter: Boolean,
+    currentSpeechIndex: Int,
+    expectedCurrentIndex: Int,
+): Boolean = isRun && !paused && paragraphMode && waitingForChapter &&
+    currentSpeechIndex == expectedCurrentIndex
+
 internal const val PARAGRAPH_PREFETCH_REMAINING_ITEMS = 5
 
 internal fun shouldPrefetchParagraphChapter(
@@ -168,12 +179,19 @@ abstract class BaseReadAloudService : BaseService(),
         }
 
         @JvmStatic
+        @Volatile
         var isRun = false
             private set
 
         @JvmStatic
+        @Volatile
         var pause = true
             private set
+
+        /** 正在运行的朗读服务实现类; 控制意图必须发给它, 不能只依赖当前引擎配置。 */
+        @JvmStatic
+        val currentServiceClass: Class<*>?
+            get() = currentService?.javaClass
 
         /** 服务章末切章时置位，阻止阅读页再次 play 导致双重重启。 */
         @Volatile
@@ -237,6 +255,11 @@ abstract class BaseReadAloudService : BaseService(),
         fun shouldSyncSpeechNavigation(): Boolean {
             return speechFollowState.shouldSyncSpeechNavigation()
         }
+
+        /** 段落朗读正在等待目标章节: 章末自动切章把启动交给阅读页期间为 true。 */
+        @JvmStatic
+        val isWaitingForParagraphChapter: Boolean
+            get() = currentService?.paragraphWaitingForChapter == true
 
         @JvmStatic
         internal fun updateReadAloudChapterIndex(index: Int) {
@@ -332,6 +355,7 @@ abstract class BaseReadAloudService : BaseService(),
 
     private var prefetchedParagraphChapter: PrefetchedParagraphChapter? = null
     private var paragraphPrefetchJob: Coroutine<*>? = null
+    private var paragraphHandoffJob: Job? = null
 
     private fun clearParagraphPrefetch(cancel: Boolean = true) {
         if (cancel) paragraphPrefetchJob?.cancel()
@@ -493,7 +517,14 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     private fun newParagraphReadAloud(play: Boolean, position: Int, itemId: String?) {
-        val chapter = ReadBook.curTextChapter?.takeIf { it.isCompleted } ?: return
+        val chapter = ReadBook.curTextChapter?.takeIf { it.isCompleted } ?: run {
+            val index = ReadBook.durChapterIndex
+            AppLog.put("段落朗读启动放弃: 章节未就绪, index=$index, 稍后重试")
+            scheduleChapterLoadRetry(index, 1)
+            return
+        }
+        chapterLoadRetryJob?.cancel()
+        cancelParagraphChapterHandoff()
         invalidateParagraphPlayback()
         clearParagraphPrefetch()
         lastStartedParagraphProgress = null
@@ -690,23 +721,33 @@ abstract class BaseReadAloudService : BaseService(),
         readAloudGeneration.incrementAndGet()
         readAloudJob?.cancel()
         chapterLoadRetryJob?.cancel()
+        cancelParagraphChapterHandoff()
         paragraphSession++
         clearParagraphPrefetch()
         val wasCurrentService = currentService === this
-        if (wasCurrentService) currentService = null
-        if (paragraphMode && wasCurrentService) {
-            lastStartedParagraphProgress?.let { progress ->
-                ReadBook.saveParagraphSpeechProgress(
-                    progress.bookUrl, progress.chapterIndex, progress.chapterPosition, progress.anchor
-                )
+        if (wasCurrentService) {
+            currentService = null
+            if (paragraphMode) {
+                lastStartedParagraphProgress?.let { progress ->
+                    ReadBook.saveParagraphSpeechProgress(
+                        progress.bookUrl, progress.chapterIndex, progress.chapterPosition,
+                        progress.anchor
+                    )
+                }
+            }
+            saveLastReadAloudPosition()
+            if (!readerSynced()) {
+                // 游标会在下面被重置, 必须先把会话进度提交出去。
+                saveSessionProgress(flush = true, force = true)
             }
         }
-        saveLastReadAloudPosition()
-        if (!readerSynced()) {
-            // 游标会在下面被重置, 必须先把会话进度提交出去。
-            saveSessionProgress(flush = true, force = true)
-        }
         super.onDestroy()
+        unregisterPhoneStateListener(phoneStateListener)
+        if (!wasCurrentService) {
+            // 已被新服务取代, 不能回写全局状态、通知和会话。
+            mediaSessionCompat.release()
+            return
+        }
         speechFollowState.cancelPositionChanges()
         restoreReadAloudFollow()
         updateReadAloudChapterIndex(-1)
@@ -732,7 +773,6 @@ abstract class BaseReadAloudService : BaseService(),
         if (!isRun) {
             ReadAloudSession.clear()
         }
-        unregisterPhoneStateListener(phoneStateListener)
         upNotificationJob?.invokeOnCompletion {
             if (currentService == null) notificationManager.cancel(NotificationId.ReadAloudService)
         }
@@ -796,6 +836,7 @@ abstract class BaseReadAloudService : BaseService(),
             return
         }
         if (positionToken != 0L && speechFollowState.pendingPosition != positionToken) return
+        chapterLoadRetryJob?.cancel()
         val transition = if (positionToken != 0L) positionToken else beginPositionChange()
         paragraphSession++
         paragraphMode = false
@@ -812,10 +853,17 @@ abstract class BaseReadAloudService : BaseService(),
             val book = ReadBook.book
             val textChapter = ReadBook.curTextChapter
             if (book == null || textChapter == null || !textChapter.isCompleted) {
-                // 章节尚未准备好时静默放弃本次启动，同时释放位置切换令牌，避免阻塞后续进度。
+                // 章节未就绪时不能静默放弃: 章末切章后没有其它事件会再拉起播放, 会永久停在章末。
                 withContext(Main.immediate) {
                     finishPositionChange(transition)
                     postEvent(EventBus.READ_ALOUD_FOLLOW, followReadAloudPosition)
+                    if (book == null) {
+                        AppLog.put("朗读启动放弃: 书籍为空")
+                    } else {
+                        val index = textChapter?.chapter?.index ?: ReadBook.durChapterIndex
+                        AppLog.put("朗读启动放弃: 章节未就绪, index=$index, 稍后重试")
+                        scheduleChapterLoadRetry(index, 1)
+                    }
                 }
                 return@execute
             }
@@ -916,6 +964,12 @@ abstract class BaseReadAloudService : BaseService(),
 
     @CallSuper
     open fun pauseReadAloud(abandonFocus: Boolean = true) {
+        if (!pause) {
+            val caller = Throwable().stackTrace.drop(1).take(3).joinToString(" <- ") {
+                "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}"
+            }
+            AppLog.putDebug("暂停朗读 来源: $caller")
+        }
         if (useWakeLock) {
             wakeLock.release()
             wifiLock?.release()
@@ -1465,6 +1519,7 @@ abstract class BaseReadAloudService : BaseService(),
         attempt: Int = 0,
         startPaused: Boolean = false
     ) {
+        cancelParagraphChapterHandoff()
         if (chapterIndex !in 0..<sessionChapterCount()) {
             chapterLoadPending = false
             return
@@ -1587,12 +1642,15 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     private fun changeParagraphChapter(next: Boolean) {
-        val chapterIndex = speechChapterIndex() + if (next) 1 else -1
+        val currentChapterIndex = speechChapterIndex()
+        val chapterIndex = currentChapterIndex + if (next) 1 else -1
         if (chapterIndex !in 0 until minOf(ReadBook.chapterSize, ReadBook.simulatedChapterSize)) {
             if (next) stopSelf()
             return
         }
-        val visibleCanFollow = followReadAloudPosition && ReadBook.durChapterIndex == speechChapterIndex()
+        val visibleCanFollow = followReadAloudPosition &&
+            ReadBook.durChapterIndex == currentChapterIndex
+        cancelParagraphChapterHandoff()
         invalidateParagraphPlayback()
         waitingParagraphChapterIndex = chapterIndex
         paragraphDetachedLoadStarted = false
@@ -1602,10 +1660,45 @@ abstract class BaseReadAloudService : BaseService(),
         if (visibleCanFollow) {
             val moved = if (next) ReadBook.moveToNextChapter(true, syncReadAloudFollow = true)
                 else ReadBook.moveToPrevChapter(true, toLast = false, syncReadAloudFollow = true)
-            if (moved) return
+            if (moved) {
+                armParagraphChapterHandoffWatchdog(chapterIndex, currentChapterIndex)
+                return
+            }
         }
         paragraphDetachedLoadStarted = true
         loadSpeechChapterOnly(chapterIndex)
+    }
+
+    /**
+     * 切章时把新章节的启动交给阅读页后, 阅读页可能因布局未完成或与朗读会话竞争
+     * 而错过启动, 表现就是无声停在章末。短暂等待仍无播放接续时由服务自行加载。
+     */
+    private fun armParagraphChapterHandoffWatchdog(
+        chapterIndex: Int,
+        previousChapterIndex: Int,
+    ) {
+        paragraphHandoffJob?.cancel()
+        paragraphHandoffJob = lifecycleScope.launch {
+            delay(3_000L)
+            if (!shouldRecoverParagraphChapterHandoff(
+                    isRun = isRun,
+                    paused = pause,
+                    paragraphMode = paragraphMode,
+                    waitingForChapter = paragraphWaitingForChapter,
+                    currentSpeechIndex = speechChapterIndex(),
+                    expectedCurrentIndex = previousChapterIndex,
+                )
+            ) return@launch
+            AppLog.put("段落朗读切章交接超时, 服务自行加载新章节")
+            paragraphHandoffJob = null
+            paragraphDetachedLoadStarted = true
+            loadSpeechChapterOnly(chapterIndex)
+        }
+    }
+
+    private fun cancelParagraphChapterHandoff() {
+        paragraphHandoffJob?.cancel()
+        paragraphHandoffJob = null
     }
 
     private fun initPhoneStateListener() {

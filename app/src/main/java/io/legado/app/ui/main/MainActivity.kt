@@ -43,6 +43,7 @@ import io.legado.app.help.source.CustomBookSourceSync
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.sync.ServerSync
 import io.legado.app.help.sync.SyncManager
+import io.legado.app.help.sync.SyncPolicy
 import io.legado.app.help.sync.SyncSocket
 import io.legado.app.help.update.AppUpdate
 import io.legado.app.help.update.isIgnoredAppUpdate
@@ -213,6 +214,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             syncPollJob = lifecycleScope.launch {
                 while (true) {
                     kotlinx.coroutines.delay(60_000)
+                    if (!ServerSync.isConfigured) break
                     SyncManager.pull(applyConfigs = false)
                 }
             }
@@ -320,7 +322,9 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
             block.resume(true)
             return@sc
         }
-        val privacyPolicy = String(assets.open("privacyPolicy.md").readBytes())
+        val privacyAsset =
+            if (BuildConfig.ServerDataSync) "privacyPolicy.md" else "privacyPolicyLocal.md"
+        val privacyPolicy = String(assets.open(privacyAsset).readBytes())
         alert(getString(R.string.privacy_policy), privacyPolicy) {
             positiveButton(R.string.agree) {
                 LocalConfig.privacyPolicyOk = true
@@ -386,6 +390,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      * 本地密码改为在备份设置里按需设置。
      */
     private suspend fun bindAccountIfNeeded() {
+        if (!SyncPolicy.dataSyncEnabled) return
         if (LocalConfig.accountBindPrompted) return
         if (BackupServer.phone.isNotEmpty()) {
             LocalConfig.accountBindPrompted = true
@@ -515,7 +520,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
      * 备份同步
      */
     private fun backupSync() {
-        if (!AppConfig.autoCheckNewBackup) {
+        if (!SyncPolicy.dataSyncEnabled || !AppConfig.autoCheckNewBackup) {
             return
         }
         lifecycleScope.launch {

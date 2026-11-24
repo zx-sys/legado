@@ -48,9 +48,22 @@
         android:padding="6dp"
         android:src="@drawable/ic_play_24dp"
         app:layout_constraintBottom_toBottomOf="@+id/tv_download"
-        app:layout_constraintRight_toLeftOf="@+id/tv_export"
+        app:layout_constraintRight_toLeftOf="@+id/iv_clear_cache"
         app:layout_constraintTop_toTopOf="@id/tv_name"
         app:tint="@color/primaryText" />
+
+    <ImageView
+        android:id="@+id/iv_clear_cache"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/clear_cache"
+        android:padding="7dp"
+        android:src="@drawable/ic_outline_delete"
+        app:layout_constraintBottom_toBottomOf="@+id/tv_download"
+        app:layout_constraintRight_toLeftOf="@+id/tv_export"
+        app:layout_constraintTop_toTopOf="@id/tv_name"
+        app:tint="@color/secondaryText" />
 
     <TextView
         android:id="@+id/tv_export"

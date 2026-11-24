@@ -21,6 +21,16 @@ class ReadBookChapterRestartContractTest {
         assertTrue(restart.contains("readAloud(!BaseReadAloudService.pause)"))
     }
 
+    @Test
+    fun `paragraph chapter-end handoff uses the waiting chapter state`() {
+        val source = projectFile("src/main/java/io/legado/app/model/ReadBook.kt").readText()
+        val guard = source.substringAfter("shouldIgnoreVisiblePageForReadAloud(")
+            .substringBefore(") {")
+
+        assertTrue(guard.contains("waitingForParagraphChapter"))
+        assertTrue(guard.contains("BaseReadAloudService.isWaitingForParagraphChapter"))
+    }
+
     private fun projectFile(pathInApp: String): File {
         return listOf(File(pathInApp), File("app/$pathInApp"))
             .firstOrNull { it.isFile }

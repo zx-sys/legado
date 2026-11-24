@@ -1944,4 +1944,18 @@
 
     <string name="read_aloud_drag_seek">Listening controls reader gestures</string>
     <string name="read_aloud_drag_seek_summary">Vertical swipes leave follow mode and scroll or turn pages freely. Enable the swipe-page option to turn pages horizontally. Tap the text for the listening menu.</string>
+
+    <string name="config_sync_category">Settings sync</string>
+    <string name="config_sync_title">Sync settings only</string>
+    <string name="config_sync_summary">Off by default. When enabled, only app settings, reading settings and theme are synced; bookshelf, progress and reading records stay on this device.</string>
+    <string name="config_sync_bind_summary">The phone number only identifies the settings-sync account. Bookshelf, progress and reading records are not uploaded, and cloud backups are not restored.</string>
+    <string name="config_sync_phone_required">Enter a phone number first</string>
+    <string name="config_sync_bind_failed">Failed to bind for settings sync</string>
+    <string name="config_sync_enabled_toast">Settings sync enabled</string>
+    <string name="backup_now_local_summary">Create a local backup now</string>
+    <string name="restore_local_summary">Restore from a local zip</string>
+    <string name="deepseek_api_key">DeepSeek API Key</string>
+    <string name="deepseek_api_key_summary">Required before enabling AI cleaning; stored only on this device, never uploaded or backed up</string>
+    <string name="deepseek_api_key_configured">Configured (stored on this device only)</string>
+    <string name="ai_polish_need_key">Enter a DeepSeek API Key before enabling AI cleaning</string>
 </resources>

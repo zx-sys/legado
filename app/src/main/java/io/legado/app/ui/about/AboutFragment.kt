@@ -7,6 +7,7 @@ import android.view.View
 import androidx.annotation.StringRes
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.AppConst.appInfo
 import io.legado.app.constant.AppLog
@@ -55,7 +56,10 @@ class AboutFragment : PreferenceFragmentCompat() {
             "mail" -> requireContext().sendMail(getString(R.string.email))
             "license" -> showMdFile(getString(R.string.license), "LICENSE.md")
             "disclaimer" -> showMdFile(getString(R.string.disclaimer), "disclaimer.md")
-            "privacyPolicy" -> showMdFile(getString(R.string.privacy_policy), "privacyPolicy.md")
+            "privacyPolicy" -> showMdFile(
+                getString(R.string.privacy_policy),
+                if (BuildConfig.ServerDataSync) "privacyPolicy.md" else "privacyPolicyLocal.md"
+            )
             "gzGzh" -> requireContext().sendToClip(getString(R.string.legado_gzh))
             "crashLog" -> showDialogFragment<CrashLogsDialog>()
             "saveLog" -> saveLog()

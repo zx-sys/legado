@@ -13,6 +13,7 @@ import androidx.core.view.WindowInsetsCompat
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
 import io.legado.app.R
+import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ViewReadAloudFloatBallBinding
 import io.legado.app.help.config.AppConfig
@@ -48,6 +49,7 @@ class ReadAloudFloatBall(
     private var initialY = 0f
     private var lastCoverKey: String? = null
     private var fallbackCover = true
+    private var lastPausedState: Boolean? = null
 
     private val layoutListener =
         View.OnLayoutChangeListener { view, left, _, right, _, oldLeft, _, oldRight, _ ->
@@ -119,6 +121,12 @@ class ReadAloudFloatBall(
 
     private fun refreshPlayState() {
         val paused = BaseReadAloudService.pause
+        if (lastPausedState != paused) {
+            lastPausedState = paused
+            AppLog.putDebug(
+                "悬浮球状态更新 pause=$paused isRun=${BaseReadAloudService.isRun}"
+            )
+        }
         binding.ivBallPlayPause.setImageResource(
             if (paused) R.drawable.ic_play_24dp else R.drawable.ic_pause_24dp,
         )

@@ -1,5 +1,6 @@
 package io.legado.app.service
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,10 +32,34 @@ class ParagraphChapterEndPolicyTest {
     }
 
     @Test
-    fun `never advances while still speaking or before the last paragraph`() {
+    fun `never advances while still speaking or far before the last paragraph`() {
         assertFalse(canAdvance(engineSpeaking = true))
-        assertFalse(canAdvance(nowSpeak = 4))
+        assertFalse(canAdvance(nowSpeak = 3, lastParagraph = 5))
+        assertFalse(canAdvance(nowSpeak = 0, lastParagraph = 1))
         assertFalse(canAdvance(idleMs = 11_999L))
+    }
+
+    @Test
+    fun `tolerates one missed last-paragraph callback`() {
+        assertTrue(canAdvance(nowSpeak = 4, lastParagraph = 5))
+    }
+
+    @Test
+    fun `unready chapter schedules a retry instead of silently stopping`() {
+        val source = projectFile("src/main/java/io/legado/app/service/BaseReadAloudService.kt")
+            .readText()
+        assertEquals(
+            2,
+            Regex("scheduleChapterLoadRetry\\(index, 1\\)").findAll(source).count()
+        )
+    }
+
+    @Test
+    fun `chapter end watchdog is armed after the whole queue`() {
+        val source = projectFile("src/main/java/io/legado/app/service/TTSReadAloudService.kt")
+            .readText()
+        assertTrue(source.contains("var lastQueuedIndex = -1"))
+        assertTrue(source.contains("armChapterEndWatchdog(sessionId, lastQueuedIndex"))
     }
 
     @Test
@@ -55,6 +80,38 @@ class ParagraphChapterEndPolicyTest {
         assertFalse(canAdvance(sameChapter = false))
         assertFalse(canAdvance(isRun = false))
         assertFalse(canAdvance(paragraphMode = false))
+    }
+
+    @Test
+    fun `handoff recovery only runs while still waiting for the same switch`() {
+        fun recover(
+            isRun: Boolean = true,
+            paused: Boolean = false,
+            paragraphMode: Boolean = true,
+            waiting: Boolean = true,
+            current: Int = 9,
+            expected: Int = 9,
+        ) = shouldRecoverParagraphChapterHandoff(
+            isRun, paused, paragraphMode, waiting, current, expected
+        )
+
+        assertTrue(recover())
+        assertFalse(recover(waiting = false))
+        assertFalse(recover(current = 10))
+        assertFalse(recover(paused = true))
+        assertFalse(recover(isRun = false))
+        assertFalse(recover(paragraphMode = false))
+    }
+
+    @Test
+    fun `chapter switch arms a service-side handoff fallback`() {
+        val source = projectFile(
+            "src/main/java/io/legado/app/service/BaseReadAloudService.kt"
+        ).readText()
+        val change = source.substringAfter("private fun changeParagraphChapter")
+            .substringBefore("private fun armParagraphChapterHandoffWatchdog")
+        assertTrue(change.contains("armParagraphChapterHandoffWatchdog(chapterIndex"))
+        assertTrue(change.contains("if (moved)"))
     }
 
     private fun projectFile(pathInApp: String): File {

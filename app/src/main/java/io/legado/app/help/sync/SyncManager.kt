@@ -94,7 +94,7 @@ object SyncManager {
         chapterTitle: String?,
         force: Boolean = false,
     ) {
-        if (!ServerSync.isConfigured) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured) return
         if (book.isPrivateShelf) return
         if (!force && isQuiet()) return
         val item = SyncProgress(
@@ -113,7 +113,7 @@ object SyncManager {
     }
 
     fun enqueueRecord(record: ReadRecord) {
-        if (!ServerSync.isConfigured || isQuiet()) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured || isQuiet()) return
         if (PrivateShelfBookCache.isPrivate(record.bookName, record.author)) return
         val item = SyncRecord(
             bookName = record.bookName,
@@ -145,7 +145,7 @@ object SyncManager {
     }
 
     fun enqueueBook(book: Book, removed: Boolean = false, force: Boolean = false) {
-        if (!ServerSync.isConfigured) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured) return
         if (!force && isQuiet()) return
         if (!removed && book.isPrivateShelf) return
         val updatedAt = System.currentTimeMillis()
@@ -164,7 +164,7 @@ object SyncManager {
     }
 
     fun enqueueGroup(group: BookGroup, removed: Boolean = false) {
-        if (!ServerSync.isConfigured || isQuiet()) return
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured || isQuiet()) return
         val item = group.toSyncGroup(removed, System.currentTimeMillis())
         synchronized(lock) {
             pendingGroups[group.groupName] = item
@@ -184,17 +184,30 @@ object SyncManager {
     fun bootstrap() = scope.launch {
         if (!ServerSync.isConfigured || isQuiet()) return@launch
         if (!firstPullDone) return@launch
-        PrivateShelfBookCache.ensureLoaded()
+        if (SyncPolicy.dataSyncEnabled) {
+            PrivateShelfBookCache.ensureLoaded()
+        }
         runCatching {
             val phone = BackupServer.phone
             if (LocalConfig.getString(BOOTSTRAP_PHONE_KEY, null) != phone) {
-                // 仅在该类数据服务器端尚无内容时整体采用本机数据, 避免旧备份覆盖新设备
-                appDb.bookDao.getUnsyncedBooks()
-                    .filterNot { it.isPrivateShelf }
-                    .forEach { book ->
-                    val item = toSyncBook(book, false, System.currentTimeMillis())
-                    synchronized(lock) {
-                        pendingBooks[bookKey(book.name, book.author)] = item
+                if (SyncPolicy.dataSyncEnabled) {
+                    // 仅在该类数据服务器端尚无内容时整体采用本机数据, 避免旧备份覆盖新设备
+                    appDb.bookDao.getUnsyncedBooks()
+                        .filterNot { it.isPrivateShelf }
+                        .forEach { book ->
+                        val item = toSyncBook(book, false, System.currentTimeMillis())
+                        synchronized(lock) {
+                            pendingBooks[bookKey(book.name, book.author)] = item
+                        }
+                    }
+                    if (!serverHadGroups) {
+                        appDb.bookGroupDao.all.filter { it.groupId > 0 }.forEach { group ->
+                            synchronized(lock) {
+                                pendingGroups[group.groupName] = group.toSyncGroup(
+                                    false, System.currentTimeMillis()
+                                )
+                            }
+                        }
                     }
                 }
                 SettingsSync.collectPending().forEach { item ->
@@ -203,15 +216,6 @@ object SyncManager {
                 if (!serverHadSettings) {
                     SettingsSync.collectAll().forEach { item ->
                         synchronized(lock) { pendingSettings[item.key] = item }
-                    }
-                }
-                if (!serverHadGroups) {
-                    appDb.bookGroupDao.all.filter { it.groupId > 0 }.forEach { group ->
-                        synchronized(lock) {
-                            pendingGroups[group.groupName] = group.toSyncGroup(
-                                false, System.currentTimeMillis()
-                            )
-                        }
                     }
                 }
                 LocalConfig.putString(BOOTSTRAP_PHONE_KEY, phone)
@@ -226,8 +230,30 @@ object SyncManager {
         }
     }
 
+    /** 朋友包开启“仅同步配置”后: 拉一次云端配置并把本机配置补推上去 */
+    fun activateConfigSync() = scope.launch {
+        if (!ServerSync.isConfigured) return@launch
+        runCatching {
+            LocalConfig.syncCursor = 0
+            pull(applyConfigs = true)
+            SettingsSync.collectAll().forEach { item ->
+                synchronized(lock) { pendingSettings[item.key] = item }
+            }
+            enqueueConfigFile("read_config", ReadBookConfig.configFilePath)
+            enqueueConfigFile("share_read_config", ReadBookConfig.shareConfigFilePath)
+            enqueueConfigFile("theme_config", ThemeConfig.configFilePath)
+            flush()
+        }.onFailure {
+            AppLog.put("开启配置同步失败\n${it.localizedMessage}", it)
+        }
+    }
+
     /** Flush queued writes, then pull once so restored records merge with the server. */
     fun syncNow(onFinished: (() -> Unit)? = null) {
+        if (!SyncPolicy.dataSyncEnabled) {
+            onFinished?.invoke()
+            return
+        }
         scope.launch {
             runCatching {
                 flush()
@@ -263,6 +289,16 @@ object SyncManager {
         scope.launch { flush() }
     }
 
+    private fun enqueueConfigFile(type: String, path: String?) {
+        if (path.isNullOrBlank()) return
+        val content = runCatching {
+            File(path).takeIf { it.isFile }?.readText()
+        }.getOrNull() ?: return
+        synchronized(lock) {
+            pendingConfigs[type] = SyncConfig(type, content, System.currentTimeMillis())
+        }
+    }
+
     private suspend fun flush() {
         val payload = synchronized(lock) {
             if (pendingProgress.isEmpty() && pendingRecords.isEmpty() &&
@@ -271,12 +307,13 @@ object SyncManager {
             ) {
                 return
             }
+            val dataSync = SyncPolicy.dataSyncEnabled
             val payload = SyncPayload(
-                progress = pendingProgress.values.toList(),
-                records = pendingRecords.values.toList(),
+                progress = if (dataSync) pendingProgress.values.toList() else emptyList(),
+                records = if (dataSync) pendingRecords.values.toList() else emptyList(),
                 configs = pendingConfigs.values.toList(),
-                books = pendingBooks.values.toList(),
-                groups = pendingGroups.values.toList(),
+                books = if (dataSync) pendingBooks.values.toList() else emptyList(),
+                groups = if (dataSync) pendingGroups.values.toList() else emptyList(),
                 settings = pendingSettings.values.toList(),
                 device = AppConst.androidId,
             )
@@ -333,7 +370,9 @@ object SyncManager {
      */
     suspend fun pull(applyConfigs: Boolean = false) {
         if (!ServerSync.isConfigured) return
-        PrivateShelfBookCache.ensureLoaded()
+        if (SyncPolicy.dataSyncEnabled) {
+            PrivateShelfBookCache.ensureLoaded()
+        }
         lastPullAt = System.currentTimeMillis()
         // 设备时钟异常时不要把游标带进未来
         val cursor = LocalConfig.syncCursor
@@ -364,20 +403,21 @@ object SyncManager {
         advanceCursor: Boolean
     ) = applyMutex.withLock {
         var cursor = LocalConfig.syncCursor
+        val dataSync = SyncPolicy.dataSyncEnabled
         payload.groups.forEach { item ->
-            runCatching { applyGroup(item) }
+            if (dataSync) runCatching { applyGroup(item) }
             cursor = maxOf(cursor, item.updatedAt)
         }
         payload.books.forEach { item ->
-            runCatching { applyBook(item) }
+            if (dataSync) runCatching { applyBook(item) }
             cursor = maxOf(cursor, item.updatedAt)
         }
         payload.progress.forEach { item ->
-            runCatching { applyProgress(item) }
+            if (dataSync) runCatching { applyProgress(item) }
             cursor = maxOf(cursor, item.updatedAt)
         }
         payload.records.forEach { item ->
-            runCatching { applyRecord(item) }
+            if (dataSync) runCatching { applyRecord(item) }
             cursor = maxOf(cursor, item.updatedAt)
         }
         payload.settings.forEach { cursor = maxOf(cursor, it.updatedAt) }

@@ -81,6 +81,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     private var menu: Menu? = null
     private val groupList: ArrayList<BookGroup> = arrayListOf()
     private var groupId: Long = -1
+    private val clearedBookUrls = hashSetOf<String>()
 
     private val exportDir = registerForActivityResult(HandleFileContract()) { result ->
         var isReadyPath = false
@@ -267,7 +268,7 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
             ).catch {
                 AppLog.put("缓存管理界面获取书籍列表失败\n${it.localizedMessage}", it)
             }.flowOn(IO).conflate().collect { books ->
-                adapter.setItems(books)
+                adapter.setItems(books.filterNot { it.bookUrl in clearedBookUrls })
                 viewModel.loadCacheFiles(books)
             }
         }
@@ -342,6 +343,24 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 configExportSection(path, position)
             } else {
                 startExport(path, position)
+            }
+        }
+    }
+
+    override fun clearCache(position: Int) {
+        adapter.getItem(position)?.let { book ->
+            alert(R.string.clear_cache) {
+                setMessage(R.string.clear_all_content)
+                okButton {
+                    viewModel.clearCache(book) {
+                        clearedBookUrls.add(book.bookUrl)
+                        adapter.setItems(
+                            adapter.getItems().filterNot { it.bookUrl == book.bookUrl }
+                        )
+                        toastOnUi(R.string.clear_cache_success)
+                    }
+                }
+                noButton { }
             }
         }
     }

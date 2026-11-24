@@ -30,7 +30,9 @@ object SettingsSync {
     private val excludedKeys = hashSetOf(
         // 账号/服务器/备份路径
         "backupPhone", "backupServerUrl", "backupUri", "backupContent", "restoreIgnore",
-        "lastBackup", "syncCursor",
+        "lastBackup", "syncCursor", "serverConfigSync",
+        // 本机凭据, 不上云
+        "deepseekApiKey",
         // 设备/路径/安装状态
         "fontFolder", "coverFont", "remoteFontsCache", "remoteFontsCacheTime",
         "remoteTtsEnginesCache", "remoteTtsEnginesCacheTime", "threadCount",
@@ -51,7 +53,7 @@ object SettingsSync {
         "color", "bgImage", "remoteFonts", "remoteTts", "bookSourceCatalog",
         "bookSourceExcluded", "bookSourceServer", "bookSourceSelection", "customSource",
         "bookSourceLast", "readAloudLast", "readAloudControlsX", "readAloudControlsY",
-        "readAloudBall",
+        "readAloudBall", "deepseek",
     )
 
     private val prefs: SharedPreferences
@@ -102,7 +104,7 @@ object SettingsSync {
 
     /** 本地设置变化时入队, 由 AppConfig 的 SharedPreferences 监听调用 */
     fun onLocalChanged(key: String) {
-        if (isApplying || !isSyncable(key)) return
+        if (!SyncPolicy.anySyncEnabled || isApplying || !isSyncable(key)) return
         val value = prefs.all[key] ?: return
         val encoded = encode(value) ?: return
         if (lastApplied[key] == encoded) {

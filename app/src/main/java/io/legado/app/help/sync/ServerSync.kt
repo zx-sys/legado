@@ -103,7 +103,9 @@ object ServerSync {
     private val client by lazy { okHttpClient }
 
     val isConfigured: Boolean
-        get() = BackupServer.serverUrlConfigured && BackupServer.phone.isNotEmpty()
+        get() = SyncPolicy.anySyncEnabled &&
+                BackupServer.serverUrlConfigured &&
+                BackupServer.phone.isNotEmpty()
 
     private fun requestBuilder(path: String): Request.Builder {
         val builder = Request.Builder().url("${BackupServer.apiBase}$path")

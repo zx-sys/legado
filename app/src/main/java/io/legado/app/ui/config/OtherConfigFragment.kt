@@ -16,6 +16,7 @@ import androidx.preference.EditTextPreference
 import androidx.preference.ListPreference
 import androidx.preference.Preference
 import com.jeremyliao.liveeventbus.LiveEventBus
+import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
@@ -26,7 +27,9 @@ import io.legado.app.help.DispatchersMonitor
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.normalizeJsSourceApiToken
 import io.legado.app.help.http.Cronet
+import io.legado.app.help.polish.LocalPolishRunner
 import io.legado.app.lib.dialogs.alert
+import io.legado.app.lib.prefs.SwitchPreference
 import io.legado.app.lib.prefs.fragment.PreferenceFragment
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.model.CheckSource
@@ -108,6 +111,35 @@ class OtherConfigFragment : PreferenceFragment(),
             }
         }
         upPreferenceSummary(PreferKey.jsSourceApiToken, AppConfig.jsSourceApiToken)
+        findPreference<EditTextPreference>(PreferKey.deepseekApiKey)?.let {
+            it.isVisible = !BuildConfig.ServerDataSync
+            it.isPersistent = false
+            it.text = AppConfig.deepseekApiKey
+            it.setOnPreferenceChangeListener { _, newValue ->
+                val key = newValue?.toString()?.trim()?.takeIf { value -> value.isNotEmpty() }
+                AppConfig.deepseekApiKey = key
+                upPreferenceSummary(PreferKey.deepseekApiKey, key)
+                if (!BuildConfig.ServerDataSync && key == null) {
+                    findPreference<SwitchPreference>(PreferKey.aiPolishEnabled)?.isChecked = false
+                }
+                true
+            }
+            it.setOnBindEditTextListener { editText ->
+                editText.inputType =
+                    InputType.TYPE_TEXT_VARIATION_PASSWORD or InputType.TYPE_CLASS_TEXT
+                editText.setSelection(editText.text.length)
+            }
+        }
+        upPreferenceSummary(PreferKey.deepseekApiKey, AppConfig.deepseekApiKey)
+        findPreference<SwitchPreference>(PreferKey.aiPolishEnabled)?.setOnPreferenceChangeListener {
+                _, newValue ->
+            if (!BuildConfig.ServerDataSync && newValue == true && !LocalPolishRunner.isReady()) {
+                toastOnUi(R.string.ai_polish_need_key)
+                false
+            } else {
+                true
+            }
+        }
         AppConfig.defaultBookTreeUri?.let {
             upPreferenceSummary(PreferKey.defaultBookTreeUri, it)
         }
@@ -351,6 +383,11 @@ class OtherConfigFragment : PreferenceFragment(),
                 getString(R.string.js_source_api_token_summary)
             } else {
                 getString(R.string.js_source_api_token_configured)
+            }
+            PreferKey.deepseekApiKey -> preference.summary = if (value.isNullOrBlank()) {
+                getString(R.string.deepseek_api_key_summary)
+            } else {
+                getString(R.string.deepseek_api_key_configured)
             }
             PreferKey.bitmapCacheSize -> preference.summary =
                 getString(R.string.bitmap_cache_size_summary, value)

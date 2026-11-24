@@ -88,6 +88,113 @@ class ReadAloudManualPagePolicyTest {
     }
 
     @Test
+    fun `stale visible page does not pull speech cursor back`() {
+        assertTrue(
+            ReadAloudManualPagePolicy.shouldIgnoreVisiblePageForReadAloud(
+                restartFromVisiblePage = false,
+                waitingForParagraphChapter = false,
+                isReadAloudRunning = true,
+                isReadAloudPaused = false,
+                readAloudChapterIndex = 9,
+                visibleChapterIndex = 10
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldIgnoreVisiblePageForReadAloud(
+                restartFromVisiblePage = false,
+                waitingForParagraphChapter = false,
+                isReadAloudRunning = true,
+                isReadAloudPaused = false,
+                readAloudChapterIndex = 10,
+                visibleChapterIndex = 10
+            )
+        )
+    }
+
+    @Test
+    fun `paragraph chapter-end handoff is not blocked by visible page guard`() {
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldIgnoreVisiblePageForReadAloud(
+                restartFromVisiblePage = false,
+                waitingForParagraphChapter = true,
+                isReadAloudRunning = true,
+                isReadAloudPaused = false,
+                readAloudChapterIndex = 9,
+                visibleChapterIndex = 10
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldIgnoreVisiblePageForReadAloud(
+                restartFromVisiblePage = true,
+                waitingForParagraphChapter = false,
+                isReadAloudRunning = true,
+                isReadAloudPaused = false,
+                readAloudChapterIndex = 9,
+                visibleChapterIndex = 10
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldIgnoreVisiblePageForReadAloud(
+                restartFromVisiblePage = false,
+                waitingForParagraphChapter = false,
+                isReadAloudRunning = true,
+                isReadAloudPaused = true,
+                readAloudChapterIndex = 9,
+                visibleChapterIndex = 10
+            )
+        )
+    }
+
+    @Test
+    fun `detached highlight only when speech is on the visible page`() {
+        assertTrue(
+            ReadAloudManualPagePolicy.shouldRenderDetachedHighlight(
+                followingReadAloudPosition = false,
+                speechChapterIndex = 9,
+                visibleChapterIndex = 9,
+                speechPageIndex = 3,
+                visiblePageIndex = 3
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldRenderDetachedHighlight(
+                followingReadAloudPosition = true,
+                speechChapterIndex = 9,
+                visibleChapterIndex = 9,
+                speechPageIndex = 3,
+                visiblePageIndex = 3
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldRenderDetachedHighlight(
+                followingReadAloudPosition = false,
+                speechChapterIndex = 9,
+                visibleChapterIndex = 10,
+                speechPageIndex = 3,
+                visiblePageIndex = 3
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldRenderDetachedHighlight(
+                followingReadAloudPosition = false,
+                speechChapterIndex = 9,
+                visibleChapterIndex = 9,
+                speechPageIndex = 3,
+                visiblePageIndex = 4
+            )
+        )
+        assertFalse(
+            ReadAloudManualPagePolicy.shouldRenderDetachedHighlight(
+                followingReadAloudPosition = false,
+                speechChapterIndex = -1,
+                visibleChapterIndex = 9,
+                speechPageIndex = 3,
+                visiblePageIndex = 3
+            )
+        )
+    }
+
+    @Test
     fun `chapter navigation restarts after the new chapter is ready`() {
         val readBook = readProjectFile("src/main/java/io/legado/app/model/ReadBook.kt")
         val activity = readProjectFile(

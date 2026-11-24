@@ -1189,10 +1189,16 @@ object ReadBook : CoroutineScope by MainScope() {
             if (updateReadAloud && ReadAloud.isReadingBook(it.chapter.bookUrl) && it.isCompleted) {
                 // 锁屏期间朗读游标可能已经推进到后面的章节；旧页面不能把它拉回来重读。
                 // 用户手动换章(restartReadAloudFromVisiblePage)是明确要移动朗读游标, 不拦。
-                if (!restartReadAloudFromVisiblePage &&
-                    BaseReadAloudService.isRun && !BaseReadAloudService.pause &&
-                    ReadAloud.readAloudChapterIndex >= 0 &&
-                    ReadAloud.readAloudChapterIndex != it.chapter.index
+                // 段落模式章末自动切章时服务在等阅读页启动新章节, 也不能拦。
+                if (ReadAloudManualPagePolicy.shouldIgnoreVisiblePageForReadAloud(
+                        restartFromVisiblePage = restartReadAloudFromVisiblePage,
+                        waitingForParagraphChapter =
+                            BaseReadAloudService.isWaitingForParagraphChapter,
+                        isReadAloudRunning = BaseReadAloudService.isRun,
+                        isReadAloudPaused = BaseReadAloudService.pause,
+                        readAloudChapterIndex = ReadAloud.readAloudChapterIndex,
+                        visibleChapterIndex = it.chapter.index,
+                    )
                 ) {
                     return@let
                 }

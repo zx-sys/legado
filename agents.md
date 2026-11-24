@@ -78,11 +78,18 @@
 - 升级配置结构时递增 `LocalConfig.configSyncVersion`，触发一次全量拉取。
 - WS 路由必须同时保留：`/ws/msg/`（管理端通知）和 `/ws/legado/sync/`（App 同步）。
 
+## 分享版构建（数据不上云）
+
+- `app` 的 `ServerDataSync` 由打包参数决定：默认 `false`，即朋友包——书架、进度、阅读记录、自定义书源、服务端备份全部只在本机，系统云备份也关闭。
+- 自己的包显式开启：`./gradlew assembleAppDebug -Pserver.sync=true`，或在 `local.properties` 写 `server.sync=true`；release 工作流已传 `true`。
+- 朋友包可在“设置 → 备份与恢复”手动开启“仅同步配置”（默认关）：只用手机号同步应用设置、阅读设置和主题，书架/进度/记录不上传。
+- 朋友包 AI 清洗默认关，需在“其他设置”填写自己的 DeepSeek API Key；Key 存在独立偏好文件，不参与备份、配置同步和系统云备份。
+
 ## 合并上游后的最低验证
 
 ```bash
-# 客户端
-./gradlew assembleAppDebug -Pbackup.server.url=http://118.31.79.174:9666
+# 客户端（自己的包）
+./gradlew assembleAppDebug -Pbackup.server.url=http://118.31.79.174:9666 -Pserver.sync=true
 # 后台
 cd backend && .venv/Scripts/python.exe manage.py check
 cd backend && .venv/Scripts/python.exe manage.py makemigrations --check --dry-run

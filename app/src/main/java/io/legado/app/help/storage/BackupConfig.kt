@@ -113,7 +113,9 @@ object BackupConfig {
         PreferKey.readAloudWakeLock,
         PreferKey.audioPlayWakeLock,
         PreferKey.backupPhone,
-        PreferKey.backupServerUrl
+        PreferKey.backupServerUrl,
+        PreferKey.serverConfigSync,
+        PreferKey.deepseekApiKey
     )
 
     //阅读配置

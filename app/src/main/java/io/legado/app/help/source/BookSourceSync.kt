@@ -9,6 +9,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.http.okHttpClient
+import io.legado.app.help.sync.SyncPolicy
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
@@ -78,7 +79,8 @@ object BookSourceSync {
 
     private fun requestBuilder(path: String): Request.Builder {
         val builder = Request.Builder().url("$apiBase$path")
-        if (phone.isNotEmpty()) {
+        // 关闭数据同步时不带手机号, 目录请求不关联账号
+        if (SyncPolicy.dataSyncEnabled && phone.isNotEmpty()) {
             builder.header("X-User-Phone", phone)
         }
         return builder
@@ -161,7 +163,7 @@ object BookSourceSync {
                 saveExcludedUrls(excludedUrls().filter { it !in catalogUrls })
                 AppConfig.bookSourceSelectionUpdatedAt = System.currentTimeMillis()
             }
-            val remoteSelection = if (restoreDeleted) null else {
+            val remoteSelection = if (!SyncPolicy.dataSyncEnabled || restoreDeleted) null else {
                 runCatching { fetchSelection() }.getOrElse {
                     AppLog.put("读取书源选择配置失败\n${it.localizedMessage}", it)
                     null
@@ -175,7 +177,8 @@ object BookSourceSync {
                 appliedRemote = true
             }
             val (added, updated) = mergeCatalog(catalog)
-            if (phone.isNotEmpty() && (restoreDeleted || (!appliedRemote &&
+            if (SyncPolicy.dataSyncEnabled && phone.isNotEmpty() &&
+                (restoreDeleted || (!appliedRemote &&
                         AppConfig.bookSourceSelectionUpdatedAt > (remoteSelection?.updatedAt ?: 0)))
             ) {
                 uploadSelection()
@@ -191,7 +194,7 @@ object BookSourceSync {
      * 用户切换开关或删除书源后调用，把当前选择上报到服务器。
      */
     fun uploadSelectionInBackground() {
-        if (!isConfigured) return
+        if (!SyncPolicy.dataSyncEnabled || !isConfigured) return
         // 没有手机号/离线时也记脏，等下次能同步时再上传
         AppConfig.bookSourceSelectionUpdatedAt = System.currentTimeMillis()
         if (phone.isEmpty()) return
@@ -214,7 +217,7 @@ object BookSourceSync {
     }
 
     private suspend fun fetchSelection(): BookSourceSelection? = withContext(Dispatchers.IO) {
-        if (phone.isEmpty()) return@withContext null
+        if (!SyncPolicy.dataSyncEnabled || phone.isEmpty()) return@withContext null
         val request = requestBuilder("/book-source-config").get().build()
         client.newCall(request).execute().use { response ->
             if (response.code == 404) return@withContext null
@@ -227,7 +230,7 @@ object BookSourceSync {
     }
 
     private suspend fun uploadSelection() = withContext(Dispatchers.IO) {
-        if (phone.isEmpty()) return@withContext
+        if (!SyncPolicy.dataSyncEnabled || phone.isEmpty()) return@withContext
         val disabled = appDb.bookSourceDao.all
             .filter { !it.enabled }
             .map { it.bookSourceUrl }

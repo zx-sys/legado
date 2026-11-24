@@ -3,11 +3,19 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <io.legado.app.lib.prefs.PreferenceCategory
+        android:key="backupAccountCategory"
         android:title="@string/backup_account"
         app:allowDividerAbove="false"
         app:allowDividerBelow="false"
         app:iconSpaceReserved="false"
         app:layout="@layout/view_preference_category">
+
+        <io.legado.app.lib.prefs.SwitchPreference
+            android:defaultValue="false"
+            android:key="serverConfigSync"
+            android:summary="@string/config_sync_summary"
+            android:title="@string/config_sync_title"
+            app:iconSpaceReserved="false" />
 
         <io.legado.app.lib.prefs.EditTextPreference
             android:key="backupServerUrl"

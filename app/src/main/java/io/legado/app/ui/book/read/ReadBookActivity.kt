@@ -74,6 +74,7 @@ import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.model.ReadAloud
+import io.legado.app.model.ReadAloudManualPagePolicy
 import io.legado.app.model.ReadBook
 import io.legado.app.model.ParagraphTtsStart
 import io.legado.app.model.ParagraphTtsStopped
@@ -168,6 +169,7 @@ import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.sysScreenOffTime
 import io.legado.app.utils.throttle
+import io.legado.app.utils.longToastOnUi
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.visible
 import kotlinx.coroutines.CancellationException
@@ -1040,6 +1042,20 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
     }
 
+    private fun confirmClearBookCache(book: Book) {
+        alert(
+            titleResource = R.string.clear_cache,
+            messageResource = R.string.clear_all_content
+        ) {
+            okButton {
+                autoPageStop()
+                viewModel.refreshContentAll(book)
+                longToastOnUi(R.string.clear_cache_success)
+            }
+            noButton { }
+        }
+    }
+
     private fun refreshAfterChapters() {
         resetReviewSummaryState()
         if (ReadBook.bookSource == null) {
@@ -1102,6 +1118,8 @@ class ReadBookActivity : BaseReadBookActivity(),
                 }
                 loadChapterList(it)
             }
+
+            R.id.menu_clear_cache -> ReadBook.book?.let { confirmClearBookCache(it) }
 
             R.id.menu_enable_replace -> changeReplaceRuleState()
             R.id.menu_manual_replace_rule -> showDialogFragment<ManualReplaceRulesDialog>()
@@ -1949,6 +1967,42 @@ class ReadBookActivity : BaseReadBookActivity(),
         ReadAloud.restoreReadAloudFollow()
         speakingPage.upPageAloudSpan(chapterStart - chapter.getReadLength(speakingPage.index))
         binding.readView.upContent(resetPageOffset = false)
+    }
+
+    /**
+     * 手动脱离跟随后, 朗读位置仍在当前可见页时只画高亮;
+     * 不移动阅读位置, 也不恢复跟随。
+     */
+    private fun renderDetachedAloudHighlight(chapterStart: Int) {
+        val textChapter = ReadBook.curTextChapter ?: return
+        val visiblePage = binding.readView.curPage.textPage
+        if (!ReadAloudManualPagePolicy.shouldRenderDetachedHighlight(
+                followingReadAloudPosition = ReadAloud.followReadAloudPosition,
+                speechChapterIndex = ReadAloud.readAloudChapterIndex,
+                visibleChapterIndex = textChapter.chapter.index,
+                speechPageIndex = textChapter.getPageIndexByCharIndex(chapterStart),
+                visiblePageIndex = visiblePage.index,
+            )
+        ) {
+            clearVisibleAloudSpan()
+            return
+        }
+        val page = textChapter.getPage(visiblePage.index) ?: return
+        if (page !== visiblePage) {
+            clearVisibleAloudSpan()
+            return
+        }
+        page.upPageAloudSpan(chapterStart - textChapter.getReadLength(page.index))
+        binding.readView.curPage.invalidateContentView()
+        binding.readView.submitRenderTask()
+    }
+
+    private fun clearVisibleAloudSpan() {
+        val page = binding.readView.curPage.textPage
+        if (!page.hasReadAloudSpan) return
+        page.removePageAloudSpan()
+        binding.readView.curPage.invalidateContentView()
+        binding.readView.submitRenderTask()
     }
 
     /**
@@ -3479,6 +3533,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 return@observeEventSticky
             }
             if (!ReadAloud.followReadAloudPosition) {
+                renderDetachedAloudHighlight(chapterStart)
                 scheduleAloudFollowCheck()
                 return@observeEventSticky
             }

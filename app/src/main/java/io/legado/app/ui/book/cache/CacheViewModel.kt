@@ -8,7 +8,11 @@ import io.legado.app.data.entities.Book
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.model.CacheBook
+import io.legado.app.model.ReadBook
+import io.legado.app.model.ReadManga
 import io.legado.app.utils.sendValue
+import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.ensureActive
 import kotlin.collections.set
 
@@ -40,6 +44,26 @@ class CacheViewModel(application: Application) : BaseViewModel(application) {
                 }
                 ensureActive()
             }
+        }
+    }
+
+    fun clearCache(book: Book, onSuccess: (Book) -> Unit) {
+        execute {
+            CacheBook.cacheBookMap[book.bookUrl]?.stop()
+            BookHelp.clearCache(book)
+            if (ReadBook.book?.bookUrl == book.bookUrl) {
+                ReadBook.clearTextChapter()
+            }
+            if (ReadManga.book?.bookUrl == book.bookUrl) {
+                ReadManga.clearMangaChapter()
+            }
+            appDb.bookChapterDao.getChapterCount(book.bookUrl)
+        }.onSuccess { chapterCount ->
+            book.totalChapterNum = chapterCount
+            cacheChapters[book.bookUrl] = hashSetOf()
+            onSuccess.invoke(book)
+        }.onError {
+            context.toastOnUi("清理缓存出错\n${it.localizedMessage}")
         }
     }
 

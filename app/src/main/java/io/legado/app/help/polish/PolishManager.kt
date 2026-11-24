@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import com.jeremyliao.liveeventbus.LiveEventBus
+import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.constant.EventBus
 import io.legado.app.data.appDb
@@ -32,12 +33,18 @@ object PolishManager {
     private val noticed = Collections.synchronizedSet(mutableSetOf<String>())
 
     fun init() {
+        if (!BuildConfig.ServerDataSync && AppConfig.aiPolishEnabled &&
+            !LocalPolishRunner.isReady()
+        ) {
+            AppConfig.aiPolishEnabled = false
+        }
         LiveEventBus.get<Pair<Book, BookChapter>>(EventBus.SAVE_CONTENT)
             .observeForever { (book, _) -> scheduleBook(book) }
     }
 
     fun scheduleBook(book: Book) {
         if (!AppConfig.aiPolishEnabled) return
+        if (!BuildConfig.ServerDataSync && !LocalPolishRunner.isReady()) return
         pending[book.bookUrl]?.cancel()
         pending[book.bookUrl] = scope.launch {
             delay(30_000)
@@ -56,7 +63,12 @@ object PolishManager {
         BackupServer.serverUrlConfigured && BackupServer.phone.isNotEmpty()
 
     suspend fun uploadBook(book: Book) {
-        if (!AppConfig.aiPolishEnabled || !serverReady() || !canUseNetwork()) return
+        if (!AppConfig.aiPolishEnabled || !canUseNetwork()) return
+        if (!BuildConfig.ServerDataSync) {
+            LocalPolishRunner.process(book)
+            return
+        }
+        if (!serverReady()) return
         val profile = appDb.aiSourceProfileDao.get(book.origin)
         val chapters = PolishUploader.collect(book)
         if (chapters.isEmpty()) return
@@ -74,7 +86,12 @@ object PolishManager {
     }
 
     suspend fun syncBook(book: Book) {
-        if (!AppConfig.aiPolishEnabled || !serverReady() || !canUseNetwork()) return
+        if (!AppConfig.aiPolishEnabled || !canUseNetwork()) return
+        if (!BuildConfig.ServerDataSync) {
+            LocalPolishRunner.applyExisting(book)
+            return
+        }
+        if (!serverReady()) return
 
         if (book.origin.isNotEmpty()) {
             val profile = PolishApi.sourceProfile(book.origin)

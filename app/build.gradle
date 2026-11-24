@@ -47,6 +47,9 @@ if (localPropertiesFile.exists()) {
 }
 def backupServerUrl = project.findProperty("backup.server.url")
         ?: localProperties.getProperty("backup.server.url", "")
+// 服务器数据同步开关: 默认关闭(朋友包纯本地), 个人包用 -Pserver.sync=true 或 local.properties 打开
+def serverDataSync = (project.findProperty("server.sync")
+        ?: localProperties.getProperty("server.sync", "false")).toString().toBoolean()
 
 android {
     compileSdk = compile_sdk_version
@@ -78,6 +81,8 @@ android {
         versionCode = versionCodeValue
         versionName version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // 关闭数据同步的包同时关闭系统云备份, 保证书库/Key/润色结果只在本机
+        manifestPlaceholders.put("allowBackup", serverDataSync.toString())
         // Keep app translations while dropping unused transitive dependency locales.
         resourceConfigurations += [
                 'en',
@@ -102,6 +107,7 @@ android {
         buildConfigField "String", "Cronet_Version", "\"$CronetVersion\""
         buildConfigField "String", "Cronet_Main_Version", "\"$CronetMainVersion\""
         buildConfigField "String", "BackupServerUrl", "\"${backupServerUrl}\""
+        buildConfigField "boolean", "ServerDataSync", "${serverDataSync}"
 
         javaCompileOptions {
             annotationProcessorOptions {
