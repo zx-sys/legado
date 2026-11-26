@@ -1945,6 +1945,8 @@
     <string name="read_aloud_drag_seek">Listening controls reader gestures</string>
     <string name="read_aloud_drag_seek_summary">Vertical swipes leave follow mode and scroll or turn pages freely. Enable the swipe-page option to turn pages horizontally. Tap the text for the listening menu.</string>
 
+    <string name="read_aloud_float_ball">Read-aloud floating ball</string>
+    <string name="read_aloud_float_ball_summary">Show the in-app control ball while reading aloud</string>
     <string name="config_sync_category">Settings sync</string>
     <string name="config_sync_title">Sync settings only</string>
     <string name="config_sync_summary">Off by default. When enabled, only app settings, reading settings and theme are synced; bookshelf, progress and reading records stay on this device.</string>

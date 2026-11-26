@@ -263,9 +263,28 @@ fun Book.sync(currentBook: Book, toc: List<BookChapter>) {
 }
 
 fun Book.update() {
+    val previous = appDb.bookDao.getBook(bookUrl)
+    if (previous != null) normalizeIdentityFrom(previous)
+    val identityChanged = previous != null && identityDiffersFrom(previous)
     appDb.bookDao.updatePreservingCustomCoverUrl(this)
+    if (previous != null && identityChanged) {
+        // 书名/作者是同步身份; 改身份时把旧身份从服务端墓碑化, 否则会留下两条同名书。
+        appDb.bookHighlightDao.updateBookMetadata(bookUrl, name, author)
+        appDb.bookmarkDao.renameBook(previous.name, previous.author, name, author)
+        appDb.readRecordDao.renameBook(previous.name, previous.author, name, author)
+        SyncManager.enqueueBook(previous, removed = true)
+    }
     SyncManager.enqueueBook(this)
 }
+
+/** 书籍信息刷新不能把已知的书名/作者刷成空。 */
+internal fun Book.normalizeIdentityFrom(previous: Book) {
+    if (name.isBlank()) name = previous.name
+    if (author.isBlank()) author = previous.author
+}
+
+internal fun Book.identityDiffersFrom(previous: Book): Boolean =
+    name != previous.name || author != previous.author
 
 fun Book.savePreservingCustomCoverUrl() {
     if (appDb.bookDao.has(bookUrl)) {

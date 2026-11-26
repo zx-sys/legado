@@ -3,6 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <io.legado.app.lib.prefs.PreferenceCategory
+        android:key="aiPolishCategory"
         android:title="@string/ai_polish"
         app:iconSpaceReserved="false">
 
@@ -35,7 +36,7 @@
     </io.legado.app.lib.prefs.PreferenceCategory>
 
     <io.legado.app.lib.prefs.NameListPreference
-        android:defaultValue="auto"
+        android:defaultValue="zh"
         android:key="language"
         android:title="@string/language"
         app:entries="@array/language"

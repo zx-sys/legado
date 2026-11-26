@@ -7,6 +7,7 @@ import androidx.core.content.edit
 import com.google.gson.JsonParser
 import io.legado.app.constant.EventBus
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.polish.PolishBuildPolicy
 import io.legado.app.utils.GSON
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.fromJsonObject
@@ -98,6 +99,7 @@ object SettingsSync {
     fun collectPending(): List<SyncSetting> = pending.values.toList()
 
     fun isSyncable(key: String): Boolean {
+        if (!PolishBuildPolicy.available && key.startsWith("aiPolish")) return false
         if (key in excludedKeys) return false
         return excludedPrefixes.none { key.startsWith(it) }
     }

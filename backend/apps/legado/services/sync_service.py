@@ -94,6 +94,26 @@ def normalize_records(rows) -> list[dict]:
     return result
 
 
+def normalize_record_removals(rows) -> list[dict]:
+    result = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("bookName") or "").strip()[:255]
+        if not name:
+            continue
+        result.append(
+            {
+                "bookName": name,
+                "author": str(row.get("author") or "").strip()[:255],
+                "updatedAt": min(_int(row.get("updatedAt")) or now_ms(), now_ms()),
+            }
+        )
+        if len(result) >= MAX_ITEMS_PER_KIND:
+            break
+    return result
+
+
 def normalize_configs(rows) -> list[dict]:
     result = []
     for row in rows or []:
@@ -225,7 +245,7 @@ def _dirty_add(client, kind: str, phone: str, field: str, entry: dict) -> None:
 # ---------------------------------------------------------------- 读取
 
 
-def _read_redis(phone: str, since: int) -> dict | None:
+def _read_redis(phone: str, since: int, include_record_removals: bool = False) -> dict | None:
     client = hot_data.redis_client()
     if client is None:
         return None
@@ -244,12 +264,22 @@ def _read_redis(phone: str, since: int) -> dict | None:
             row for row in (json.loads(item) for item in progress_rows)
             if row.get("updatedAt", 0) > since
         ]
+        all_records = [json.loads(item) for item in record_rows]
         records = [
-            row for row in (json.loads(item) for item in record_rows)
-            if row.get("updatedAt", 0) > since
+            row for row in all_records
+            if not row.get("removed") and row.get("updatedAt", 0) > since
         ]
+        record_removals = [
+            row for row in all_records
+            if row.get("removed") and row.get("updatedAt", 0) > since
+        ] if include_record_removals else []
         configs = [row for row in configs if row.get("updatedAt", 0) > since]
-        return {"progress": progress, "records": records, "configs": configs}
+        return {
+            "progress": progress,
+            "records": records,
+            "recordRemovals": record_removals,
+            "configs": configs,
+        }
     except Exception as exc:
         logger.warning("read sync from redis failed: %s", exc)
         return None
@@ -380,13 +410,14 @@ def _read_mysql(user, since: int) -> dict:
     return payload
 
 
-def get_sync(user, since: int = 0) -> dict:
+def get_sync(user, since: int = 0, include_record_removals: bool = False) -> dict:
     since = max(0, int(since or 0))
-    payload = _read_redis(user.phone, since)
+    payload = _read_redis(user.phone, since, include_record_removals)
     if payload is None:
         payload = _read_mysql(user, since)
     else:
         payload.update(_read_books_groups_settings(user, since))
+    payload.setdefault("recordRemovals", [])
     payload["serverTime"] = now_ms()
     return payload
 
@@ -398,7 +429,7 @@ def _merge_redis(phone: str, payload: dict) -> dict:
     client = hot_data.redis_client()
     if client is None:
         return None
-    server_newer = {"progress": [], "records": [], "configs": []}
+    server_newer = {"progress": [], "records": [], "recordRemovals": [], "configs": []}
     for row in payload["progress"]:
         key = hot_data.progress_key(phone)
         stored_raw = client.hget(key, row["bookUrl"])
@@ -415,13 +446,37 @@ def _merge_redis(phone: str, payload: dict) -> dict:
         stored_raw = client.hget(key, field)
         stored = json.loads(stored_raw) if stored_raw else None
         if stored and stored.get("updatedAt", 0) > row["updatedAt"]:
-            server_newer["records"].append(stored)
+            if not stored.get("removed"):
+                server_newer["records"].append(stored)
             continue
-        if stored:
+        if stored and not stored.get("removed"):
             row["readTime"] = max(row["readTime"], stored.get("readTime", 0))
         client.hset(key, field, json.dumps(row, ensure_ascii=False))
         client.expire(key, hot_data.PROGRESS_TTL)
         _dirty_add(client, "records", phone, field, row)
+    for row in payload.get("recordRemovals", []):
+        key = hot_data.records_key(phone)
+        field = _record_field(row)
+        stored_raw = client.hget(key, field)
+        stored = json.loads(stored_raw) if stored_raw else None
+        if stored and stored.get("updatedAt", 0) > row["updatedAt"]:
+            if not stored.get("removed"):
+                server_newer["records"].append(stored)
+            continue
+        tombstone = {
+            "bookName": row["bookName"],
+            "author": row["author"],
+            "readTime": 0,
+            "lastRead": 0,
+            "lastChapterIndex": -1,
+            "lastChapterPos": 0,
+            "lastChapterTitle": "",
+            "removed": True,
+            "updatedAt": row["updatedAt"],
+        }
+        client.hset(key, field, json.dumps(tombstone, ensure_ascii=False))
+        client.expire(key, hot_data.PROGRESS_TTL)
+        _dirty_add(client, "records", phone, field, tombstone)
     for row in payload["configs"]:
         key = hot_data.config_key(phone, row["type"])
         stored_raw = client.get(key)
@@ -441,7 +496,7 @@ def _merge_redis(phone: str, payload: dict) -> dict:
 
 
 def _merge_mysql(user, payload: dict) -> dict:
-    server_newer = {"progress": [], "records": [], "configs": []}
+    server_newer = {"progress": [], "records": [], "recordRemovals": [], "configs": []}
     for row in payload["progress"]:
         book = _book_for(user, row["name"], row["author"], row["bookUrl"])
         if int(book.dur_chapter_time or 0) > row["updatedAt"]:
@@ -475,6 +530,27 @@ def _merge_mysql(user, payload: dict) -> dict:
             )
             continue
         _apply_book_record(book, row)
+    for row in payload.get("recordRemovals", []):
+        book = LegadoBook.objects.filter(
+            user=user, name=row["bookName"], author=row["author"]
+        ).first()
+        if book is None:
+            continue
+        if int(book.last_read_time or 0) > row["updatedAt"]:
+            server_newer["records"].append(
+                {
+                    "bookName": book.name,
+                    "author": book.author,
+                    "readTime": int(book.read_time or 0),
+                    "lastRead": int(book.last_read_time or 0),
+                    "lastChapterIndex": book.last_chapter_index,
+                    "lastChapterPos": book.last_chapter_pos,
+                    "lastChapterTitle": book.last_chapter_title,
+                    "updatedAt": int(book.last_read_time or 0),
+                }
+            )
+            continue
+        _clear_book_record(book)
     for row in payload["configs"]:
         config = UserConfig.objects.filter(
             user=user, config_type=row["type"]
@@ -613,6 +689,7 @@ def apply_sync(user, payload: dict) -> dict:
     payload = {
         "progress": normalize_progress(payload.get("progress")),
         "records": normalize_records(payload.get("records")),
+        "recordRemovals": normalize_record_removals(payload.get("recordRemovals")),
         "configs": normalize_configs(payload.get("configs")),
         "books": normalize_books(payload.get("books")),
         "groups": normalize_groups(payload.get("groups")),
@@ -669,6 +746,20 @@ def _apply_book_record(book: LegadoBook, row: dict) -> None:
         update_fields=[
             "read_time", "last_read_time", "last_chapter_index",
             "last_chapter_pos", "last_chapter_title", "sync_updated_at", "update_time",
+        ]
+    )
+
+
+def _clear_book_record(book: LegadoBook) -> None:
+    book.read_time = 0
+    book.last_read_time = 0
+    book.last_chapter_index = -1
+    book.last_chapter_pos = 0
+    book.last_chapter_title = ""
+    book.save(
+        update_fields=[
+            "read_time", "last_read_time", "last_chapter_index",
+            "last_chapter_pos", "last_chapter_title", "update_time",
         ]
     )
 
@@ -741,13 +832,23 @@ def _flush_progress(client) -> int:
 
 
 def _flush_records(client) -> int:
-    from apps.legado.models import LegadoUser
+    from apps.legado.models import LegadoBook, LegadoUser
 
     count = 0
     for phone, _, entry in _pop_dirty(client, "records"):
         try:
             user = LegadoUser.objects.filter(phone=phone).first()
             if user is None:
+                continue
+            if entry.get("removed"):
+                book = LegadoBook.objects.filter(
+                    user=user, name=entry.get("bookName", ""), author=entry.get("author", "")
+                ).first()
+                if book is None:
+                    continue
+                if int(book.last_read_time or 0) <= entry.get("updatedAt", 0):
+                    _clear_book_record(book)
+                    count += 1
                 continue
             book = _book_for(user, entry.get("bookName", ""), entry.get("author", ""), "")
             if int(book.last_read_time or 0) <= entry.get("updatedAt", 0):

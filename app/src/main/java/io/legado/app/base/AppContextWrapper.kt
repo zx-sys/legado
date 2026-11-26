@@ -13,6 +13,18 @@ import java.util.*
 
 
 @Suppress("unused")
+/**
+ * 未设置语言时默认简体中文; 只有显式选择“跟随系统”才使用系统语言。
+ */
+internal fun resolveAppLocale(setting: String?, systemLocale: Locale): Locale =
+    when (setting) {
+        "zh" -> Locale.SIMPLIFIED_CHINESE
+        "tw" -> Locale.TRADITIONAL_CHINESE
+        "en" -> Locale.ENGLISH
+        "auto" -> systemLocale
+        else -> Locale.SIMPLIFIED_CHINESE
+    }
+
 object AppContextWrapper {
 
     @SuppressLint("ObsoleteSdkInt")
@@ -73,14 +85,8 @@ object AppContextWrapper {
     /**
      * 当前设置语言
      */
-    private fun getSetLocale(context: Context): Locale {
-        return when (context.getPrefString(PreferKey.language)) {
-            "zh" -> Locale.SIMPLIFIED_CHINESE
-            "tw" -> Locale.TRADITIONAL_CHINESE
-            "en" -> Locale.ENGLISH
-            else -> getSystemLocale()
-        }
-    }
+    private fun getSetLocale(context: Context): Locale =
+        resolveAppLocale(context.getPrefString(PreferKey.language), getSystemLocale())
 
     /**
      * 判断App语言和设置语言是否相同

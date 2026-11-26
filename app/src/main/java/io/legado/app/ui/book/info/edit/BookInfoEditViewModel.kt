@@ -64,6 +64,10 @@ class BookInfoEditViewModel(application: Application) : BaseViewModel(applicatio
                 }
             }
             this@BookInfoEditViewModel.book = book
+            if (metadataChanged) {
+                // 旧 (书名,作者) 是服务端身份, 不清墓碑会和新身份并存成两条书。
+                SyncManager.enqueueBook(oldBook, removed = true)
+            }
             SyncManager.enqueueBook(book)
         }.onSuccess {
             saved.value = true

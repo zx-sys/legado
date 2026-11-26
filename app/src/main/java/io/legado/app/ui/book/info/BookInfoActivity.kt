@@ -54,6 +54,7 @@ import io.legado.app.help.book.readProgress
 import io.legado.app.help.book.removeType
 import io.legado.app.help.book.update
 import io.legado.app.help.privacy.PrivateShelfActions
+import io.legado.app.help.polish.PolishBuildPolicy
 import io.legado.app.help.polish.PolishManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
@@ -283,6 +284,7 @@ class BookInfoActivity :
 
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.book_info, menu)
+        menu.findItem(R.id.menu_ai_polish)?.isVisible = PolishBuildPolicy.available
         editMenuItem = menu.findItem(R.id.menu_edit)
         menuCustomBtn = menu.findItem(R.id.menu_custom_btn).also {
             it.isVisible = viewModel.hasCustomBtn
@@ -447,8 +449,8 @@ class BookInfoActivity :
                 if (!item.isChecked) longToastOnUi(R.string.need_more_time_load_content)
             }
 
-            R.id.menu_ai_polish -> viewModel.getBook()?.let {
-                AiPolishDialog.show(this, it)
+            R.id.menu_ai_polish -> if (PolishBuildPolicy.available) {
+                viewModel.getBook()?.let { AiPolishDialog.show(this, it) }
             }
 
             R.id.menu_delete_alert -> LocalConfig.bookInfoDeleteAlert = !item.isChecked

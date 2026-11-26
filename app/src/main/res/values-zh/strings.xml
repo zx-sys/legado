@@ -1820,6 +1820,8 @@
     <string name="read_aloud_drag_seek">听书时接管正文手势</string>
     <string name="read_aloud_drag_seek_summary">听书时上下滑动会退出跟随，直接滚动或翻页自由查看；开启“滑动听书时左右翻页”后，左右滑动可手动翻页；点击正文打开听书菜单</string>
 
+    <string name="read_aloud_float_ball">朗读悬浮球</string>
+    <string name="read_aloud_float_ball_summary">朗读时在 App 内显示控制悬浮球</string>
     <string name="config_sync_category">配置同步</string>
     <string name="config_sync_title">仅同步配置到服务器</string>
     <string name="config_sync_summary">默认关闭。开启后只同步应用设置、阅读设置和主题，书架、进度和阅读记录只保存在本机。</string>

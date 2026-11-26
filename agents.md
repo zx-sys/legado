@@ -84,7 +84,20 @@
 - `app` 的 `ServerDataSync` 由打包参数决定：默认 `false`，即朋友包——书架、进度、阅读记录、自定义书源、服务端备份全部只在本机，系统云备份也关闭。
 - 自己的包显式开启：`./gradlew assembleAppDebug -Pserver.sync=true`，或在 `local.properties` 写 `server.sync=true`；release 工作流已传 `true`。
 - 朋友包可在“设置 → 备份与恢复”手动开启“仅同步配置”（默认关）：只用手机号同步应用设置、阅读设置和主题，书架/进度/记录不上传。
-- 朋友包 AI 清洗默认关，需在“其他设置”填写自己的 DeepSeek API Key；Key 存在独立偏好文件，不参与备份、配置同步和系统云备份。
+- 朋友包 AI 清洗由打包参数控制：默认关闭；传 `-PaiPolish=true`（或 `local.properties` 写 `aiPolish=true`）才显示入口和 Key 字段，Key 只存在独立偏好文件，不参与备份、配置同步和系统云备份。自用包继续走服务端清洗。
+- 朗读悬浮球在“朗读设置”里由用户开关，默认开启；关闭后立即卸载悬浮球，不再使用打包参数。
+
+### 打包与产物位置（固定）
+
+- 默认只打自用包；朋友包仅在明确要求时再打，不要顺手一起出。
+- 自用包命令（arm-only + 118 后端 + 开启数据同步）：
+  ```bash
+  ./gradlew assembleAppDebug \
+    -Pbackup.server.url=http://118.31.79.174:9666 \
+    -Pserver.sync=true -ParmOnly=true
+  ```
+- 产物统一复制到仓库根目录 **`deploy/legado-app-own.apk`**（固定路径、每次覆盖；`deploy/` 已 gitignore，且 `gradlew clean` 不会清掉）。
+- 交付前必查：生成的 `app/build/generated/source/buildConfig/app/debug/io/legado/app/BuildConfig.java` 里 `BackupServerUrl` 含 `118.31.79.174` 且 `ServerDataSync = true`；APK 只含 `arm64-v8a`/`armeabi-v7a`。`-P` 没生效时会静默回落到 `local.properties` 的 `10.0.2.2`，真机上同步会超时。
 
 ## 合并上游后的最低验证
 

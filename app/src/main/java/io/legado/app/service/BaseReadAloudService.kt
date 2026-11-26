@@ -591,6 +591,9 @@ abstract class BaseReadAloudService : BaseService(),
             toastOnUi("朗读定时 ${AppConfig.ttsTimer} 分钟")
         }
         loadCover(sessionBook() ?: ReadBook.book)
+        // 新服务实例必须主动广播初始状态; 旧实例被替换时不会发 STOP,
+        // 否则悬浮球会停留在上一个实例的播放/暂停状态。
+        postEvent(EventBus.ALOUD_STATE, Status.PLAY)
     }
 
     private fun loadCover(book: Book?, notify: Boolean = true) {

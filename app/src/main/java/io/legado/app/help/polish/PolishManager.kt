@@ -33,7 +33,9 @@ object PolishManager {
     private val noticed = Collections.synchronizedSet(mutableSetOf<String>())
 
     fun init() {
-        if (!BuildConfig.ServerDataSync && AppConfig.aiPolishEnabled &&
+        if (!PolishBuildPolicy.available) {
+            AppConfig.aiPolishEnabled = false
+        } else if (!BuildConfig.ServerDataSync && AppConfig.aiPolishEnabled &&
             !LocalPolishRunner.isReady()
         ) {
             AppConfig.aiPolishEnabled = false
@@ -43,7 +45,7 @@ object PolishManager {
     }
 
     fun scheduleBook(book: Book) {
-        if (!AppConfig.aiPolishEnabled) return
+        if (!PolishBuildPolicy.available || !AppConfig.aiPolishEnabled) return
         if (!BuildConfig.ServerDataSync && !LocalPolishRunner.isReady()) return
         pending[book.bookUrl]?.cancel()
         pending[book.bookUrl] = scope.launch {
@@ -63,7 +65,7 @@ object PolishManager {
         BackupServer.serverUrlConfigured && BackupServer.phone.isNotEmpty()
 
     suspend fun uploadBook(book: Book) {
-        if (!AppConfig.aiPolishEnabled || !canUseNetwork()) return
+        if (!PolishBuildPolicy.available || !AppConfig.aiPolishEnabled || !canUseNetwork()) return
         if (!BuildConfig.ServerDataSync) {
             LocalPolishRunner.process(book)
             return
@@ -86,7 +88,7 @@ object PolishManager {
     }
 
     suspend fun syncBook(book: Book) {
-        if (!AppConfig.aiPolishEnabled || !canUseNetwork()) return
+        if (!PolishBuildPolicy.available || !AppConfig.aiPolishEnabled || !canUseNetwork()) return
         if (!BuildConfig.ServerDataSync) {
             LocalPolishRunner.applyExisting(book)
             return
@@ -166,6 +168,7 @@ object PolishManager {
     }
 
     fun noticeIfContaminated(book: Book, chapterIndex: Int, show: (String) -> Unit) {
+        if (!PolishBuildPolicy.available) return
         val patch = appDb.aiChapterPatchDao.getChapter(book.bookUrl, chapterIndex) ?: return
         if (patch.status != "contaminated" && patch.status != "suspicious") return
         val key = "${book.bookUrl}:$chapterIndex"

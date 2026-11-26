@@ -10,6 +10,9 @@ build/
 .externalNativeBuild
 /release
 /tmp
+/temp/
+/deploy/
+*.apk
 node_modules/
 /app/app
 /app/google

@@ -485,7 +485,12 @@ class SyncView(NoAuthAPIView):
             since = int(request.query_params.get("since") or 0)
         except (TypeError, ValueError):
             since = 0
-        return Response(sync_service.get_sync(user, since))
+        caps = request.headers.get("X-Legado-Caps", "")
+        return Response(
+            sync_service.get_sync(
+                user, since, include_record_removals="record-removal" in caps
+            )
+        )
 
     def post(self, request):
         user, error = get_user(request)
@@ -498,5 +503,7 @@ class SyncView(NoAuthAPIView):
             for kind in ("books", "groups", "settings", "progress", "records", "configs")
             if data.get(kind)
         ]
+        if data.get("recordRemovals"):
+            kinds.append("records")
         realtime.notify_sync(user.phone, kinds, str(data.get("device") or ""))
         return Response(result)

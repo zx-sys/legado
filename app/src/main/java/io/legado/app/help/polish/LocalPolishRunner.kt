@@ -21,9 +21,11 @@ object LocalPolishRunner {
 
     private val running = ConcurrentHashMap.newKeySet<String>()
 
-    fun isReady(): Boolean = !AppConfig.deepseekApiKey.isNullOrBlank()
+    fun isReady(): Boolean =
+        PolishBuildPolicy.available && !AppConfig.deepseekApiKey.isNullOrBlank()
 
     suspend fun process(book: Book) {
+        if (!PolishBuildPolicy.available) return
         val apiKey = AppConfig.deepseekApiKey ?: return
         if (!AppConfig.aiPolishEnabled || !PolishManager.canUseNetwork()) return
         if (!running.add(book.bookUrl)) return

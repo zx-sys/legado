@@ -35,6 +35,7 @@ import io.legado.app.help.privacy.PrivateShelfBookCache
 import io.legado.app.help.privacy.withoutPrivateShelf
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
+import io.legado.app.help.sync.SyncManager
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.accentColor
@@ -296,6 +297,9 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
             yesButton {
                 lifecycleScope.launch {
                     withContext(IO) {
+                        appDb.readRecordDao.all.forEach {
+                            SyncManager.enqueueRecordRemoval(it.bookName, it.author)
+                        }
                         appDb.readRecordDao.clear()
                         ReadRecordCoverCache.prune()
                     }
@@ -398,6 +402,9 @@ class ReadRecordActivity : BaseActivity<ActivityReadRecordBinding>() {
                 yesButton {
                     lifecycleScope.launch {
                         withContext(IO) {
+                            appDb.readRecordDao.getRecords(item.bookName, item.author).forEach {
+                                SyncManager.enqueueRecordRemoval(it.bookName, it.author)
+                            }
                             appDb.readRecordDao.deleteByBook(item.bookName, item.author)
                             ReadRecordCoverCache.prune()
                         }

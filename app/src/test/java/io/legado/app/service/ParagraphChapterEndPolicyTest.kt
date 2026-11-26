@@ -45,6 +45,86 @@ class ParagraphChapterEndPolicyTest {
     }
 
     @Test
+    fun `stalled engine force advances only after hard idle and progress`() {
+        assertTrue(
+            shouldForceAdvanceStalledTts(
+                idleMs = CHAPTER_END_HARD_IDLE_MS,
+                hardIdleMs = CHAPTER_END_HARD_IDLE_MS,
+                nowSpeak = 2,
+                chapterLoadPending = false,
+                sameChapter = true,
+            )
+        )
+        assertTrue(
+            shouldForceAdvanceStalledTts(
+                idleMs = 90_000L,
+                hardIdleMs = CHAPTER_END_HARD_IDLE_MS,
+                nowSpeak = 2,
+                chapterLoadPending = false,
+                sameChapter = true,
+            )
+        )
+        assertFalse(
+            shouldForceAdvanceStalledTts(
+                idleMs = CHAPTER_END_HARD_IDLE_MS - 1,
+                hardIdleMs = CHAPTER_END_HARD_IDLE_MS,
+                nowSpeak = 2,
+                chapterLoadPending = false,
+                sameChapter = true,
+            )
+        )
+        assertFalse(
+            shouldForceAdvanceStalledTts(
+                idleMs = 90_000L,
+                hardIdleMs = CHAPTER_END_HARD_IDLE_MS,
+                nowSpeak = 0,
+                chapterLoadPending = false,
+                sameChapter = true,
+            )
+        )
+        assertFalse(
+            shouldForceAdvanceStalledTts(
+                idleMs = 90_000L,
+                hardIdleMs = CHAPTER_END_HARD_IDLE_MS,
+                nowSpeak = 2,
+                chapterLoadPending = true,
+                sameChapter = true,
+            )
+        )
+        assertFalse(
+            shouldForceAdvanceStalledTts(
+                idleMs = 90_000L,
+                hardIdleMs = CHAPTER_END_HARD_IDLE_MS,
+                nowSpeak = 2,
+                chapterLoadPending = false,
+                sameChapter = false,
+            )
+        )
+    }
+
+    @Test
+    fun `system tts init failure pauses instead of staying silent`() {
+        val source = projectFile(
+            "src/main/java/io/legado/app/service/TTSReadAloudService.kt"
+        ).readText()
+        val init = source.substringAfter("private fun onTtsInitialized")
+            .substringBefore("override fun play")
+        assertTrue(init.contains("pauseReadAloud()"))
+        assertFalse(init.contains("if (AppConfig.paragraphReadMode) pauseReadAloud()"))
+    }
+
+    @Test
+    fun `chapter watchdog survives transient chapter loading`() {
+        val source = projectFile(
+            "src/main/java/io/legado/app/service/TTSReadAloudService.kt"
+        ).readText()
+        val watchdog = source.substringAfter("private fun armChapterEndWatchdog")
+            .substringBefore("private fun playParagraphQueue")
+        assertTrue(watchdog.contains("if (!chapterLoadPending)"))
+        assertTrue(watchdog.contains("shouldForceAdvanceStalledTts"))
+    }
+
+    @Test
     fun `unready chapter schedules a retry instead of silently stopping`() {
         val source = projectFile("src/main/java/io/legado/app/service/BaseReadAloudService.kt")
             .readText()

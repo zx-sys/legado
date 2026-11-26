@@ -50,6 +50,9 @@ def backupServerUrl = project.findProperty("backup.server.url")
 // 服务器数据同步开关: 默认关闭(朋友包纯本地), 个人包用 -Pserver.sync=true 或 local.properties 打开
 def serverDataSync = (project.findProperty("server.sync")
         ?: localProperties.getProperty("server.sync", "false")).toString().toBoolean()
+// 朋友包本地 AI 清洗开关: 默认关闭, -PaiPolish=true 或 local.properties aiPolish=true 打开
+def localAiPolish = (project.findProperty("aiPolish")
+        ?: localProperties.getProperty("aiPolish", "false")).toString().toBoolean()
 
 android {
     compileSdk = compile_sdk_version
@@ -108,6 +111,7 @@ android {
         buildConfigField "String", "Cronet_Main_Version", "\"$CronetMainVersion\""
         buildConfigField "String", "BackupServerUrl", "\"${backupServerUrl}\""
         buildConfigField "boolean", "ServerDataSync", "${serverDataSync}"
+        buildConfigField "boolean", "LocalAiPolish", "${localAiPolish}"
 
         javaCompileOptions {
             annotationProcessorOptions {

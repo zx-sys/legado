@@ -5,6 +5,7 @@ import androidx.appcompat.app.AlertDialog
 import io.legado.app.R
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
+import io.legado.app.help.polish.PolishBuildPolicy
 import io.legado.app.help.polish.PolishManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -13,6 +14,7 @@ import kotlinx.coroutines.launch
 object AiPolishDialog {
 
     fun show(context: Context, book: Book) {
+        if (!PolishBuildPolicy.available) return
         val patches = appDb.aiChapterPatchDao.getByBook(book.bookUrl)
         val done = patches.count { it.status == "ok" && it.appliedAt > 0 }
         val contaminated = patches.count {

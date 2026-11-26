@@ -2,6 +2,7 @@ package io.legado.app.ui.readaloud
 
 import android.app.Activity
 import android.app.Application
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -11,8 +12,10 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import com.jeremyliao.liveeventbus.LiveEventBus
 import io.legado.app.constant.EventBus
+import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ViewReadAloudFloatBallBinding
 import io.legado.app.help.LifecycleHelp
+import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.permission.PermissionActivity
 import io.legado.app.receiver.SharedReceiverActivity
 import io.legado.app.service.BaseReadAloudService
@@ -27,6 +30,8 @@ import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeActivity
 import io.legado.app.ui.video.VideoPlayerActivity
 import io.legado.app.ui.welcome.WelcomeActivity
+import io.legado.app.utils.defaultSharedPreferences
+import splitties.init.appCtx
 import java.lang.ref.WeakReference
 
 /**
@@ -35,6 +40,8 @@ import java.lang.ref.WeakReference
  */
 object ReadAloudFloatBallManager : Application.ActivityLifecycleCallbacks {
 
+    private val enabled: Boolean get() = AppConfig.readAloudFloatBallEnabled
+    private val prefs by lazy { appCtx.defaultSharedPreferences }
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
     private var initialized = false
     private var hostRef: WeakReference<Activity>? = null
@@ -57,10 +64,23 @@ object ReadAloudFloatBallManager : Application.ActivityLifecycleCallbacks {
         QrCodeActivity::class.java,
     )
 
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == PreferKey.readAloudFloatBall) {
+            mainHandler.post {
+                if (!enabled) {
+                    detach()
+                } else if (BaseReadAloudService.isRun) {
+                    attachTop()
+                }
+            }
+        }
+    }
+
     fun init(application: Application) {
         if (initialized) return
         initialized = true
         application.registerActivityLifecycleCallbacks(this)
+        prefs.registerOnSharedPreferenceChangeListener(prefListener)
         LiveEventBus.get<Int>(EventBus.ALOUD_STATE).observeForever { onAloudState() }
         LiveEventBus.get<ArrayList<Int>>(EventBus.UP_CONFIG).observeForever { onConfigChanged() }
     }
@@ -69,7 +89,7 @@ object ReadAloudFloatBallManager : Application.ActivityLifecycleCallbacks {
      * 阅读页菜单是 Activity 内容的一部分，会盖在悬浮球下面；打开菜单时先隐藏悬浮球。
      */
     fun setReaderMenuVisible(visible: Boolean) {
-        if (readerMenuVisible == visible) return
+        if (!enabled || readerMenuVisible == visible) return
         readerMenuVisible = visible
         mainHandler.post {
             if (visible) {
@@ -82,7 +102,7 @@ object ReadAloudFloatBallManager : Application.ActivityLifecycleCallbacks {
 
     private fun onAloudState() {
         mainHandler.post {
-            if (!BaseReadAloudService.isRun) {
+            if (!enabled || !BaseReadAloudService.isRun) {
                 detach()
             } else if (ball == null) {
                 attachTop()
@@ -104,6 +124,7 @@ object ReadAloudFloatBallManager : Application.ActivityLifecycleCallbacks {
     }
 
     private fun attach(activity: Activity) {
+        if (!enabled) return
         detach()
         if (!BaseReadAloudService.isRun) return
         if (activity.isFinishing || activity.isDestroyed) return

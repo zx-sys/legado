@@ -31,7 +31,6 @@ import io.legado.app.utils.internString
 import io.legado.app.utils.mapParallel
 import io.legado.app.utils.mapParallelSafe
 import io.legado.app.utils.onEachIndexed
-import io.legado.app.utils.runCatchingCancellable
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers.IO
@@ -47,6 +46,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.catch
@@ -714,6 +714,10 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
             changeSourceLoading.value = false
             changeSourceCancelable.value = true
             changeSourceResult.value = PendingEvent(SourceChangeResult.Error(throwable))
+        }.onCancel {
+            changeSourceTask = null
+            changeSourceLoading.postValue(false)
+            changeSourceCancelable.postValue(true)
         }
     }
 
@@ -727,8 +731,8 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
 
     suspend fun getToc(book: Book): Result<Pair<List<BookChapter>, BookSource>> =
         withContext(SuppressSourceNavigation) {
-            runCatchingCancellable {
-                withTimeoutOrNull(60_000L) {
+            try {
+                val result = withTimeoutOrNull(60_000L) {
                     val source = appDb.bookSourceDao.getBookSource(book.origin)
                         ?: throw NoStackTraceException("书源不存在")
                     if (book.tocUrl.isEmpty()) {
@@ -737,6 +741,20 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
                     val toc = WebBook.getChapterListAwait(source, book).getOrThrow()
                     Pair(toc, source)
                 } ?: throw NoStackTraceException("加载目录超时，请稍后重试")
+                Result.success(result)
+            } catch (e: CancellationException) {
+                // 子组件自己的超时也是 CancellationException; 外层还活着就必须转成普通错误,
+                // 否则 onError 不执行, changeSourceLoading 永远为 true, 转圈卡死。
+                if (!shouldConvertCancellationToTimeout(e, currentCoroutineContext().isActive)) {
+                    throw e
+                }
+                Result.failure(
+                    NoStackTraceException(
+                        "加载目录超时，请稍后重试\n${e.localizedMessage.orEmpty()}"
+                    )
+                )
+            } catch (e: Throwable) {
+                Result.failure(e)
             }
         }
 
@@ -823,6 +841,10 @@ open class ChangeBookSourceViewModel(application: Application) : BaseViewModel(a
             changeSourceLoading.value = false
             changeSourceCancelable.value = true
             changeSourceResult.value = PendingEvent(SourceChangeResult.Error(throwable))
+        }.onCancel {
+            changeSourceTask = null
+            changeSourceLoading.postValue(false)
+            changeSourceCancelable.postValue(true)
         }
     }
 

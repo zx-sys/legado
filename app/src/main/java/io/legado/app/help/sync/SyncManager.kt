@@ -8,6 +8,7 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.ReadRecord
+import io.legado.app.help.book.isNotShelf
 import io.legado.app.help.book.isPrivateShelf
 import io.legado.app.help.book.mergeBookType
 import io.legado.app.help.config.LocalConfig
@@ -46,6 +47,7 @@ object SyncManager {
 
     private val pendingProgress = LinkedHashMap<String, SyncProgress>()
     private val pendingRecords = LinkedHashMap<String, SyncRecord>()
+    private val pendingRecordRemovals = LinkedHashMap<String, SyncRecordRemoval>()
     private val pendingConfigs = LinkedHashMap<String, SyncConfig>()
     private val pendingBooks = LinkedHashMap<String, SyncBook>()
     private val pendingGroups = LinkedHashMap<String, SyncGroup>()
@@ -127,6 +129,21 @@ object SyncManager {
         )
         synchronized(lock) {
             pendingRecords["${record.bookName}::${record.author}"] = item
+        }
+        schedulePush()
+    }
+
+    fun enqueueRecordRemoval(bookName: String, author: String, force: Boolean = false) {
+        if (!SyncPolicy.dataSyncEnabled || !ServerSync.isConfigured) return
+        if (!force && isQuiet()) return
+        if (PrivateShelfBookCache.isPrivate(bookName, author)) return
+        val item = SyncRecordRemoval(
+            bookName = bookName,
+            author = author,
+            updatedAt = System.currentTimeMillis(),
+        )
+        synchronized(lock) {
+            pendingRecordRemovals["$bookName::$author"] = item
         }
         schedulePush()
     }
@@ -302,6 +319,7 @@ object SyncManager {
     private suspend fun flush() {
         val payload = synchronized(lock) {
             if (pendingProgress.isEmpty() && pendingRecords.isEmpty() &&
+                pendingRecordRemovals.isEmpty() &&
                 pendingConfigs.isEmpty() && pendingBooks.isEmpty() &&
                 pendingGroups.isEmpty() && pendingSettings.isEmpty()
             ) {
@@ -311,6 +329,11 @@ object SyncManager {
             val payload = SyncPayload(
                 progress = if (dataSync) pendingProgress.values.toList() else emptyList(),
                 records = if (dataSync) pendingRecords.values.toList() else emptyList(),
+                recordRemovals = if (dataSync) {
+                    pendingRecordRemovals.values.toList()
+                } else {
+                    emptyList()
+                },
                 configs = pendingConfigs.values.toList(),
                 books = if (dataSync) pendingBooks.values.toList() else emptyList(),
                 groups = if (dataSync) pendingGroups.values.toList() else emptyList(),
@@ -319,6 +342,7 @@ object SyncManager {
             )
             pendingProgress.clear()
             pendingRecords.clear()
+            pendingRecordRemovals.clear()
             pendingConfigs.clear()
             pendingBooks.clear()
             pendingGroups.clear()
@@ -333,6 +357,9 @@ object SyncManager {
                     payload.progress.forEach { pendingProgress[it.bookUrl] = it }
                     payload.records.forEach {
                         pendingRecords["${it.bookName}::${it.author}"] = it
+                    }
+                    payload.recordRemovals.forEach {
+                        pendingRecordRemovals["${it.bookName}::${it.author}"] = it
                     }
                     payload.configs.forEach { pendingConfigs[it.type] = it }
                     payload.books.forEach {
@@ -388,6 +415,7 @@ object SyncManager {
                 apply(payload, applyConfigs, advanceCursor = true)
             }
             .onFailure { AppLog.put("拉取同步数据失败\n${it.localizedMessage}", it) }
+        runCatching { ReadRecordIdentityCleanup.mergeDuplicateIdentities() }
         flushDeferredProgress()
     }
 
@@ -418,6 +446,10 @@ object SyncManager {
         }
         payload.records.forEach { item ->
             if (dataSync) runCatching { applyRecord(item) }
+            cursor = maxOf(cursor, item.updatedAt)
+        }
+        payload.recordRemovals.forEach { item ->
+            if (dataSync) runCatching { applyRecordRemoval(item) }
             cursor = maxOf(cursor, item.updatedAt)
         }
         payload.settings.forEach { cursor = maxOf(cursor, it.updatedAt) }
@@ -474,6 +506,7 @@ object SyncManager {
         if (current?.isPrivateShelf == true) return
         if (item.removed) {
             if (current != null && current.syncTime <= item.updatedAt) {
+                mergeReadRecordIntoSurvivor(current)
                 appDb.bookDao.delete(current)
                 postEvent(EventBus.UP_BOOKSHELF, "")
             }
@@ -494,6 +527,52 @@ object SyncManager {
             appDb.bookDao.update(current)
         }
         postEvent(EventBus.UP_BOOKSHELF, "")
+    }
+
+    /**
+     * 服务端删除的是重复身份时, 旧身份的历史不能直接丢:
+     * 同名且仅剩一本书时把阅读记录并入幸存书, 书架与历史都只留一条。
+     */
+    private fun mergeReadRecordIntoSurvivor(removed: Book) {
+        val sameName = appDb.bookDao.getBooksByName(removed.name)
+        if (sameName.size != 2) return
+        if (sameName.any { it.bookUrl != removed.bookUrl && it.isNotShelf }) return
+        val survivor = sameName.firstOrNull { it.bookUrl != removed.bookUrl } ?: return
+        if (removed.author.isNotBlank() && survivor.author.isNotBlank() &&
+            removed.author != survivor.author
+        ) {
+            return
+        }
+        val deviceId = AppConst.androidId
+        val removedRecord = appDb.readRecordDao.getRecord(deviceId, removed.name, removed.author)
+            ?: return
+        val survivorRecord =
+            appDb.readRecordDao.getRecord(deviceId, survivor.name, survivor.author)
+        if (survivorRecord == null) {
+            val moved = removedRecord.copy(
+                bookName = survivor.name,
+                author = survivor.author,
+                displayBookName = survivor.name,
+                displayAuthor = survivor.author,
+                resolvedAuthor = null,
+            )
+            appDb.readRecordDao.insert(moved)
+            enqueueRecordRemoval(removedRecord.bookName, removedRecord.author, force = true)
+            appDb.readRecordDao.delete(removedRecord)
+            enqueueRecord(moved)
+            return
+        }
+        survivorRecord.readTime += removedRecord.readTime
+        if (removedRecord.lastRead > survivorRecord.lastRead) {
+            survivorRecord.lastRead = removedRecord.lastRead
+            survivorRecord.lastChapterIndex = removedRecord.lastChapterIndex
+            survivorRecord.lastChapterPos = removedRecord.lastChapterPos
+            survivorRecord.lastChapterTitle = removedRecord.lastChapterTitle
+        }
+        appDb.readRecordDao.update(survivorRecord)
+        enqueueRecordRemoval(removedRecord.bookName, removedRecord.author, force = true)
+        appDb.readRecordDao.delete(removedRecord)
+        enqueueRecord(survivorRecord)
     }
 
     private fun Book.applyMeta(item: SyncBook, groupId: Long, updatedAt: Long) {
@@ -628,6 +707,16 @@ object SyncManager {
         appDb.readRecordDao.update(current)
     }
 
+    private fun applyRecordRemoval(item: SyncRecordRemoval) {
+        if (PrivateShelfBookCache.isPrivate(item.bookName, item.author)) return
+        val current = appDb.readRecordDao.getRecord(
+            AppConst.androidId, item.bookName, item.author
+        ) ?: return
+        if (shouldApplyRecordRemoval(current.lastRead, item.updatedAt)) {
+            appDb.readRecordDao.delete(current)
+        }
+    }
+
     private suspend fun applyConfig(item: SyncConfig) {
         when (item.type) {
             "read_config" -> {
@@ -702,3 +791,7 @@ object SyncManager {
  */
 internal fun shouldApplyRemoteProgress(localUpdatedAt: Long, remoteUpdatedAt: Long): Boolean =
     remoteUpdatedAt > localUpdatedAt
+
+/** 删除墓碑只在本地记录不比它新时生效, 避免删掉之后重新阅读生成的记录。 */
+internal fun shouldApplyRecordRemoval(localLastRead: Long, removalUpdatedAt: Long): Boolean =
+    localLastRead <= removalUpdatedAt

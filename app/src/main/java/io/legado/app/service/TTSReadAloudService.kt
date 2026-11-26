@@ -46,6 +46,9 @@ internal fun speechChunkEnd(text: String, start: Int, limit: Int): Int {
  * 引擎偶尔会漏发最后一段的 onStart/onDone. 只要已经进到倒数第二段且长时间无回调,
  * 就按章末处理; 完全没开始 (nowSpeak=0) 时不前进, 避免整章被跳过。
  */
+internal const val CHAPTER_END_GRACE_MS = 12_000L
+internal const val CHAPTER_END_HARD_IDLE_MS = 45_000L
+
 internal fun isLastQueuedParagraphReached(nowSpeak: Int, lastParagraph: Int): Boolean =
     nowSpeak >= lastParagraph || (lastParagraph - nowSpeak == 1 && nowSpeak > 0)
 
@@ -64,6 +67,18 @@ internal fun shouldAdvanceParagraphChapterAtEnd(
 ): Boolean = paragraphMode && isRun && !paused && currentPlayback && sameChapter &&
     !chapterLoadPending && isLastQueuedParagraphReached(nowSpeak, lastParagraph) &&
     !engineSpeaking && idleMs >= graceMs
+
+/**
+ * 引擎可能把 isSpeaking 卡在 true, 或连续漏掉最后几段回调, 导致正常看门狗永远不触发。
+ * 已开始播放且长时间完全没有进度时, 允许强制按章末处理。
+ */
+internal fun shouldForceAdvanceStalledTts(
+    idleMs: Long,
+    hardIdleMs: Long,
+    nowSpeak: Int,
+    chapterLoadPending: Boolean,
+    sameChapter: Boolean,
+): Boolean = sameChapter && !chapterLoadPending && nowSpeak > 0 && idleMs >= hardIdleMs
 
 /**
  * 本地朗读
@@ -89,7 +104,7 @@ class TTSReadAloudService : BaseReadAloudService() {
         kotlin.runCatching {
             initTts()
         }.onFailure {
-            if (AppConfig.paragraphReadMode) pauseReadAloud()
+            pauseReadAloud()
             AppLog.put("${getString(R.string.tts_init_failed)}\n$it", it, true)
         }
     }
@@ -141,7 +156,8 @@ class TTSReadAloudService : BaseReadAloudService() {
                 play()
             }
         } else {
-            if (AppConfig.paragraphReadMode) pauseReadAloud()
+            // 初始化失败时不能继续显示“播放中”, 否则会停在章节边界且没有任何声音。
+            pauseReadAloud()
             toastOnUi(R.string.tts_init_failed)
         }
     }
@@ -249,20 +265,33 @@ class TTSReadAloudService : BaseReadAloudService() {
     private fun armChapterEndWatchdog(sessionId: Long, lastParagraph: Int, chapterIndex: Int) {
         chapterEndWatchdogJob?.cancel()
         lastUtteranceProgressAt = System.currentTimeMillis()
-        val graceMs = 12_000L
+        val graceMs = CHAPTER_END_GRACE_MS
         chapterEndWatchdogJob = lifecycleScope.launch {
             delay(graceMs)
             while (isActive && isRun && !pause && isCurrentPlayback(sessionId) &&
-                textChapter?.chapter?.index == chapterIndex && !chapterLoadPending
+                textChapter?.chapter?.index == chapterIndex
             ) {
-                val idleMs = System.currentTimeMillis() - lastUtteranceProgressAt
-                if (isLastQueuedParagraphReached(nowSpeak, lastParagraph) &&
-                    textToSpeech?.isSpeaking != true &&
-                    idleMs >= graceMs
-                ) {
-                    AppLog.put("TTS 章末没有收到完成回调, 自动进入下一章")
-                    nextChapter(auto = true)
-                    return@launch
+                // 章节加载中不判定, 但看门狗要继续活着, 不能因一次瞬时 pending 永久退出。
+                if (!chapterLoadPending) {
+                    val idleMs = System.currentTimeMillis() - lastUtteranceProgressAt
+                    val speaking = textToSpeech?.isSpeaking == true
+                    val forced = shouldForceAdvanceStalledTts(
+                        idleMs = idleMs,
+                        hardIdleMs = CHAPTER_END_HARD_IDLE_MS,
+                        nowSpeak = nowSpeak,
+                        chapterLoadPending = chapterLoadPending,
+                        sameChapter = true,
+                    )
+                    if (forced || (isLastQueuedParagraphReached(nowSpeak, lastParagraph) &&
+                            !speaking && idleMs >= graceMs)
+                    ) {
+                        AppLog.put(
+                            "TTS 章末确认切章: now=$nowSpeak/$lastParagraph, " +
+                                "speaking=$speaking, idle=${idleMs}ms, forced=$forced"
+                        )
+                        nextChapter(auto = true)
+                        return@launch
+                    }
                 }
                 delay(3_000L)
             }
@@ -319,17 +348,25 @@ class TTSReadAloudService : BaseReadAloudService() {
     ) {
         chapterEndWatchdogJob?.cancel()
         lastUtteranceProgressAt = System.currentTimeMillis()
-        val graceMs = 12_000L
+        val graceMs = CHAPTER_END_GRACE_MS
         chapterEndWatchdogJob = lifecycleScope.launch {
             delay(graceMs)
             while (isActive && isRun && !pause && isCurrentPlayback(sessionId)) {
                 val idleMs = System.currentTimeMillis() - lastUtteranceProgressAt
-                if (shouldAdvanceParagraphChapterAtEnd(
+                val sameChapter = textChapter?.chapter?.index == chapterIndex
+                val forced = shouldForceAdvanceStalledTts(
+                    idleMs = idleMs,
+                    hardIdleMs = CHAPTER_END_HARD_IDLE_MS,
+                    nowSpeak = nowSpeak,
+                    chapterLoadPending = chapterLoadPending,
+                    sameChapter = sameChapter,
+                )
+                if (forced || shouldAdvanceParagraphChapterAtEnd(
                         paragraphMode = paragraphMode,
                         isRun = isRun,
                         paused = pause,
                         currentPlayback = isCurrentPlayback(sessionId),
-                        sameChapter = textChapter?.chapter?.index == chapterIndex,
+                        sameChapter = sameChapter,
                         chapterLoadPending = chapterLoadPending,
                         nowSpeak = nowSpeak,
                         lastParagraph = lastParagraph,
@@ -338,7 +375,10 @@ class TTSReadAloudService : BaseReadAloudService() {
                         graceMs = graceMs,
                     )
                 ) {
-                    AppLog.put("段落朗读章末没有收到完成回调, 自动进入下一章")
+                    AppLog.put(
+                        "段落朗读章末确认切章: now=$nowSpeak/$lastParagraph, " +
+                            "idle=${idleMs}ms, forced=$forced"
+                    )
                     nextChapter(auto = true)
                     return@launch
                 }

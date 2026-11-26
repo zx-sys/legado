@@ -69,6 +69,7 @@ object PreferKey {
     const val readAloudControlsSize = "readAloudControlsSize"
     const val readAloudControlsWidth = "readAloudControlsWidth"
     const val readAloudControlsOpacity = "readAloudControlsOpacity"
+    const val readAloudFloatBall = "readAloudFloatBall"
     const val readAloudControlsThreshold = "readAloudControlsThreshold"
     const val readAloudControlsX = "readAloudControlsX"
     const val readAloudControlsY = "readAloudControlsY"

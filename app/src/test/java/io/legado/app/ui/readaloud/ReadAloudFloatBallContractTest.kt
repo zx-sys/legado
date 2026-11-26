@@ -25,6 +25,18 @@ class ReadAloudFloatBallContractTest {
     }
 
     @Test
+    fun `service broadcasts its initial state for the floating ball`() {
+        val service = projectFile(
+            "src/main/java/io/legado/app/service/BaseReadAloudService.kt"
+        ).readText()
+        val onCreate = service.substringAfter("override fun onCreate()")
+            .substringBefore("private fun loadCover")
+        assertTrue(onCreate.contains("isRun = true"))
+        assertTrue(onCreate.contains("pause = false"))
+        assertTrue(onCreate.contains("postEvent(EventBus.ALOUD_STATE"))
+    }
+
+    @Test
     fun `back key no longer pauses read aloud`() {
         val activity = projectFile(
             "src/main/java/io/legado/app/ui/book/read/ReadBookActivity.kt"

@@ -143,6 +143,9 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE name = :name and author = :author")
     fun getBook(name: String, author: String): Book?
 
+    @Query("SELECT * FROM books WHERE name = :name")
+    fun getBooksByName(name: String): List<Book>
+
     @Query("update books set syncTime = :ts where bookUrl = :bookUrl")
     fun updateSyncTime(bookUrl: String, ts: Long)
 

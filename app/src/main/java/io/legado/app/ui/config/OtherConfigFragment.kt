@@ -28,6 +28,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.normalizeJsSourceApiToken
 import io.legado.app.help.http.Cronet
 import io.legado.app.help.polish.LocalPolishRunner
+import io.legado.app.help.polish.PolishBuildPolicy
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.prefs.SwitchPreference
 import io.legado.app.lib.prefs.fragment.PreferenceFragment
@@ -78,6 +79,8 @@ class OtherConfigFragment : PreferenceFragment(),
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         putPrefBoolean(PreferKey.processText, isProcessTextEnabled())
         addPreferencesFromResource(R.xml.pref_config_other)
+        findPreference<Preference>("aiPolishCategory")?.isVisible =
+            PolishBuildPolicy.available
         upPreferenceSummary(PreferKey.userAgent, AppConfig.userAgent)
         upPreferenceSummary(PreferKey.preDownloadNum, AppConfig.preDownloadNum.toString())
         upPreferenceSummary(PreferKey.threadCount, AppConfig.threadCount.toString())
@@ -112,7 +115,7 @@ class OtherConfigFragment : PreferenceFragment(),
         }
         upPreferenceSummary(PreferKey.jsSourceApiToken, AppConfig.jsSourceApiToken)
         findPreference<EditTextPreference>(PreferKey.deepseekApiKey)?.let {
-            it.isVisible = !BuildConfig.ServerDataSync
+            it.isVisible = PolishBuildPolicy.available && !BuildConfig.ServerDataSync
             it.isPersistent = false
             it.text = AppConfig.deepseekApiKey
             it.setOnPreferenceChangeListener { _, newValue ->
@@ -133,7 +136,9 @@ class OtherConfigFragment : PreferenceFragment(),
         upPreferenceSummary(PreferKey.deepseekApiKey, AppConfig.deepseekApiKey)
         findPreference<SwitchPreference>(PreferKey.aiPolishEnabled)?.setOnPreferenceChangeListener {
                 _, newValue ->
-            if (!BuildConfig.ServerDataSync && newValue == true && !LocalPolishRunner.isReady()) {
+            if (PolishBuildPolicy.available && !BuildConfig.ServerDataSync &&
+                newValue == true && !LocalPolishRunner.isReady()
+            ) {
                 toastOnUi(R.string.ai_polish_need_key)
                 false
             } else {

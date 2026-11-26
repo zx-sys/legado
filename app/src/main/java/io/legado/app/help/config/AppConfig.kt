@@ -786,6 +786,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     val readAloudDragSeek
         get() = appCtx.getPrefBoolean(PreferKey.readAloudDragSeek, true)
 
+    val readAloudFloatBallEnabled
+        get() = appCtx.getPrefBoolean(PreferKey.readAloudFloatBall, true)
+
     val replaceEnableDefault get() = appCtx.getPrefBoolean(PreferKey.replaceEnableDefault, true)
 
     var manualReplaceRule: Boolean

@@ -33,6 +33,12 @@ data class SyncRecord(
     @SerializedName("updatedAt") val updatedAt: Long,
 )
 
+data class SyncRecordRemoval(
+    @SerializedName("bookName") val bookName: String,
+    @SerializedName("author") val author: String,
+    @SerializedName("updatedAt") val updatedAt: Long,
+)
+
 data class SyncConfig(
     @SerializedName("type") val type: String,
     @SerializedName("content") val content: String,
@@ -85,6 +91,7 @@ data class SyncSetting(
 data class SyncPayload(
     @SerializedName("progress") val progress: List<SyncProgress> = emptyList(),
     @SerializedName("records") val records: List<SyncRecord> = emptyList(),
+    @SerializedName("recordRemovals") val recordRemovals: List<SyncRecordRemoval> = emptyList(),
     @SerializedName("configs") val configs: List<SyncConfig> = emptyList(),
     @SerializedName("books") val books: List<SyncBook> = emptyList(),
     @SerializedName("groups") val groups: List<SyncGroup> = emptyList(),
@@ -93,12 +100,13 @@ data class SyncPayload(
     @SerializedName("serverTime") val serverTime: Long = 0L,
 ) {
     val isEmpty: Boolean
-        get() = progress.isEmpty() && records.isEmpty() && configs.isEmpty() &&
-                books.isEmpty() && groups.isEmpty() && settings.isEmpty()
+        get() = progress.isEmpty() && records.isEmpty() && recordRemovals.isEmpty() &&
+                configs.isEmpty() && books.isEmpty() && groups.isEmpty() && settings.isEmpty()
 }
 
 object ServerSync {
 
+    private const val SYNC_CAPS = "record-removal"
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
     private val client by lazy { okHttpClient }
 
@@ -112,6 +120,7 @@ object ServerSync {
         if (BackupServer.phone.isNotEmpty()) {
             builder.header("X-User-Phone", BackupServer.phone)
         }
+        builder.header("X-Legado-Caps", SYNC_CAPS)
         return builder
     }
 
